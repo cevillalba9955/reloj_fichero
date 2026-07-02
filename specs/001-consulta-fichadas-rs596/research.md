@@ -41,22 +41,37 @@ Node 18) y un test runner (`node:test`, estable desde Node 20).
 **Decision**: El cliente TCP mantiene una máquina de estados simple:
 "esperando respuesta a comando X", donde X determina la cantidad exacta de
 bytes a leer antes de considerar la respuesta completa. No existe un campo
-de longitud genérico en el protocolo — el tamaño de cada respuesta depende
-del comando que la originó (documentado en `research/protocolo_prosoft_rs596.md`).
+de longitud genérico en el protocolo — el tamaño de cada mensaje depende del
+comando concreto que lo originó.
 
-Tabla de tamaños fijos usada para el framing (todos confirmados en el
-documento de research):
+> **CORRECCIÓN (2026-07-02, durante `/speckit-implement`)**: La versión
+> anterior de esta tabla asumía un formato de comando fijo de 13 bytes y un
+> ACK fijo de 11 bytes, extrapolados de la plantilla genérica en prosa de
+> `research/protocolo_prosoft_rs596.md` §2 sin contrastarla byte a byte
+> contra los ejemplos reales de la §6. Al implementar `src/protocol/`, esa
+> verificación mostró que **no coincide**: el comando real `0xB4` mide 16
+> bytes y el comando real `0xA4` mide 15 bytes (no 13 ambos), y el ACK
+> simple real mide 10 bytes (no 11). Es decir, el "formato de comando" de
+> §2 es una simplificación en prosa que no captura parámetros
+> específicos por comando — el tamaño real es **variable por comando**, tal
+> como su propio nombre lo indica ("4 bytes variable"). La tabla de abajo
+> refleja únicamente lo verificado byte a byte contra la §6; ver hallazgo
+> completo en `research.md` §5-bis más abajo.
 
-| Mensaje | Tamaño fijo |
+Tamaños confirmados por contraste directo con los ejemplos hex de la §6
+(únicos comandos con captura real disponible):
+
+| Mensaje | Tamaño real verificado |
 |---|---|
-| Comando (software → reloj) | 13 bytes (`55 AA 01 CMD [4] [2] [2] 00`) |
-| ACK simple (reloj → software, sin datos) | 11 bytes (`AA 55 01 01 [4] [2] 00`) |
-| ACK + payload de `0x13` (1ª respuesta) | 11 + 2 (`55 AA`) + 64 bytes |
-| ACK + payload de `0x13` (2ª respuesta) | 11 + 2 + 1040 bytes |
-| ACK + payload de `0xC3` | 11 + 2 + 272 bytes |
-| ACK + payload de `0xB2` (fecha/hora) | 11 + 2 + 12 bytes |
-| ACK + payload de `0xA4` | 11 + 2 + 4 (header) + 20×N bytes (N = pendientes reportados por `0xB4`) |
+| Comando `0xB4` (consultar pendientes) | 16 bytes (ver `research/protocolo_prosoft_rs596.md` §6.1/6.2, primera línea) |
+| Comando `0xA4` (pedir detalle) | 15 bytes (§6.1, tercera línea) |
+| Comando `0xA8` (borrar — fuera de alcance de esta feature, FR-007) | 16 bytes (§6.3) |
+| ACK simple sin datos (reloj → software) | 10 bytes (§6.1/6.3) |
+| ACK + payload de `0xA4` | 10 + 2 (`55 AA`) + 4 (header) + 20×N bytes (N = pendientes) — confirmado en §6.1/6.2 |
 | Paquete "keepalive" observado | 6 bytes, todos en `00` |
+| Comando `0x80` (handshake) | **Sin captura real — tamaño desconocido, ver §5-bis** |
+| Comando `0x13` (parámetros, ×2) | **Sin captura real — tamaño desconocido, ver §5-bis** |
+| ACK + payload de `0x13` / `0xC3` / `0xB2` | Tamaños de payload (64B, 1040B, 272B, 12B) confirmados por el research doc, pero el tamaño exacto del ACK que los precede no se recontó byte a byte porque este script no usa esos comandos (ver `contracts/protocol-contract.md`) |
 
 **Rationale**: Como el socket TCP es un stream sin garantía de que cada
 `read()` traiga un mensaje completo, el cliente debe acumular bytes en un
@@ -72,6 +87,59 @@ fueran un registro corrupto.
 - **Asumir "un `read()` = un mensaje"**: descartado explícitamente — es una
   suposición común pero incorrecta sobre TCP; puede funcionar en pruebas
   locales de baja latencia y fallar en producción con fragmentación real.
+
+## 2-bis. Hallazgo: `0x80` (handshake) y `0x13` (parámetros) sin captura real
+
+**Hallazgo**: `research/protocolo_prosoft_rs596.md` confirma la *existencia*
+y el *propósito* de los comandos `0x80`, `0x13` y **también `0x81`**
+(aparecen nombrados en los diagramas de secuencia de §5.1 y §5.4), pero **no
+incluye ningún ejemplo hexadecimal real de ninguno de los tres** — a
+diferencia de `0xB4`, `0xA4` y `0xA8`, que sí tienen captura literal en §6.
+Como además se confirmó (ver nota de corrección arriba) que el formato de
+comando **no es uniforme** entre comandos, no existe una base confiable para
+derivar los bytes exactos de `0x80`/`0x13`/`0x81` a partir de los otros tres
+ejemplos. Esto incluye el `0x81` de cierre de operación que pide FR-008 —
+el cierre del *socket TCP* en sí no requiere bytes de protocolo (es una
+operación de la capa de transporte), pero el frame explícito de "cierre de
+operación" documentado sí los necesitaría y tampoco está capturado.
+
+**Decision**: No se fabrican bytes para `0x80`/`0x13`/`0x81`. `src/protocol/commands.js`
+expone `buildHandshakeCommand()`, `buildParamsCommand()` y
+`buildCloseOperationCommand()` como funciones que lanzan explícitamente
+`ProtocoloNoImplementadoError` con un mensaje que referencia este hallazgo,
+en vez de construir una trama inventada. Como consecuencia, el cliente TCP
+(`src/protocol/client.js`) puede completar el tramo de conteo/detalle de
+fichadas (`0xB4`/`0xA4`, verificado byte a byte) pero **no puede completar
+el handshake real contra un reloj físico todavía** — la sesión terminará en
+`closed(error)` con `errorReason` apuntando a este gap la primera vez que el
+flujo llegue a esa etapa. El cierre del socket TCP (`FR-008`, parte de
+transporte) sí se garantiza siempre, incluso cuando `buildCloseOperationCommand()`
+falla: el cliente captura ese error puntual, lo registra en el log de sesión,
+y de todos modos fuerza el cierre del socket subyacente.
+
+**Rationale**: Enviar una trama de `0x80`/`0x13` inventada a un reloj real
+en producción viola directamente el Principio III de la constitución
+(NON-NEGOTIABLE: nada del protocolo se construye sin respaldo de tráfico
+capturado) y podría dejar al equipo en un estado impredecible. Es preferible
+que el script falle de forma clara y explícita a que falle silenciosamente
+enviando bytes incorrectos.
+
+**Follow-up requerido** (fuera del alcance de este script, pendiente de
+research): capturar con Wireshark una sesión real que incluya `0x80` y las
+dos invocaciones de `0x13`, y actualizar
+`research/protocolo_prosoft_rs596.md` con esos bytes. Una vez disponible,
+`buildHandshakeCommand()`/`buildParamsCommand()` se implementan igual que
+`buildPendingCountCommand()`/`buildPendingDetailCommand()` (§2 de este
+documento) y este hallazgo se cierra.
+
+**Alternatives considered**:
+- **Adivinar los bytes por analogía con `0xB4`/`0xA4`**: descartado — ya se
+  demostró que el formato varía por comando, así que no hay patrón fiable
+  para extrapolar.
+- **Omitir el handshake y mandar `0xB4` directo**: descartado como decisión
+  de diseño (se le presentó al usuario como opción en `/speckit-implement`
+  y no fue la elegida); se puede reconsiderar manualmente más adelante si
+  alguien lo prueba contra hardware real y documenta el resultado.
 
 ## 3. Manejo de paquetes "keepalive" (`00 00 00 00 00 00`)
 

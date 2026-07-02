@@ -1,0 +1,16 @@
+{
+  "description": "Captura real - dos registros pendientes (rostro + huella, mas el anterior sin borrar)",
+  "source": "research/protocolo_prosoft_rs596.md #6.2",
+  "nota": "El documento original (research.md #6.2) no mostraba el comando 0xA4 ni el ACK+marcador que precede al header para este caso de 2 registros. Se completaron ambos campos (comandoA4, respuestaA4Ack) extrayendolos con tshark de research/fichada2.pcapng stream 11, una captura real de una sesion de descarga con 2 fichadas pendientes; el header y los registros coinciden byte a byte con lo que ya documentaba research.md.",
+  "comandoB4": "55 AA 01 B4 08 00 00 00 00 00 FF FF 00 00 05 00",
+  "respuestaB4": "AA 55 01 01 02 00 00 00 05 00",
+  "declaredPendingCountFromB4": 2,
+  "comandoA4": "55 AA 01 A4 00 00 00 00 02 00 00 00 28 00 06 00",
+  "respuestaA4Ack": "AA 55 01 01 00 00 00 00 06 00",
+  "respuestaA4PayloadMarker": "55 AA",
+  "respuestaA4Header": "01 00 00 00",
+  "registros": [
+    "01 00 00 16 F9 71 02 05 00 00 00 01 00 00 00 10 01 00 00 00",
+    "01 00 00 09 F9 71 02 89 00 00 00 01 00 00 00 40 DA 04 00 00"
+  ]
+}

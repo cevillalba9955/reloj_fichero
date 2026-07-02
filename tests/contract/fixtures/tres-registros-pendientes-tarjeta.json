@@ -1,0 +1,10 @@
+{
+  "description": "Captura real en vivo (2026-07-02) contra el equipo real 192.168.1.82: 3 fichadas pendientes, la tercera por tarjeta. Confirmado por comparacion con el software oficial: la 3ra fichada informo metodo 'tarjeta' y el registro trae verificationMethodCode 00000030, nunca antes observado.",
+  "source": "research/protocolo_prosoft_rs596.md #5.6, sesion en vivo via src/cli/consultar-fichadas.js",
+  "declaredPendingCountFromB4": 3,
+  "registros": [
+    "01 00 00 06 F9 71 A2 E1 00 00 00 01 00 00 00 40 02 00 00 00",
+    "01 00 00 26 F9 71 C2 09 00 00 00 01 00 00 00 40 01 00 00 00",
+    "01 00 00 15 F9 71 C2 45 00 00 00 01 00 00 00 30 8D 09 00 00"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "description": "Captura real - un registro pendiente (fichada unica, Cesar Villalba)",
+  "source": "research/protocolo_prosoft_rs596.md #6.1",
+  "nota": "Los bytes se transcriben tal cual aparecen en la fuente, separados por espacios, para que sean faciles de comparar visualmente contra el documento original. Los tests los convierten con hexToBuffer(). comandoA4 fue corregido de 15 a 16 bytes (research.md #6.1 original tenia un error de transcripcion) tras verificar con tshark contra research/fichada3.pcapng stream 19, que muestra el mismo caso de 1 registro pendiente byte a byte.",
+  "comandoB4": "55 AA 01 B4 08 00 00 00 00 00 FF FF 00 00 05 00",
+  "respuestaB4": "AA 55 01 01 01 00 00 00 05 00",
+  "declaredPendingCountFromB4": 1,
+  "comandoA4": "55 AA 01 A4 00 00 00 00 01 00 00 00 14 00 06 00",
+  "respuestaA4Ack": "AA 55 01 01 00 00 00 00 06 00",
+  "respuestaA4PayloadMarker": "55 AA",
+  "respuestaA4Header": "01 00 00 00",
+  "registros": [
+    "01 00 00 16 F9 71 02 05 00 00 00 01 00 00 00 10 99 02 00 00"
+  ],
+  "respuestaA4Completa": "AA 55 01 01 00 00 00 00 06 00 55 AA 01 00 00 00 01 00 00 16 F9 71 02 05 00 00 00 01 00 00 00 10 99 02 00 00"
+}

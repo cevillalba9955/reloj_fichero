@@ -1,0 +1,7 @@
+{
+  "description": "Captura real - comando de borrado (0xA8), ACK simple sin payload",
+  "source": "research/protocolo_prosoft_rs596.md #6.3",
+  "nota": "Fuera de alcance de esta feature (FR-007: el script no borra fichadas automaticamente). Se transcribe igual porque sirve como segundo ejemplo real de ACK simple (10 bytes) para el contract test de framing, y para que src/protocol/commands.js documente explicitamente por que NO expone un builder para 0xA8.",
+  "comandoA8": "55 AA 01 A8 00 00 00 00 00 00 FF FF 00 00 06 00",
+  "respuestaA8": "AA 55 01 01 00 00 00 00 06 00"
+}

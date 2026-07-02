@@ -2,7 +2,7 @@
 
 **Estado:** Ingeniería inversa parcial, basada en análisis de tráfico de red (Wireshark) entre el software oficial "Gestión de Personal Pro-Soft" y el equipo.
 
-**Última actualización:** 2 de julio de 2026
+**Última actualización:** 2 de julio de 2026 (agregada sección 6.4: handshake/`0x13`/`0x81` confirmados vía tshark sobre `research/*.pcapng`; corregido el comando `0xA4` de la sección 6.1)
 
 **Advertencia:** Este documento no está basado en documentación oficial del fabricante (no existe públicamente). Es el resultado de observar tráfico real. Los campos marcados como "confirmado" fueron validados comparando múltiples capturas; los marcados como "hipótesis" o "sin resolver" son observaciones no verificadas y pueden estar incompletos o ser incorrectos.
 
@@ -60,12 +60,12 @@ También aparecen paquetes de solo `00 00 00 00 00 00` (6 bytes) intercalados �
 
 | Código | Nombre (hipótesis) | Confirmado | Descripción |
 |---|---|---|---|
-| `0x80` | Handshake / apertura de sesión | ✅ | Primer mensaje de toda sesión. El equipo responde con ACK simple. |
-| `0x13` | Consulta de parámetros del equipo | ✅ | Se envía dos veces por sesión; la primera respuesta (64 bytes) trae parámetros de configuración binarios sin decodificar; la segunda (1040 bytes) trae el bloque de identificación (ver sección 4). |
-| `0x81` | Inicio/fin de una operación de sincronización | ✅ | Aparece envolviendo bloques de operaciones (ej. antes y después de subir usuarios, antes y después de bajar fichadas). |
+| `0x80` | Handshake / apertura de sesión | ✅ | Primer mensaje de toda sesión. El equipo responde con ACK simple. Bytes reales en sección 6.4. |
+| `0x13` | Consulta de parámetros del equipo | ✅ | Se envía **tres** veces por sesión (no dos, ver corrección 2026-07-02): 1ª y 3ª vez con la misma trama, respuesta de 64 bytes con parámetros de configuración binarios sin decodificar; 2ª vez con una trama distinta, respuesta de 1040 bytes con el bloque de identificación (ver sección 4). Bytes reales en sección 6.4. |
+| `0x81` | Inicio/fin de una operación de sincronización | ✅ | Dos variantes por el byte 4 de la trama: `00` = apertura (usada antes de operaciones como `0xA8`), `01` = cierre (usada al final de toda sesión, incluida la descarga de fichadas — no hay apertura `0x81` antes de `0xB4`/`0xA4` en las capturas revisadas). Bytes reales en sección 6.4. |
 | `0xB4` | Consultar fichadas pendientes | ✅ | El reloj responde con un ACK donde uno de los bytes indica la cantidad de registros pendientes (`01`, `02`, etc. — ver ejemplos en sección 5). |
 | `0xA4` | Solicitar el detalle de las fichadas pendientes | ✅ | El reloj devuelve el payload con los registros (ver sección 5). |
-| `0xA8` | Borrar fichadas ya descargadas | ✅ | Comando corto, sin payload de datos. El equipo responde con ACK simple. Se usa después de `0xA4` para limpiar lo ya leído. |
+| `0xA8` | Borrar fichadas ya descargadas | ✅ | Comando corto, sin payload de datos. El equipo responde con ACK simple. Se envuelve en `0x81` apertura/cierre, en una sesión TCP separada de la lectura (ver sección 6.5). **Probado contra el equipo real el 2026-07-02** (autorizado explícitamente por el usuario, prueba única): 3 fichadas pendientes → 0 tras el borrado, confirmado con una consulta `0xB4` posterior. No expuesto por el CLI de esta feature (FR-007 lo excluye deliberadamente del alcance). |
 | `0xE9` | Subir nombre de usuario | ✅ | Payload de 196 bytes con el nombre codificado en **UTF-16LE**. Usado al dar de alta empleados desde el software hacia el equipo. |
 | `0x98` | Subir legajo/número de usuario | ✅ | Acompaña al comando anterior; trae el número de legajo en ASCII. |
 | `0x96` | Confirmación / siguiente ítem de lote | ✅ | Se envía después de cada `0xE9`/`0x98`, con contador incremental — controla el avance registro por registro en una carga masiva de usuarios. |
@@ -174,6 +174,79 @@ Ninguna dio resultados consistentes con las horas reales conocidas de las fichad
 2. Estos 20 bytes podrían ser solo una notificación de evento, y la fecha/hora completa se resuelva del lado del software cruzando contra su propia base de datos, no viajar completa por este canal
 3. Podría haber un desfase de alineación de bytes en el parsing (los límites de "registro" asumidos podrían no ser exactamente cada 20 bytes)
 
+### 5.6 Dato de calibración real — fichada de prueba vs. software oficial (2026-07-02)
+
+Se descargó en vivo (vía este script, contra `192.168.1.82`) el siguiente
+registro real, único pendiente en ese momento:
+
+```
+rawHex:  01 00 00 06 F9 71 A2 E1 00 00 00 01 00 00 00 40 35 04 00 00
+campo[0]: 01 00 00 06
+campo[1]: F9 71 A2 E1
+campo[2]: 00 00 00 01
+campo[3]: 00 00 00 40   <- metodo de verificacion
+campo[4]: 35 04 00 00
+```
+
+El software oficial, para esta misma fichada, informó: fecha `02/07/26`,
+hora `13:56`, tipo `Entrada`, legajo `1`, id `72`, método **reconocimiento
+facial**.
+
+**Método de verificación `0x40` = rostro/facial — confirmado por comparación directa.**
+Esto valida, con evidencia externa (no solo inferencia interna), el
+significado de uno de los dos valores observados hasta ahora en campo[3]
+(`0x10` y `0x40`). Encaja además con una fórmula plausible derivada del
+propio equipo: el bloque de identificación (sección 4) declara
+`EnrollDataType:{fp,pwd,idcard,face}`; si se numera esa lista 1 a 4 y se
+multiplica por `0x10`, da `fp=0x10, pwd=0x20, idcard=0x30, face=0x40` —
+coincide exactamente con el valor confirmado. **`0x10 = huella (fp)` queda
+como hipótesis fuerte por esta fórmula, pero todavía sin una confirmación
+independiente propia** (no se probó una fichada por huella contra el
+software oficial). `verificationMethodLabel` en el código sigue
+exponiéndose con `unconfirmed: true` para todos los valores, tal como exige
+el contrato (`output-schema.json`); esta sección documenta el hallazgo a
+nivel de investigación, no cambia esa garantía del código.
+
+**Legajo — hipótesis nueva sobre campo[2]:** en las 4 sesiones reales
+revisadas hasta ahora (incluida esta), campo[2] es siempre `00 00 00 01`, y
+en las que se conoce el legajo del empleado (esta y la de la sección 6.1,
+"Cesar Villalba"), el legajo real es `1` en ambos casos. Es decir, no hay
+todavía ningún caso de prueba con un legajo distinto de `1` que permita
+distinguir "campo[2] = legajo del empleado" de "campo[2] = constante fija
+sin relación con el legajo". Para desambiguar hace falta una fichada de
+prueba de un empleado con legajo distinto de 1.
+
+**Timestamp:** sigue sin resolverse. Un solo punto de calibración (`13:56`,
+sin segundos) no alcanza para aislar una fórmula de empaquetado de fecha/hora
+entre los bytes candidatos (campo[1] y campo[4]); intentos previos con 3
+horas reales conocidas (sección 5.5) ya habían fallado con los formatos más
+comunes. Para avanzar hacer falta registrar el hex crudo de varias fichadas
+junto con la hora exacta (con segundos) que informe el software oficial para
+cada una.
+
+**"id: 72" del software:** no se encontró como ninguno de los bytes del
+registro (no aparece `0x48` en ningún campo). Es consistente con la
+hipótesis ya documentada de que ese id es un correlativo interno de la base
+de datos del software oficial, no un valor que viaje por este protocolo.
+
+**Actualización (2026-07-02, misma sesión de pruebas):** una tercera
+fichada trajo `verificationMethodCode = 00000030`, un valor nunca antes
+observado en ninguna captura. El usuario confirmó contra el software
+oficial que esa marcación fue **por tarjeta**. Esto confirma la fórmula de
+la sección anterior para un segundo valor independiente:
+
+| Código | Método | Confirmación |
+|---|---|---|
+| `0x10` | huella (fp) | hipótesis por fórmula, sin confirmar de forma independiente |
+| `0x20` | clave (pwd) | nunca observado en ninguna captura — no se expone como hipótesis en el código |
+| `0x30` | tarjeta (idcard) | ✅ **confirmado** contra el software oficial |
+| `0x40` | rostro (face) | ✅ **confirmado** contra el software oficial |
+
+Registro real (fixture `tests/contract/fixtures/tres-registros-pendientes-tarjeta.json`):
+```
+01 00 00 15 F9 71 C2 45 00 00 00 01 00 00 00 30 8D 09 00 00
+```
+
 ---
 
 ## 6. Ejemplos de capturas reales (hex)
@@ -184,12 +257,23 @@ Ninguna dio resultados consistentes con las horas reales conocidas de las fichad
 Comando:   55 AA 01 B4 08 00 00 00 00 00 FF FF 00 00 05 00
 Respuesta: AA 55 01 01 01 00 00 00 05 00        <- flag "01" = 1 registro pendiente
 
-Comando:   55 AA 01 A4 00 00 00 00 01 00 00 14 00 06 00
+Comando:   55 AA 01 A4 00 00 00 00 01 00 00 00 14 00 06 00
 Respuesta: AA 55 01 01 00 00 00 00 06 00 55 AA
            01 00 00 00                                    <- header
            01 00 00 16 F9 71 02 05 00 00 00 01
            00 00 00 10 99 02 00 00                        <- registro (20 bytes)
 ```
+
+> **Corrección (2026-07-02):** el comando `0xA4` de este ejemplo se había
+> transcripto con 15 bytes (faltaba un `00` en el campo de cantidad de
+> registros, entre el byte `01` y el `00 00 14 00`). Se corrigió a 16 bytes
+> tras extraer el tráfico con `tshark` directamente de
+> `research/fichada3.pcapng` (stream 19, mismo caso de 1 registro pendiente)
+> y de `research/fichada2.pcapng` (stream 11, 2 registros pendientes, ver
+> 6.2). El formato real del comando `0xA4` es:
+> ```
+> 55 AA 01 A4 00 00 00 00 [cantidad de registros, LE32] [cantidad*20, LE16] [seq LE16]
+> ```
 
 ### 6.2 Dos registros pendientes (rostro + huella, más el anterior sin borrar)
 
@@ -197,11 +281,18 @@ Respuesta: AA 55 01 01 00 00 00 00 06 00 55 AA
 Comando:   55 AA 01 B4 08 00 00 00 00 00 FF FF 00 00 05 00
 Respuesta: AA 55 01 01 02 00 00 00 05 00        <- flag "02" = 2 registros pendientes
 
-Respuesta a 0xA4:
+Comando:   55 AA 01 A4 00 00 00 00 02 00 00 00 28 00 06 00
+Respuesta: AA 55 01 01 00 00 00 00 06 00 55 AA
   header:     01 00 00 00
   registro 1: 01 00 00 16 F9 71 02 05 00 00 00 01 00 00 00 10 01 00 00 00
   registro 2: 01 00 00 09 F9 71 02 89 00 00 00 01 00 00 00 40 DA 04 00 00
 ```
+
+> El comando `0xA4` y el ACK+marcador previos al header no estaban en la
+> versión original de este ejemplo (solo se habían transcripto el header y
+> los registros); se completaron el 2026-07-02 extrayéndolos con `tshark` de
+> `research/fichada2.pcapng` (stream 11), que reproduce esta misma sesión de
+> 2 registros pendientes byte a byte.
 
 ### 6.3 Comando de borrado
 
@@ -209,6 +300,91 @@ Respuesta a 0xA4:
 Comando:   55 AA 01 A8 00 00 00 00 00 00 FF FF 00 00 06 00
 Respuesta: AA 55 01 01 00 00 00 00 06 00        <- ACK simple, sin payload
 ```
+
+---
+
+### 6.4 Apertura y cierre de sesión: `0x80`, `0x13` (x3) y `0x81` — confirmado ✅
+
+Añadido el 2026-07-02, extraído con `tshark` de tres capturas independientes
+(`research/fichada1.pcapng` stream 176, `research/fichada2.pcapng` streams
+11 y 13, `research/fichada3.pcapng` stream 19), todas coincidentes byte a
+byte salvo donde se indica. Resuelve el gap que impedía implementar
+`buildHandshakeCommand`/`buildParamsCommand`/`buildCloseOperationCommand`
+sin fabricar bytes (Constitución, Principio III).
+
+**Secuencia real completa de una descarga de fichadas** (numeración de
+secuencia desde 1 al conectar):
+
+```
+1. 0x80 (seq 1)               -> ACK
+2. 0x13 "parametros"  (seq 2) -> ACK + 64 bytes
+3. 0x13 "identificacion" (seq 3) -> ACK + 1040 bytes
+4. 0x13 "parametros" de nuevo (seq 4) -> ACK + 64 bytes  (si, se repite)
+5. 0xB4 (seq 5)                -> ACK con cantidad pendiente
+6. 0xA4 (seq 6), solo si hay pendientes -> ACK + registros
+7. 0x81 cierre (seq 6 o 7)     -> ACK
+```
+
+**0x80 — handshake:**
+```
+Comando:   55 AA 01 80 00 00 00 00 00 00 FF FF 00 00 01 00
+Respuesta: AA 55 01 01 00 00 00 00 01 00
+```
+Los bytes 8-9 (aquí `00 00`) variaron entre capturas (`80 D2`, `4C D3`, `00 00`)
+sin afectar el resultado — el equipo no parece validarlos.
+
+**0x13 "parámetros" (64 bytes de respuesta, se envía 2 veces: 1ª y 3ª):**
+```
+Comando:   55 AA 01 13 00 00 00 00 00 00 00 00 30 00 [seq]
+Respuesta: AA 55 01 01 00 00 00 00 [seq] 55 AA
+           04 01 30 00 00 13 10 00 ED 04 00 00 01 01 00 01
+           01 00 00 12 10 27 00 00 E8 03 00 00 E8 03 00 00
+           E8 03 00 00 40 0D 03 00 01 01 00 01 00 00 00 04
+           AD 05 00 00
+```
+Payload binario sin decodificar (parámetros de configuración del equipo),
+idéntico byte a byte en las 4 sesiones revisadas.
+
+**0x13 "identificación" (1040 bytes de respuesta, se envía 1 vez, 2ª):**
+```
+Comando:   55 AA 01 13 01 00 00 00 [4 bytes variables] 04 [seq]
+Respuesta: AA 55 01 01 00 00 00 00 [seq] 55 AA + 1028 bytes
+           (bloque de identificacion, ver seccion 4)
+```
+Los 4 "bytes variables" (posiciones 8-11) difieren por sesión (`08 CD`,
+`D6 D1`, `00 00`) sin afectar el resultado, igual que en el handshake.
+
+**0x81 — cierre de operación (variante byte4=`01`, usada al final de la sesión):**
+```
+Comando:   55 AA 01 81 01 00 00 00 00 00 FF FF 00 00 [seq]
+Respuesta: AA 55 01 01 00 00 00 00 [seq]
+```
+Existe una variante byte4=`00` ("apertura de operación") usada antes de
+comandos como `0xA8`, fuera del alcance de esta feature (FR-007).
+
+### 6.5 Borrado (`0xA8`) — probado contra el equipo real (2026-07-02)
+
+Fuera del CLI de esta feature (FR-007 lo excluye a propósito), pero probado
+una vez de forma manual y explícitamente autorizada por el usuario, para
+validar el comando contra el equipo real. Reproduce exactamente los bytes
+observados en `research/fichada2.pcapng` stream 13, en una sesión TCP
+**separada** de la lectura (no en la misma sesión que `0xB4`/`0xA4`):
+
+```
+1. 0x80 (seq 1) -> ACK
+2. 0x13 "parametros" (seq 2) -> ACK + 64 bytes
+3. 0x13 "identificacion" (seq 3) -> ACK + 1040 bytes
+4. 0x13 "parametros" de nuevo (seq 4) -> ACK + 64 bytes
+5. 0x81 apertura (seq 5): 55 AA 01 81 00 00 00 00 00 00 FF FF 00 00 05 00 -> ACK
+6. 0xA8 borrar   (seq 6): 55 AA 01 A8 00 00 00 00 00 00 FF FF 00 00 06 00 -> ACK
+7. 0x81 cierre   (seq 7): 55 AA 01 81 01 00 00 00 00 00 FF FF 00 00 07 00 -> ACK
+```
+
+**Resultado real:** antes del borrado, `0xB4` (en una tercera sesión TCP,
+solo de verificación) declaraba 3 fichadas pendientes; después del `0xA8`,
+la misma consulta `0xB4` declaró 0. Confirma que `0xA8` efectivamente limpia
+el buffer de fichadas pendientes del equipo, sin devolver ningún payload de
+datos (solo el ACK simple).
 
 ---
 
