@@ -56,6 +56,24 @@ test('records: parseFichadaRecord decodifica el registro real por tarjeta (verif
   assert.deepEqual(record.verificationMethodLabel, { value: 'tarjeta', unconfirmed: true });
 });
 
+test('records: parseFichadaRecord decodifica timestampHypothesis (minuto/segundo confirmados, hora mod 8) contra research/control_fichada.csv', () => {
+  const fixture = loadFixture('siete-registros-control-fichada.json');
+  for (const { hex, csv, expectedTimestampHypothesis } of fixture.registros) {
+    const record = parseFichadaRecord(hexToBuffer(hex));
+    assert.deepEqual(
+      record.timestampHypothesis,
+      { value: expectedTimestampHypothesis, unconfirmed: true },
+      `hora real ${csv.hora} (${csv.modo}, legajo ${csv.legajo}) deberia decodificar a ${expectedTimestampHypothesis}`
+    );
+  }
+});
+
+test('records: parseFichadaRecord devuelve timestampHypothesis.value null cuando los bits de flag no calzan con el formato esperado', () => {
+  const raw = hexToBuffer('01 00 00 16 F9 71 FF FF 00 00 00 01 00 00 00 10 99 02 00 00');
+  const record = parseFichadaRecord(raw);
+  assert.deepEqual(record.timestampHypothesis, { value: null, unconfirmed: true });
+});
+
 test('records: parseFichadaRecord rechaza un buffer que no mide exactamente 20 bytes (FR-010)', () => {
   assert.throws(() => parseFichadaRecord(hexToBuffer('01 02 03')), /20 bytes/);
 });

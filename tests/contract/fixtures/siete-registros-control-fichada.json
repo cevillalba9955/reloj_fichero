@@ -1,0 +1,13 @@
+{
+  "description": "Captura real en vivo (2026-07-02) contra 192.168.1.82, correlacionada 1 a 1 con research/control_fichada.csv (export del software oficial). Usada para confirmar la formula de segundos y minutos de research.md #5.7 (hora sigue ambigua cada 8 horas).",
+  "source": "research/protocolo_prosoft_rs596.md #5.7, research/control_fichada.csv",
+  "registros": [
+    { "hex": "01 00 00 0F F9 71 C2 89 00 00 00 01 00 00 00 40 02 00 00 00", "csv": { "hora": "14:34:15", "modo": "Entrada", "legajo": 2 }, "expectedTimestampHypothesis": "06:34:15" },
+    { "hex": "01 00 00 36 F9 71 C2 8D 00 00 00 01 00 00 00 40 01 00 00 00", "csv": { "hora": "14:35:54", "modo": "Salida", "legajo": 2 }, "expectedTimestampHypothesis": "06:35:54" },
+    { "hex": "01 00 00 08 F9 71 C2 91 00 00 00 01 00 00 00 30 01 00 00 00", "csv": { "hora": "14:36:08", "modo": "Entrada", "legajo": 1 }, "expectedTimestampHypothesis": "06:36:08" },
+    { "hex": "01 00 00 07 F9 71 C2 99 00 00 00 01 00 00 00 10 01 00 00 00", "csv": { "hora": "14:38:07", "modo": "Salida", "legajo": 1 }, "expectedTimestampHypothesis": "06:38:07" },
+    { "hex": "01 00 00 0F F9 71 C2 9D 00 00 00 01 00 00 00 10 01 00 00 00", "csv": { "hora": "14:39:15", "modo": "Entrada", "legajo": 1 }, "expectedTimestampHypothesis": "06:39:15" },
+    { "hex": "01 00 00 21 F9 71 C2 A5 00 00 00 01 00 00 00 30 01 00 00 00", "csv": { "hora": "14:41:33", "modo": "Salida", "legajo": 1 }, "expectedTimestampHypothesis": "06:41:33" },
+    { "hex": "01 00 00 3A F9 71 C2 A9 00 00 00 01 00 00 00 40 73 16 00 00", "csv": { "hora": "14:42:58", "modo": "Entrada", "legajo": 1 }, "expectedTimestampHypothesis": "06:42:58" }
+  ]
+}

@@ -1,5 +1,5 @@
 node_modules/
-output/
+/output/
 logs/
 *.log
 .env
@@ -8,3 +8,4 @@ logs/
 Thumbs.db
 research/*.pcapng
 .claude/worktrees/
+research/control_fichada.csv

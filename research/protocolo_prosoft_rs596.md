@@ -247,6 +247,68 @@ Registro real (fixture `tests/contract/fixtures/tres-registros-pendientes-tarjet
 01 00 00 15 F9 71 C2 45 00 00 00 01 00 00 00 30 8D 09 00 00
 ```
 
+### 5.7 Timestamp — segundos y minutos DECODIFICADOS ✅ (2026-07-02)
+
+Usando `research/control_fichada.csv` (export real del software oficial con
+hora exacta, con segundos, para 7 fichadas de prueba consecutivas) contra
+los 7 registros descargados en la misma sesión, se aisló la fórmula para
+dos de los tres componentes de hora que quedaban sin resolver.
+
+**Correlación (las 7 filas, en orden):**
+
+| CSV: hora | campo[0] (hex) | campo[1] (hex) |
+|---|---|---|
+| 14:34:**15** | 01 00 00 **0F** | F9 71 C2 **89** |
+| 14:35:**54** | 01 00 00 **36** | F9 71 C2 **8D** |
+| 14:36:**08** | 01 00 00 **08** | F9 71 C2 **91** |
+| 14:38:**07** | 01 00 00 **07** | F9 71 C2 **99** |
+| 14:39:**15** | 01 00 00 **0F** | F9 71 C2 **9D** |
+| 14:41:**33** | 01 00 00 **21** | F9 71 C2 **A5** |
+| 14:42:**58** | 01 00 00 **3A** | F9 71 C2 **A9** |
+
+**Segundos — CONFIRMADO ✅:** el último byte de campo[0] es el segundo de la
+hora, en binario simple (no BCD): `0x0F=15, 0x36=54, 0x08=8, 0x07=7, 0x21=33,
+0x3A=58`. Coincide exacto en las 7 filas.
+
+**Minutos — CONFIRMADO ✅:** el último byte de campo[1] es
+`minuto * 4 + 1` (bits altos = minuto de 0-59, 2 bits bajos = flag fijo en
+`01`): `34*4+1=137=0x89`, `35*4+1=141=0x8D`, `36*4+1=145=0x91`,
+`38*4+1=153=0x99`, `39*4+1=157=0x9D`, `41*4+1=165=0xA5`, `42*4+1=169=0xA9`.
+Coincide exacto en las 7 filas, y también en el dato de calibración previo
+de la sección 5.6 (`13:56` → `56*4+1=225=0xE1`, y en efecto el registro de
+esa fichada trae `F9 71 A2 E1`).
+
+**Hora — hipótesis parcial, NO confirmada del todo:** el 3er byte de
+campo[1] sigue la fórmula `(32 * hora + 2) mod 256`: hora 13 → `32*13+2=418`,
+`418 mod 256 = 162 = 0xA2` ✓; hora 14 → `32*14+2=450`, `450 mod 256 = 194 =
+0xC2` ✓. Ajusta perfecto para los dos valores de hora observados — **pero
+esta fórmula da el mismo resultado cada 8 horas** (`32*8=256=0`), es decir
+que con los datos actuales **no se puede distinguir, por ejemplo, la hora 6
+de la hora 14, o la hora 5 de la hora 13**. El 2do byte de campo[1] (`71` en
+todos los casos vistos hasta ahora) podría ser el que resuelve a qué bloque
+de 8 horas corresponde, pero no varió en ninguna prueba porque las horas 13
+y 14 caen en el mismo bloque (8-15) — hace falta un dato de calibración en
+un horario de un bloque distinto (ej. mañana temprano o de noche) para
+confirmarlo o descartarlo.
+
+**Fecha (día/mes/año):** sin tocar. El primer byte de campo[0] (`01`), sus
+2 bytes siguientes (`00 00`), y el 1er byte de campo[1] (`F9`) se mantienen
+constantes en **todas** las capturas vistas hasta ahora — pero todas son
+del mismo día calendario (2026-07-02), así que no hay todavía ningún dato
+que permita saber si esos bytes cambian entre días.
+
+**Cómo seguir:** para cerrar el formato completo haría falta una fichada de
+prueba en un horario de un bloque de 8 horas distinto al ya probado (0-7,
+16-23), e idealmente una prueba en un día calendario distinto, siempre
+comparando el hex crudo contra la hora exacta (con segundos) del software
+oficial, igual que en `research/control_fichada.csv`.
+
+**Decisión (2026-07-02):** el usuario dio por válido este formato sin más
+pruebas de calibración. Se implementó en `src/protocol/records.js`
+(`timestampHypothesis`, ver `data-model.md` §1) exponiendo minuto y segundo
+(confirmados) y la hora módulo 8 (con la ambigüedad de arriba sin resolver),
+siempre con `unconfirmed: true`.
+
 ---
 
 ## 6. Ejemplos de capturas reales (hex)

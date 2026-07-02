@@ -18,9 +18,10 @@ sin combinarlos como si tuvieran el mismo nivel de certeza (spec FR-005).
 | `rawHex` | string (40 caracteres hex) | — | Los 20 bytes crudos del registro, siempre incluidos para trazabilidad |
 | `recordTypeConstant` | string (hex, 8 caracteres) | ✅ | campo[2], bytes 8–11; se valida que sea siempre `00000001` |
 | `verificationMethodCode` | string (hex, 8 caracteres) | ✅ (parcial) | campo[3], bytes 12–15; valor crudo confirmado como variable según método |
-| `verificationMethodLabel` | string \| `null` | ❌ hipótesis | Interpretación humana de `verificationMethodCode` (ej. "huella", "rostro"); se expone solo como hipótesis, con `unconfirmed: true` |
-| `unresolvedFields.field0` | string (hex, 8 caracteres) | ❌ | campo[0], bytes 0–3 |
-| `unresolvedFields.field1` | string (hex, 8 caracteres) | ❌ | campo[1], bytes 4–7 (candidato a fecha/hora, fórmula no resuelta) |
+| `verificationMethodLabel` | string \| `null` | ❌ hipótesis (`0x10`/`0x30`/`0x40` confirmados por comparación externa, ver research.md §5.6) | Interpretación humana de `verificationMethodCode` (ej. "huella", "rostro", "tarjeta"); se expone solo como hipótesis, con `unconfirmed: true` |
+| `timestampHypothesis` | string (`HH:MM:SS`) \| `null` | ❌ hipótesis (minuto y segundo confirmados, hora ambigua cada 8hs, ver research.md §5.7) | Hora local decodificada de campo[0]/campo[1]; `null` si el registro no calza con el formato esperado |
+| `unresolvedFields.field0` | string (hex, 8 caracteres) | ❌ | campo[0], bytes 0–3 (el ultimo byte ya se usa para `timestampHypothesis`, pero se sigue exponiendo crudo aca tambien) |
+| `unresolvedFields.field1` | string (hex, 8 caracteres) | ❌ | campo[1], bytes 4–7 (bytes 2-3 ya se usan para `timestampHypothesis`; bytes 0-1 sin resolver) |
 | `unresolvedFields.field4` | string (hex, 8 caracteres) | ❌ | campo[4], bytes 16–19 |
 
 **Validation rules**:
@@ -32,6 +33,9 @@ sin combinarlos como si tuvieran el mismo nivel de certeza (spec FR-005).
   debe quedar visible, no silenciada).
 - `verificationMethodLabel` NUNCA se presenta sin su contraparte
   `verificationMethodCode` ni sin el flag de "no confirmado" explícito.
+- `timestampHypothesis` NUNCA se presenta sin el flag de "no confirmado"
+  explícito, por la misma razón: el componente de hora puede repetirse cada
+  8 horas (research.md §5.7), así que no es una garantía del protocolo.
 
 ## 2. QuerySession
 
