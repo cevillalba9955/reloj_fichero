@@ -10,32 +10,58 @@ archivos de salida (JSON de fichadas, log NDJSON).
 ## 1. FichadaRecord
 
 Representa un registro individual de 20 bytes leído del reloj (respuesta a
-`0xA4`). Mezcla campos confirmados por el protocolo con campos no resueltos,
-sin combinarlos como si tuvieran el mismo nivel de certeza (spec FR-005).
+`0xA4`), **ya re-encuadrado** (research.md §5.9, corrección 2026-07-03): el
+parser deja de tratar los 4 bytes previos al primer registro como un
+"header" descartable y los trata como el campo[4]/legajo real de ese
+primer registro; cada registro siguiente toma su legajo del campo[4] del
+registro anterior. El orden de bytes de este `FichadaRecord` ya
+re-encuadrado es `[legajo(0-3)] [campo0(4-7)] [campo1(8-11)]
+[campo2/tipo(12-15)] [campo3/método(16-19)]` — **no** el orden crudo
+`[campo0,1,2,3,4]` del payload de `0xA4` (ver `src/protocol/client.js`).
+Mezcla campos confirmados por el protocolo con campos no resueltos, sin
+combinarlos como si tuvieran el mismo nivel de certeza (spec FR-005).
 
 | Campo | Tipo | Confirmado | Descripción |
 |---|---|---|---|
-| `rawHex` | string (40 caracteres hex) | — | Los 20 bytes crudos del registro, siempre incluidos para trazabilidad |
-| `recordTypeConstant` | string (hex, 8 caracteres) | ✅ | campo[2], bytes 8–11; se valida que sea siempre `00000001` |
-| `verificationMethodCode` | string (hex, 8 caracteres) | ✅ (parcial) | campo[3], bytes 12–15; valor crudo confirmado como variable según método |
+| `rawHex` | string (40 caracteres hex) | — | Los 20 bytes ya re-encuadrados, siempre incluidos para trazabilidad |
+| `legajoHipotesis` | integer (0-255) | ❌ hipótesis (27/27 coincidencias contra dos sesiones reales independientes tras corregir el encuadre, ver research.md §5.9) | Primer byte del bloque de 4 bytes re-encuadrado (bytes 0-3); identifica al empleado. Sigue `unconfirmed: true` — no hay confirmación sobre los otros 3 bytes de ese bloque ni sobre el caso de verificación por tarjeta |
+| `recordTypeConstant` | string (hex, 8 caracteres) | ✅ (bytes), ❌ (significado) | campo[2] re-encuadrado, bytes 12–15; no es fijo entre sesiones (`00000001` el 2026-07-02, `00000002` el 2026-07-03, ver research.md §5.8); no es el legajo del empleado (hipótesis refutada, research.md §5.6) |
+| `verificationMethodCode` | string (hex, 8 caracteres) | ✅ (parcial) | campo[3] re-encuadrado, bytes 16–19; valor crudo confirmado como variable según método |
 | `verificationMethodLabel` | string \| `null` | ❌ hipótesis (`0x10`/`0x30`/`0x40` confirmados por comparación externa, ver research.md §5.6) | Interpretación humana de `verificationMethodCode` (ej. "huella", "rostro", "tarjeta"); se expone solo como hipótesis, con `unconfirmed: true` |
-| `timestampHypothesis` | string (`HH:MM:SS`) \| `null` | ❌ hipótesis (minuto y segundo confirmados, hora ambigua cada 8hs, ver research.md §5.7) | Hora local decodificada de campo[0]/campo[1]; `null` si el registro no calza con el formato esperado |
-| `unresolvedFields.field0` | string (hex, 8 caracteres) | ❌ | campo[0], bytes 0–3 (el ultimo byte ya se usa para `timestampHypothesis`, pero se sigue exponiendo crudo aca tambien) |
-| `unresolvedFields.field1` | string (hex, 8 caracteres) | ❌ | campo[1], bytes 4–7 (bytes 2-3 ya se usan para `timestampHypothesis`; bytes 0-1 sin resolver) |
-| `unresolvedFields.field4` | string (hex, 8 caracteres) | ❌ | campo[4], bytes 16–19 |
+| `timestampHypothesis` | string (`HH:MM:SS`) \| `null` | ❌ hipótesis (minuto y segundo confirmados; hora combina `hourMod8` con un flag AM/PM del bit0, confirmado 6/6 contra horarios reales, ver research.md §5.10) | Hora local decodificada de campo[0]/campo[1] re-encuadrados; `null` si el registro no calza con el formato esperado, o si el flag AM/PM no alcanza para desambiguar entre los 2 candidatos restantes de ese `hourMod8` |
+| `unresolvedFields.legajoRaw` | string (hex, 8 caracteres) | ❌ (salvo byte0, ver `legajoHipotesis`) | Bloque de 4 bytes re-encuadrado (bytes 0-3) completo, crudo |
+| `unresolvedFields.field0` | string (hex, 8 caracteres) | ❌ | campo[0] re-encuadrado, bytes 4–7 (el ultimo byte ya se usa para `timestampHypothesis`, pero se sigue exponiendo crudo aca tambien) |
+| `unresolvedFields.field1` | string (hex, 8 caracteres) | ❌ | campo[1] re-encuadrado, bytes 8–11 (bytes 2-3 ya se usan para `timestampHypothesis`; bytes 0-1 sin resolver) |
 
 **Validation rules**:
 - `rawHex` DEBE tener exactamente 40 caracteres hexadecimales (20 bytes); si
   no, el registro se descarta y la sesión se marca en error (ver FR-010).
-- `recordTypeConstant` DEBE ser `00000001`; si difiere, se registra como
-  anomalía en el log de sesión pero no bloquea el resto del lote (es un
-  campo confirmado, una desviación es señal de protocolo mal interpretado y
-  debe quedar visible, no silenciada).
+- El campo[4] (legajo) del **último** registro recibido en una respuesta de
+  `0xA4` queda colgando — pertenece a una fichada que todavía no llegó en
+  esa descarga — y se descarta explícitamente en `src/protocol/client.js`;
+  no debe asignarse a ningún `FichadaRecord` de la sesión actual
+  (research.md §5.9).
+- `recordTypeConstant` NO es un valor fijo entre sesiones: se observó
+  `00000001` en la sesión de calibración del 2026-07-02 y `00000002` de
+  forma uniforme en una sesión completa (28 registros) del 2026-07-03
+  (research.md §5.8) — el mismo valor para todos los registros de un lote,
+  pero distinto entre lotes de días distintos. La hipótesis "= legajo del
+  empleado" quedó refutada (research.md §5.6, cruce con `control_fichada.csv`);
+  la hipótesis vigente es un contador de lote/sesión (día o generación
+  post-borrado), sin confirmar. El script sigue marcando internamente
+  (`anomaly: true`, usado hoy solo en el resumen de consola, no en el log
+  NDJSON de sesión) cualquier valor que difiera de `00000001`, pero esta
+  anomalía es ahora informativa, no necesariamente indicio de protocolo mal
+  interpretado — no debe tratarse como motivo para descartar el registro.
 - `verificationMethodLabel` NUNCA se presenta sin su contraparte
   `verificationMethodCode` ni sin el flag de "no confirmado" explícito.
 - `timestampHypothesis` NUNCA se presenta sin el flag de "no confirmado"
   explícito, por la misma razón: el componente de hora puede repetirse cada
   8 horas (research.md §5.7), así que no es una garantía del protocolo.
+- `legajoHipotesis` NUNCA se presenta sin el flag de "no confirmado"
+  explícito: no hay evidencia sobre el caso de verificación por tarjeta
+  (research.md §5.9, fila 28 del lote del 2026-07-03 no coincidió con
+  ningún legajo real conocido).
 
 ## 2. QuerySession
 

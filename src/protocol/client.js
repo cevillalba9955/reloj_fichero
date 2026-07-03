@@ -169,9 +169,13 @@ export async function queryPendingFichadas(socket, reader, logger, { timeoutMs, 
     );
   }
 
-  // El header de 4 bytes no tiene un significado confirmado (research.md
-  // §5.2); se lee y se descarta para mantener el framing, sin interpretarlo.
-  await reader.readExact(4, { timeoutMs });
+  // Correccion de encuadre (research.md §5.9, 2026-07-03): este bloque de 4
+  // bytes NO carece de significado - es el campo[4] (legajo) del primer
+  // registro. El limite real de cada fichada arranca 4 bytes antes de donde
+  // arrancaba el recorte viejo: [legajo] + [segundo/hora-minuto/tipo/metodo
+  // propios]. Por eso se conserva (no se descarta) y se antepone al buffer
+  // de registros antes de trocear.
+  const header = await reader.readExact(4, { timeoutMs });
 
   // No existe un campo de longitud en el protocolo: la unica forma de saber
   // cuantos bytes leer es asumir que coinciden con lo declarado por 0xB4.
@@ -193,9 +197,17 @@ export async function queryPendingFichadas(socket, reader, logger, { timeoutMs, 
     );
   }
 
+  // research.md §5.9: el stream real de campos es [header/legajo1][fichada1
+  // sin su legajo][legajo2][fichada2 sin su legajo]... Concatenando header +
+  // recordsBuffer y volviendo a trocear en bloques de RECORD_SIZE se obtiene
+  // exactamente declaredPendingCount fichadas bien encuadradas; sobran
+  // siempre los ultimos 4 bytes (el legajo de una fichada que todavia no
+  // llego en esta descarga), que se descartan a proposito.
+  const fullBuffer = Buffer.concat([header, recordsBuffer]);
   const rawRecords = [];
-  for (let offset = 0; offset < recordsBuffer.length; offset += RECORD_SIZE) {
-    rawRecords.push(recordsBuffer.subarray(offset, offset + RECORD_SIZE));
+  for (let i = 0; i < declaredPendingCount; i += 1) {
+    const offset = i * RECORD_SIZE;
+    rawRecords.push(fullBuffer.subarray(offset, offset + RECORD_SIZE));
   }
 
   return { declaredPendingCount, rawRecords };
@@ -209,7 +221,15 @@ export async function queryPendingFichadas(socket, reader, logger, { timeoutMs, 
 // detalle -> cierre de operacion. Los payloads de parametros/identificacion
 // no se interpretan (no aportan nada a la consulta de fichadas); solo se
 // leen y descartan para mantener el framing del socket sincronizado.
-export async function runQuerySession({ host, port, timeoutMs, sessionId, logger }) {
+// research.md §6.6: 13/13 corridas reales (conteo 0xB4 solo, secuencia
+// parcial, y detalle 0xA4 completo) confirmaron que el reloj no requiere
+// los tres 0x13 (parametros, identificacion, parametros) para ninguna
+// operacion de esta feature. Por eso quedan como opcionales
+// (fullHandshake=false por defecto) en vez de eliminarse: si se conecta
+// un reloj nuevo, otro firmware, o el comportamiento observado cambia,
+// alcanza con pasar fullHandshake:true (o --full-handshake en el CLI)
+// para volver a la secuencia completa sin tocar codigo.
+export async function runQuerySession({ host, port, timeoutMs, sessionId, logger, fullHandshake = false }) {
   const session = {
     sessionId,
     deviceHost: host,
@@ -242,31 +262,37 @@ export async function runQuerySession({ host, port, timeoutMs, sessionId, logger
     let seq = 1;
     const handshakeCmd = buildHandshakeCommand(seq);
     socket.write(handshakeCmd);
-    logger.log('command_sent', { commandCode: '0x80', byteLength: handshakeCmd.length });
+    logger.log('command_sent', {
+      commandCode: '0x80',
+      byteLength: handshakeCmd.length,
+      detail: fullHandshake ? 'full-handshake (0x13 x3)' : 'reduced-handshake (sin 0x13)',
+    });
     await reader.readExact(ACK_SIZE, { timeoutMs });
     logger.log('response_received', { commandCode: '0x80', byteLength: ACK_SIZE });
     seq += 1;
 
-    const paramsCmd1 = buildParamsCommand(seq);
-    socket.write(paramsCmd1);
-    logger.log('command_sent', { commandCode: '0x13', byteLength: paramsCmd1.length });
-    await reader.readExact(PARAMS_RESPONSE_SIZE, { timeoutMs });
-    logger.log('response_received', { commandCode: '0x13', byteLength: PARAMS_RESPONSE_SIZE });
-    seq += 1;
+    if (fullHandshake) {
+      const paramsCmd1 = buildParamsCommand(seq);
+      socket.write(paramsCmd1);
+      logger.log('command_sent', { commandCode: '0x13', byteLength: paramsCmd1.length });
+      await reader.readExact(PARAMS_RESPONSE_SIZE, { timeoutMs });
+      logger.log('response_received', { commandCode: '0x13', byteLength: PARAMS_RESPONSE_SIZE });
+      seq += 1;
 
-    const identificationCmd = buildIdentificationCommand(seq);
-    socket.write(identificationCmd);
-    logger.log('command_sent', { commandCode: '0x13', byteLength: identificationCmd.length });
-    await reader.readExact(IDENTIFICATION_RESPONSE_SIZE, { timeoutMs });
-    logger.log('response_received', { commandCode: '0x13', byteLength: IDENTIFICATION_RESPONSE_SIZE });
-    seq += 1;
+      const identificationCmd = buildIdentificationCommand(seq);
+      socket.write(identificationCmd);
+      logger.log('command_sent', { commandCode: '0x13', byteLength: identificationCmd.length });
+      await reader.readExact(IDENTIFICATION_RESPONSE_SIZE, { timeoutMs });
+      logger.log('response_received', { commandCode: '0x13', byteLength: IDENTIFICATION_RESPONSE_SIZE });
+      seq += 1;
 
-    const paramsCmd2 = buildParamsCommand(seq);
-    socket.write(paramsCmd2);
-    logger.log('command_sent', { commandCode: '0x13', byteLength: paramsCmd2.length });
-    await reader.readExact(PARAMS_RESPONSE_SIZE, { timeoutMs });
-    logger.log('response_received', { commandCode: '0x13', byteLength: PARAMS_RESPONSE_SIZE });
-    seq += 1;
+      const paramsCmd2 = buildParamsCommand(seq);
+      socket.write(paramsCmd2);
+      logger.log('command_sent', { commandCode: '0x13', byteLength: paramsCmd2.length });
+      await reader.readExact(PARAMS_RESPONSE_SIZE, { timeoutMs });
+      logger.log('response_received', { commandCode: '0x13', byteLength: PARAMS_RESPONSE_SIZE });
+      seq += 1;
+    }
 
     const { declaredPendingCount, rawRecords } = await queryPendingFichadas(socket, reader, logger, {
       timeoutMs,

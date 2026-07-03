@@ -33,6 +33,7 @@ export function exportSessionToJson({ session, records, outputDir }) {
       verificationMethodCode: record.verificationMethodCode,
       verificationMethodLabel: record.verificationMethodLabel,
       timestampHypothesis: record.timestampHypothesis,
+      legajoHipotesis: record.legajoHipotesis,
       unresolvedFields: record.unresolvedFields,
     })),
   };

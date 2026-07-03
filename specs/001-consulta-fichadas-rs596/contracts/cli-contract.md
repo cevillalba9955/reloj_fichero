@@ -15,6 +15,7 @@ node src/cli/consultar-fichadas.js --host <ip> [--port <número>] [--output-dir 
 | `--output-dir` | No | `./output` | Directorio donde se escribe el JSON de fichadas (FR-006) |
 | `--log-dir` | No | `./logs` | Directorio donde se escribe el log NDJSON de la sesión (FR-012) |
 | `--timeout-ms` | No | `5000` | Tiempo máximo de espera por respuesta antes de considerar la conexión anómala (FR-011) |
+| `--full-handshake` | No | `false` (desactivado) | Envía la secuencia completa de apertura (`0x13` parámetros + identificación + parámetros) antes de `0xB4`/`0xA4`, en vez de la secuencia reducida (solo `0x80`) que usa el script por defecto. Ver FR-002 y `research/protocolo_prosoft_rs596.md` §6.6: los `0x13` dejaron de ser necesarios en las pruebas contra el equipo actual, pero el flag queda disponible por si un reloj distinto (u otro firmware) sí los exige |
 
 No existe flag de borrado (`--delete`) en esta versión: FR-007 excluye el
 borrado automático del alcance de este script; se deja para una feature

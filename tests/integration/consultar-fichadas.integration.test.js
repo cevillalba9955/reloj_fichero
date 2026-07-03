@@ -29,6 +29,12 @@ test('parseCliArgs: aplica defaults de contracts/cli-contract.md', () => {
   assert.equal(options.outputDir, './output');
   assert.equal(options.logDir, './logs');
   assert.equal(options.timeoutMs, 5000);
+  assert.equal(options.fullHandshake, false);
+});
+
+test('parseCliArgs: --full-handshake activa la secuencia completa de 0x13 (FR-002)', () => {
+  const options = parseCliArgs(['--host', '192.168.1.50', '--full-handshake']);
+  assert.equal(options.fullHandshake, true);
 });
 
 test('parseCliArgs: rechaza --port no numerico', () => {

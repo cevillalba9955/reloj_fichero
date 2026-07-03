@@ -20,22 +20,44 @@ function pad2(n) {
   return String(n).padStart(2, '0');
 }
 
-// research.md §5.7: segundo (campo[0] byte 3, binario directo) y minuto
-// (campo[1] byte 3 = minuto*4+1) confirmados byte a byte contra
-// research/control_fichada.csv (7/7 y 8/8 coincidencias exactas). La hora
-// (campo[1] byte 2 = (32*hora+2) mod 256) ajusta para los dos valores de
-// hora probados (13 y 14) pero la formula se repite cada 8 horas — el
-// resultado puede estar equivocado por un multiplo de 8 para horas nunca
-// probadas. Se expone igual (dado por valido sin mas pruebas, a pedido del
-// usuario), siempre con unconfirmed: true.
+// Correccion de encuadre (research.md §5.9, 2026-07-03): el orden real de
+// campos dentro de cada fichada de 20 bytes es
+// [legajo(0-3)] [campo0/segundo(4-7)] [campo1/hora-minuto(8-11)]
+// [campo2/tipo(12-15)] [campo3/metodo(16-19)] — no
+// [campo0][campo1][campo2][campo3][campo4] como se asumia antes. El caller
+// (src/protocol/client.js) ya entrega el buffer con este encuadre corregido
+// (antepone el header de 4 bytes que antes se descartaba).
+
+// research.md §5.7: segundo (byte 7, binario directo) y minuto (byte 11 =
+// minuto*4+1) confirmados byte a byte contra research/control_fichada.csv
+// (7/7 y 8/8 coincidencias exactas).
+//
+// research.md §5.10: el byte de hora (byte 10) trae, en sus bits 1-4, un
+// flag fijo "0001", y en el bit 0 un flag tipo AM/PM: 1 = hora real <= 12,
+// 0 = hora real > 12. Confirmado 7/7 contra los horarios reales conocidos
+// (13, 14, 16, 6, 7, 11, 12) — el limite correcto es "<=12", no "<12"
+// (corregido 2026-07-03 con una fichada real de hora 12: hourMod8=4,
+// bit0=1, que con el limite viejo se resolvia mal como hora 4). Los bits
+// 5-7 siguen dando solo "hourMod8" (se repite cada 8 horas). Combinando
+// ambos: de los 3 candidatos {hourMod8, hourMod8+8, hourMod8+16}, el flag
+// AM/PM separa los que son <=12 de los que son >12; si exactamente uno de
+// los 3 cae del lado que indica el flag, la hora queda resuelta sin
+// ambiguedad; si quedan 2 candidatos del mismo lado (pasa para hourMod8
+// 0-3 con flag<=12, y para hourMod8 4-7 con flag>12 — notablemente
+// hourMod8=4 con flag<=12 es ambiguo entre 4 y 12, el caso que motivo esta
+// correccion), sigue sin poder resolverse solo con estos bytes. Con 7
+// horas confirmadas (de 24 posibles) esto sigue siendo hipotesis sin
+// validar del todo (falta el resto de las horas, y hora=0 en particular,
+// que podria no seguir el mismo patron que 1-12); se expone igual, a
+// pedido del usuario, siempre con unconfirmed: true.
 function decodeTimestampHypothesis(buffer) {
-  const second = buffer[3];
-  const hourByte = buffer[6];
-  const minuteByte = buffer[7];
+  const second = buffer[7];
+  const hourByte = buffer[10];
+  const minuteByte = buffer[11];
 
   const looksValid =
     second <= 59 &&
-    (hourByte & 0b00011111) === 0b00010 &&
+    (hourByte & 0b00011110) === 0b00010 &&
     (minuteByte & 0b00000011) === 0b01 &&
     (minuteByte >> 2) <= 59;
 
@@ -44,16 +66,25 @@ function decodeTimestampHypothesis(buffer) {
   }
 
   const hourMod8 = hourByte >> 5;
+  const isAtMostTwelve = (hourByte & 1) === 1;
   const minute = minuteByte >> 2;
 
+  const candidates = [hourMod8, hourMod8 + 8, hourMod8 + 16];
+  const matching = candidates.filter((h) => (h <= 12) === isAtMostTwelve);
+  const hour = matching.length === 1 ? matching[0] : null;
+
+  if (hour === null) {
+    return { value: null, unconfirmed: true };
+  }
+
   return {
-    value: `${pad2(hourMod8)}:${pad2(minute)}:${pad2(second)}`,
+    value: `${pad2(hour)}:${pad2(minute)}:${pad2(second)}`,
     unconfirmed: true,
   };
 }
 
 // Parsea un registro de fichada de 20 bytes segun
-// research/protocolo_prosoft_rs596.md §5.2. Devuelve un FichadaRecord
+// research/protocolo_prosoft_rs596.md §5.2/§5.9. Devuelve un FichadaRecord
 // (data-model.md §1): separa explicitamente los campos confirmados por el
 // protocolo de los que siguen sin resolver, sin mezclarlos (spec FR-005).
 export function parseFichadaRecord(buffer) {
@@ -63,8 +94,8 @@ export function parseFichadaRecord(buffer) {
     );
   }
 
-  const recordTypeConstant = hexField(buffer, 8, 12);
-  const verificationMethodCode = hexField(buffer, 12, 16);
+  const recordTypeConstant = hexField(buffer, 12, 16);
+  const verificationMethodCode = hexField(buffer, 16, 20);
 
   return {
     rawHex: buffer.toString('hex').toUpperCase(),
@@ -80,14 +111,24 @@ export function parseFichadaRecord(buffer) {
       value: VERIFICATION_METHOD_HYPOTHESES[verificationMethodCode] ?? null,
       unconfirmed: true,
     },
-    // Hipotesis (research.md §5.7): "hourMod8" en el valor puede repetirse
-    // cada 8 horas (ver el comentario de decodeTimestampHypothesis); minuto
-    // y segundo estan confirmados. Formato "HH:MM:SS" con HH = hora mod 8.
+    // Hipotesis (research.md §5.7/§5.10): minuto y segundo confirmados; la
+    // hora combina "hourMod8" con un flag AM/PM (ver el comentario de
+    // decodeTimestampHypothesis) — a veces alcanza para resolverla sin
+    // ambiguedad, a veces no (en ese caso value es null).
     timestampHypothesis: decodeTimestampHypothesis(buffer),
+    // Hipotesis (research.md §5.9): primer byte confirmado como legajo del
+    // empleado (27/27 coincidencias verificadas contra dos sesiones reales
+    // independientes, una vez corregido el encuadre). Se sigue exponiendo
+    // con unconfirmed: true: no hay confirmacion sobre el resto de los 3
+    // bytes ni sobre el caso de verificacion por tarjeta.
+    legajoHipotesis: {
+      value: buffer[0],
+      unconfirmed: true,
+    },
     unresolvedFields: {
-      field0: hexField(buffer, 0, 4),
-      field1: hexField(buffer, 4, 8),
-      field4: hexField(buffer, 16, 20),
+      legajoRaw: hexField(buffer, 0, 4),
+      field0: hexField(buffer, 4, 8),
+      field1: hexField(buffer, 8, 12),
     },
   };
 }

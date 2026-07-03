@@ -17,9 +17,9 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["rawHex", "recordTypeConstant", "verificationMethodCode", "verificationMethodLabel", "timestampHypothesis", "unresolvedFields"],
+        "required": ["rawHex", "recordTypeConstant", "verificationMethodCode", "verificationMethodLabel", "timestampHypothesis", "legajoHipotesis", "unresolvedFields"],
         "properties": {
-          "rawHex": { "type": "string", "pattern": "^[0-9A-Fa-f]{40}$" },
+          "rawHex": { "type": "string", "pattern": "^[0-9A-Fa-f]{40}$", "description": "20 bytes ya re-encuadrados (research.md §5.9): [legajo(0-3)][segundo/hora-minuto(4-11)][tipo(12-15)][metodo(16-19)], no el orden original del payload de 0xA4" },
           "recordTypeConstant": { "type": "string", "pattern": "^[0-9A-Fa-f]{8}$" },
           "verificationMethodCode": { "type": "string", "pattern": "^[0-9A-Fa-f]{8}$" },
           "verificationMethodLabel": {
@@ -33,19 +33,28 @@
           "timestampHypothesis": {
             "type": "object",
             "required": ["value", "unconfirmed"],
-            "description": "Hora local del registro en formato HH:MM:SS (research.md §5.7): minuto y segundo confirmados contra research/control_fichada.csv; HH es hora modulo 8 (la formula se repite cada 8 horas, sin desambiguar todavia entre bloques). null si el registro no calza con el formato esperado.",
+            "description": "Hora local del registro en formato HH:MM:SS (research.md §5.7/§5.10): minuto y segundo confirmados contra research/control_fichada.csv; la hora combina hourMod8 con un flag AM/PM (bit0 del byte de hora, confirmado 6/6 contra horarios reales) que a veces alcanza para resolverla sin ambiguedad y a veces no. null si el registro no calza con el formato esperado, o si el flag AM/PM no alcanza para desambiguar entre los 2 candidatos restantes.",
             "properties": {
               "value": { "type": ["string", "null"], "pattern": "^[0-9]{2}:[0-5][0-9]:[0-5][0-9]$" },
               "unconfirmed": { "type": "boolean", "const": true }
             }
           },
+          "legajoHipotesis": {
+            "type": "object",
+            "required": ["value", "unconfirmed"],
+            "description": "Legajo/ID de empleado (research.md §5.9): primer byte del campo re-encuadrado, confirmado 27/27 contra dos sesiones reales independientes tras corregir el encuadre. Sigue con unconfirmed:true por no tener confirmacion sobre el resto de los bytes ni sobre verificacion por tarjeta.",
+            "properties": {
+              "value": { "type": "integer", "minimum": 0, "maximum": 255 },
+              "unconfirmed": { "type": "boolean", "const": true }
+            }
+          },
           "unresolvedFields": {
             "type": "object",
-            "required": ["field0", "field1", "field4"],
+            "required": ["legajoRaw", "field0", "field1"],
             "properties": {
+              "legajoRaw": { "type": "string", "pattern": "^[0-9A-Fa-f]{8}$", "description": "4 bytes crudos que contienen legajoHipotesis en su primer byte; los otros 3 bytes sin confirmar" },
               "field0": { "type": "string", "pattern": "^[0-9A-Fa-f]{8}$", "description": "unconfirmed" },
-              "field1": { "type": "string", "pattern": "^[0-9A-Fa-f]{8}$", "description": "unconfirmed, candidato a fecha/hora sin fórmula resuelta" },
-              "field4": { "type": "string", "pattern": "^[0-9A-Fa-f]{8}$", "description": "unconfirmed" }
+              "field1": { "type": "string", "pattern": "^[0-9A-Fa-f]{8}$", "description": "unconfirmed, candidato a fecha/hora sin fórmula resuelta" }
             }
           }
         }

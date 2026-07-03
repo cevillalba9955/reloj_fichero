@@ -1,0 +1,62 @@
+{
+  "description": "Muestras para confirmar el flag AM/PM del bit0 del byte de hora (research.md #5.10). El limite correcto del flag es 'hora<=12' (no 'hora<12', corregido 2026-07-03 con la fila de hora 12 al final de este fixture). Las primeras 3 filas son datos REALES del lote de 28 fichadas del 2026-07-03 con hora confirmada por el usuario (16, 6 y 7 respectivamente) — pero su timestampHypothesis sigue dando null porque minuteByte no cumple el flag de bits bajos '01' que exige decodeTimestampHypothesis (minuteByte observado: 0x1A, 0x90, 0x08 -> bits bajos 2, 0, 0, no 1). Esto es una limitacion PRE-EXISTENTE y distinta de la mejora de hora AM/PM (ver research.md #5.10, seccion 'hallazgo adicional'): el minuto decodificado (byte>>2) coincide con la hora real confirmada en los 3 casos, pero el gate de validez actual las descarta igual. Las filas 5 y 6 son sinteticas (bytes construidos a mano, no una captura real) solo para probar en aislamiento la logica de resolucion de hora AM/PM+hourMod8 con un minuteByte que si cumple el flag esperado. La fila 7 es REAL (sesion 2026-07-03T15:56) y fue la que forzo la correccion del limite '<=12'.",
+  "source": "research/protocolo_prosoft_rs596.md #5.9, #5.10, research/hipotesis_fichadas_2026-07-03.csv",
+  "registros": [
+    {
+      "hex": "01 00 00 00 01 00 00 20 F9 71 02 1A 00 00 00 02 00 00 00 40",
+      "legajoReal": 1,
+      "horaReal": "16:06:32",
+      "expectedTimestampHypothesis": null,
+      "esSintetico": false,
+      "nota": "hora real confirmada 16 (hourMod8=0, flag AM/PM resolveria a 16 sin ambiguedad) pero minuteByte=0x1A no cumple el flag de bits bajos '01' (da '10') -> sigue null por esa limitacion pre-existente, no relacionada con el flag de hora"
+    },
+    {
+      "hex": "02 00 00 00 01 00 00 2F F9 71 C3 90 00 00 00 02 00 00 00 40",
+      "legajoReal": 2,
+      "horaReal": "06:36:47",
+      "expectedTimestampHypothesis": null,
+      "esSintetico": false,
+      "nota": "hora real confirmada 6 (hourMod8=6, flag AM/PM resolveria a 6 sin ambiguedad) pero minuteByte=0x90 no cumple el flag de bits bajos '01' (da '00') -> sigue null por esa limitacion pre-existente"
+    },
+    {
+      "hex": "3B 00 00 00 01 00 00 27 F9 71 E3 08 00 00 00 02 00 00 00 10",
+      "legajoReal": 59,
+      "horaReal": "07:02:39",
+      "expectedTimestampHypothesis": null,
+      "esSintetico": false,
+      "nota": "hora real confirmada 7 (hourMod8=7, flag AM/PM resolveria a 7 sin ambiguedad) pero minuteByte=0x08 no cumple el flag de bits bajos '01' (da '00') -> sigue null por esa limitacion pre-existente"
+    },
+    {
+      "hex": "02 00 00 00 01 00 00 22 F9 71 63 59 00 00 00 01 00 00 00 40",
+      "legajoReal": 2,
+      "horaReal": "11:22:34",
+      "expectedTimestampHypothesis": null,
+      "esSintetico": false,
+      "nota": "REAL, capturado con el encuadre ya corregido (sesion 2026-07-03T14:28). hourMod8=3 (grupo 0-3), flag AM/PM indica hora <12 -> sigue ambiguo entre 3 y 11 (no resuelto por el flag solo; la hora real 11 se confirmo externamente). minuteByte SI cumple el flag de bits bajos (0x59 -> '01')."
+    },
+    {
+      "hex": "01 00 00 00 01 00 00 20 F9 71 02 19 00 00 00 02 00 00 00 40",
+      "legajoReal": 1,
+      "horaReal": "16:06:32 (sintetico)",
+      "expectedTimestampHypothesis": "16:06:32",
+      "esSintetico": true,
+      "nota": "SINTETICO: mismo hourByte real (0x02, hora 16 confirmada) pero con minuteByte=0x19 (bits bajos '01', minuto 6) para que cumpla el gate de minuto y se pueda probar la logica de hora AM/PM en aislamiento; no es una captura real"
+    },
+    {
+      "hex": "3B 00 00 00 01 00 00 27 F9 71 E3 19 00 00 00 02 00 00 00 10",
+      "legajoReal": 59,
+      "horaReal": "07:06:39 (sintetico)",
+      "expectedTimestampHypothesis": "07:06:39",
+      "esSintetico": true,
+      "nota": "SINTETICO: mismo hourByte real (0xE3, hora 7 confirmada) con minuteByte=0x19 (bits bajos '01', minuto 6) para que cumpla el gate de minuto; no es una captura real"
+    },
+    {
+      "hex": "01 00 00 00 01 00 00 30 F9 71 83 DD 00 00 00 01 00 00 00 10",
+      "legajoReal": 1,
+      "horaReal": "12:55:48",
+      "expectedTimestampHypothesis": null,
+      "esSintetico": false,
+      "nota": "REAL (sesion 2026-07-03T15:56, 5to registro del lote). hourMod8=4, bit0=1. Con el limite viejo ('hora<12') esto resolvia mal como hora 4 (unico candidato <12 del grupo {4,12,20}); la hora real es 12. Con el limite corregido ('hora<=12'), tanto 4 como 12 caen del lado 'hora<=12' -> 2 candidatos -> ambiguo -> null (correcto: no se puede distinguir 4 de 12 solo con este byte). minuteByte=0xDD si cumple el flag de bits bajos ('01', minuto 55)."
+    }
+  ]
+}

@@ -28,43 +28,14 @@ function ackFor(seq) {
 // se prueba a fondo en tests/integration/query-pending-fichadas.
 const REGISTRO_REAL = Buffer.from('0100002df9712279000000010000004074030000', 'hex');
 
-// Reproduce la secuencia real completa confirmada en research.md §6.4
-// (handshake -> 0x13 parametros -> 0x13 identificacion -> 0x13 parametros de
-// nuevo -> 0xB4 -> [0xA4] -> 0x81 cierre) con un servidor mock guionado, sin
-// depender del reloj real.
-function startFullSessionServer({ declaredPendingCount = 0 } = {}) {
+// Servidor mock guionado generico: recibe una lista de pasos [{expect,
+// respond}] y responde en orden, verificando que los bytes recibidos
+// coincidan exactamente con lo esperado en cada paso.
+function startScriptedServer(steps) {
   return new Promise((resolve) => {
     const server = createServer((socket) => {
       let stepIndex = 0;
       let received = Buffer.alloc(0);
-      const steps = [
-        { expect: buildHandshakeCommand(1), respond: ackFor(1) },
-        { expect: buildParamsCommand(2), respond: Buffer.concat([ackFor(2), Buffer.alloc(PARAMS_RESPONSE_SIZE - ACK_SIZE)]) },
-        { expect: buildIdentificationCommand(3), respond: Buffer.concat([ackFor(3), Buffer.alloc(IDENTIFICATION_RESPONSE_SIZE - ACK_SIZE)]) },
-        { expect: buildParamsCommand(4), respond: Buffer.concat([ackFor(4), Buffer.alloc(PARAMS_RESPONSE_SIZE - ACK_SIZE)]) },
-        {
-          expect: buildPendingCountCommand(5),
-          respond: (() => {
-            const buffer = ackFor(5);
-            buffer.writeUInt32LE(declaredPendingCount, 4);
-            return buffer;
-          })(),
-        },
-      ];
-      if (declaredPendingCount > 0) {
-        steps.push({
-          expect: buildPendingDetailCommand(6, declaredPendingCount),
-          respond: Buffer.concat([
-            ackFor(6),
-            Buffer.from([0x55, 0xaa]),
-            Buffer.from('01000000', 'hex'),
-            ...Array(declaredPendingCount).fill(REGISTRO_REAL),
-          ]),
-        });
-      }
-      const closeSeq = declaredPendingCount > 0 ? 7 : 6;
-      steps.push({ expect: buildCloseOperationCommand(closeSeq), respond: ackFor(closeSeq) });
-
       socket.on('data', (chunk) => {
         received = Buffer.concat([received, chunk]);
         const step = steps[stepIndex];
@@ -80,6 +51,65 @@ function startFullSessionServer({ declaredPendingCount = 0 } = {}) {
     });
     server.listen(0, '127.0.0.1', () => resolve(server));
   });
+}
+
+function pendingCountStep(seq, declaredPendingCount) {
+  return {
+    expect: buildPendingCountCommand(seq),
+    respond: (() => {
+      const buffer = ackFor(seq);
+      buffer.writeUInt32LE(declaredPendingCount, 4);
+      return buffer;
+    })(),
+  };
+}
+
+function pendingDetailStep(seq, declaredPendingCount) {
+  return {
+    expect: buildPendingDetailCommand(seq, declaredPendingCount),
+    respond: Buffer.concat([
+      ackFor(seq),
+      Buffer.from([0x55, 0xaa]),
+      Buffer.from('01000000', 'hex'),
+      ...Array(declaredPendingCount).fill(REGISTRO_REAL),
+    ]),
+  };
+}
+
+// research.md §6.6 (2026-07-03, 13/13 corridas reales): la secuencia
+// reducida (solo 0x80, sin ningun 0x13) es el comportamiento por defecto
+// desde que se confirmo que el reloj no requiere los 0x13 para 0xB4/0xA4.
+function startReducedSessionServer({ declaredPendingCount = 0 } = {}) {
+  const steps = [
+    { expect: buildHandshakeCommand(1), respond: ackFor(1) },
+    pendingCountStep(2, declaredPendingCount),
+  ];
+  if (declaredPendingCount > 0) {
+    steps.push(pendingDetailStep(3, declaredPendingCount));
+  }
+  const closeSeq = declaredPendingCount > 0 ? 4 : 3;
+  steps.push({ expect: buildCloseOperationCommand(closeSeq), respond: ackFor(closeSeq) });
+  return startScriptedServer(steps);
+}
+
+// Reproduce la secuencia completa confirmada en research.md §6.4
+// (handshake -> 0x13 parametros -> 0x13 identificacion -> 0x13 parametros de
+// nuevo -> 0xB4 -> [0xA4] -> 0x81 cierre), disponible via fullHandshake:true
+// (FR-002) para equipos/firmwares donde la secuencia reducida no alcance.
+function startFullSessionServer({ declaredPendingCount = 0 } = {}) {
+  const steps = [
+    { expect: buildHandshakeCommand(1), respond: ackFor(1) },
+    { expect: buildParamsCommand(2), respond: Buffer.concat([ackFor(2), Buffer.alloc(PARAMS_RESPONSE_SIZE - ACK_SIZE)]) },
+    { expect: buildIdentificationCommand(3), respond: Buffer.concat([ackFor(3), Buffer.alloc(IDENTIFICATION_RESPONSE_SIZE - ACK_SIZE)]) },
+    { expect: buildParamsCommand(4), respond: Buffer.concat([ackFor(4), Buffer.alloc(PARAMS_RESPONSE_SIZE - ACK_SIZE)]) },
+    pendingCountStep(5, declaredPendingCount),
+  ];
+  if (declaredPendingCount > 0) {
+    steps.push(pendingDetailStep(6, declaredPendingCount));
+  }
+  const closeSeq = declaredPendingCount > 0 ? 7 : 6;
+  steps.push({ expect: buildCloseOperationCommand(closeSeq), respond: ackFor(closeSeq) });
+  return startScriptedServer(steps);
 }
 
 function withTempLogDir(fn) {
@@ -119,10 +149,10 @@ test('client: connectSocket falla rapido (sin reintentos) cuando el puerto recha
   assert.ok(elapsed < 2000, `deberia fallar mucho antes del timeout de 2000ms (tardo ${elapsed}ms)`);
 });
 
-test('client: runQuerySession completa el flujo real (handshake, 0x13 x3, 0xB4 sin pendientes, cierre) y cierra el socket (FR-002/FR-008)', async () => {
+test('client: runQuerySession completa el flujo reducido por defecto (handshake, sin 0x13, 0xB4 sin pendientes, cierre) y cierra el socket (FR-002/FR-008)', async () => {
   await withTempLogDir(async (logDir) => {
     let serverSawClose = false;
-    const server = await startFullSessionServer({ declaredPendingCount: 0 });
+    const server = await startReducedSessionServer({ declaredPendingCount: 0 });
     server.on('connection', (socket) => socket.on('close', () => { serverSawClose = true; }));
     const { port } = server.address();
     const logger = createSessionLogger({ sessionId: 'test-session', logDir });
@@ -151,9 +181,9 @@ test('client: runQuerySession completa el flujo real (handshake, 0x13 x3, 0xB4 s
   });
 });
 
-test('client: runQuerySession completa el flujo real con fichadas pendientes (0xB4 + 0xA4)', async () => {
+test('client: runQuerySession completa el flujo reducido con fichadas pendientes (0xB4 + 0xA4, sin 0x13)', async () => {
   await withTempLogDir(async (logDir) => {
-    const server = await startFullSessionServer({ declaredPendingCount: 1 });
+    const server = await startReducedSessionServer({ declaredPendingCount: 1 });
     const { port } = server.address();
     const logger = createSessionLogger({ sessionId: 'test-session-detail', logDir });
 
@@ -163,6 +193,29 @@ test('client: runQuerySession completa el flujo real con fichadas pendientes (0x
       timeoutMs: 2000,
       sessionId: 'test-session-detail',
       logger,
+    });
+
+    assert.equal(session.status, 'success');
+    assert.equal(session.declaredPendingCount, 1);
+    assert.equal(rawRecords.length, 1);
+
+    server.close();
+  });
+});
+
+test('client: runQuerySession con fullHandshake:true reproduce la secuencia completa (0x13 x3) para compatibilidad con otros equipos (FR-002)', async () => {
+  await withTempLogDir(async (logDir) => {
+    const server = await startFullSessionServer({ declaredPendingCount: 1 });
+    const { port } = server.address();
+    const logger = createSessionLogger({ sessionId: 'test-session-full', logDir });
+
+    const { session, rawRecords } = await runQuerySession({
+      host: '127.0.0.1',
+      port,
+      timeoutMs: 2000,
+      sessionId: 'test-session-full',
+      logger,
+      fullHandshake: true,
     });
 
     assert.equal(session.status, 'success');

@@ -134,6 +134,35 @@ test('queryPendingFichadas: dos registros pendientes (captura real #6.2) se pars
   });
 });
 
+test('queryPendingFichadas: re-encuadra el header de 4 bytes como legajo del primer registro, no lo descarta (research.md §5.9)', async () => {
+  await withTempLogDir(async (logDir) => {
+    const fixture = loadFixture('un-registro-pendiente.json');
+    const steps = [
+      { expect: hexToBuffer(fixture.comandoB4), respond: hexToBuffer(fixture.respuestaB4) },
+      {
+        expect: hexToBuffer(fixture.comandoA4),
+        respond: hexToBuffer(fixture.respuestaA4Completa),
+      },
+    ];
+    const server = await startScriptedServer(steps);
+    const { port } = server.address();
+    const socket = await connectSocket('127.0.0.1', port, 2000);
+    const reader = new BufferedSocketReader(socket);
+    const logger = createSessionLogger({ sessionId: 's-legajo', logDir });
+
+    const result = await queryPendingFichadas(socket, reader, logger, { timeoutMs: 2000, seq: 5 });
+
+    assert.equal(result.rawRecords.length, 1);
+    // El header real de esta captura es "01 00 00 00" (research.md §6.1) =
+    // legajo 1 = Cesar Villalba, confirmado. Antes de la correccion de
+    // encuadre este byte se descartaba sin loguear y se perdia.
+    const record = parseFichadaRecord(result.rawRecords[0]);
+    assert.deepEqual(record.legajoHipotesis, { value: 1, unconfirmed: true });
+    socket.destroy();
+    server.close();
+  });
+});
+
 test('queryPendingFichadas: discrepancia entre 0xB4 declarado y bytes extra recibidos en 0xA4 (FR-014) se reporta como error', async () => {
   await withTempLogDir(async (logDir) => {
     const unRegistro = loadFixture('un-registro-pendiente.json');

@@ -9,14 +9,27 @@ function loadFixture(name) {
   return JSON.parse(readFileSync(url, 'utf8'));
 }
 
+// Correccion de encuadre (research.md §5.9, 2026-07-03): los fixtures
+// guardan los "registros" tal como salen del payload de 0xA4 en el orden
+// viejo (campo0,1,2,3,4). parseFichadaRecord ahora espera el orden real
+// (legajo,campo0,1,2,3): [4 bytes de legajo] + [primeros 16 bytes del
+// registro viejo, descartando su campo4]. Este helper arma ese buffer,
+// igual que src/protocol/client.js con el header/registro anterior real.
+function buildTrueRecord(legajoHex, oldRegistroHex) {
+  const legajoBuf = hexToBuffer(legajoHex);
+  const oldBuf = hexToBuffer(oldRegistroHex);
+  assert.equal(legajoBuf.length, 4, 'legajoHex debe ser 4 bytes');
+  assert.equal(oldBuf.length, 20, 'oldRegistroHex debe ser 20 bytes (registro viejo completo)');
+  return Buffer.concat([legajoBuf, oldBuf.subarray(0, 16)]);
+}
+
 test('records: RECORD_SIZE es 20 bytes segun research.md', () => {
   assert.equal(RECORD_SIZE, 20);
 });
 
-test('records: parseFichadaRecord decodifica el registro real de "un registro pendiente"', () => {
+test('records: parseFichadaRecord decodifica el registro real de "un registro pendiente" (encuadre corregido con el header real)', () => {
   const fixture = loadFixture('un-registro-pendiente.json');
-  const raw = hexToBuffer(fixture.registros[0]);
-  assert.equal(raw.length, 20);
+  const raw = buildTrueRecord(fixture.respuestaA4Header, fixture.registros[0]);
 
   const record = parseFichadaRecord(raw);
 
@@ -24,17 +37,21 @@ test('records: parseFichadaRecord decodifica el registro real de "un registro pe
   assert.equal(record.recordTypeConstant, '00000001');
   assert.equal(record.verificationMethodCode, '00000010');
   assert.deepEqual(record.verificationMethodLabel, { value: 'huella', unconfirmed: true });
+  // research.md §5.9: header "01 00 00 00" = legajo 1 = Cesar Villalba (confirmado).
+  assert.deepEqual(record.legajoHipotesis, { value: 1, unconfirmed: true });
+  assert.equal(record.unresolvedFields.legajoRaw, '01000000');
   assert.equal(record.unresolvedFields.field0, '01000016');
   assert.equal(record.unresolvedFields.field1, 'F9710205');
-  assert.equal(record.unresolvedFields.field4, '99020000');
 });
 
-test('records: parseFichadaRecord decodifica los dos registros reales de "dos registros pendientes" con distinto metodo de verificacion', () => {
+test('records: parseFichadaRecord decodifica los dos registros reales de "dos registros pendientes" con distinto metodo de verificacion (encuadre corregido)', () => {
   const fixture = loadFixture('dos-registros-pendientes.json');
-  const [raw1, raw2] = fixture.registros.map(hexToBuffer);
+  const [oldRaw1, oldRaw2] = fixture.registros;
 
-  const record1 = parseFichadaRecord(raw1);
-  const record2 = parseFichadaRecord(raw2);
+  // research.md §5.9: legajo(registro N) viene del campo4 del registro N-1
+  // (o del header para N=1); el campo4 del ultimo registro queda colgando.
+  const record1 = parseFichadaRecord(buildTrueRecord(fixture.respuestaA4Header, oldRaw1));
+  const record2 = parseFichadaRecord(buildTrueRecord(hexToBuffer(oldRaw1).subarray(16, 20).toString('hex'), oldRaw2));
 
   assert.equal(record1.recordTypeConstant, '00000001');
   assert.equal(record2.recordTypeConstant, '00000001');
@@ -45,12 +62,18 @@ test('records: parseFichadaRecord decodifica los dos registros reales de "dos re
   assert.equal(record2.verificationMethodLabel.unconfirmed, true);
   assert.equal(record1.verificationMethodLabel.value, 'huella');
   assert.equal(record2.verificationMethodLabel.value, 'rostro');
+  // research.md §5.9: mismo empleado en ambos registros de esta captura (el
+  // header y el campo4 del registro 1 son ambos "01 00 00 00" = legajo 1).
+  assert.deepEqual(record1.legajoHipotesis, { value: 1, unconfirmed: true });
+  assert.deepEqual(record2.legajoHipotesis, { value: 1, unconfirmed: true });
 });
 
 test('records: parseFichadaRecord decodifica el registro real por tarjeta (verificationMethodCode 0x30, confirmado 2026-07-02)', () => {
   const fixture = loadFixture('tres-registros-pendientes-tarjeta.json');
-  const raw = hexToBuffer(fixture.registros[2]);
-  const record = parseFichadaRecord(raw);
+  // Encadenamos: el legajo del 3er registro viene del campo4 del 2do
+  // (no se capturo el header de esta sesion por separado, research.md §5.9).
+  const legajoHex = hexToBuffer(fixture.registros[1]).subarray(16, 20).toString('hex');
+  const record = parseFichadaRecord(buildTrueRecord(legajoHex, fixture.registros[2]));
 
   assert.equal(record.verificationMethodCode, '00000030');
   assert.deepEqual(record.verificationMethodLabel, { value: 'tarjeta', unconfirmed: true });
@@ -58,8 +81,14 @@ test('records: parseFichadaRecord decodifica el registro real por tarjeta (verif
 
 test('records: parseFichadaRecord decodifica timestampHypothesis (minuto/segundo confirmados, hora mod 8) contra research/control_fichada.csv', () => {
   const fixture = loadFixture('siete-registros-control-fichada.json');
+  // El timestamp/metodo/tipo de la fila i viven en el propio registro viejo
+  // i (bytes 0-15, ahora en offset 4-19 del buffer re-encuadrado); no
+  // dependen del legajo, asi que un legajo de relleno no afecta esta
+  // asercion (research.md §5.9). Ver el test de legajo mas abajo para el
+  // encadenamiento real fila a fila.
+  const RELLENO = '00000000';
   for (const { hex, csv, expectedTimestampHypothesis } of fixture.registros) {
-    const record = parseFichadaRecord(hexToBuffer(hex));
+    const record = parseFichadaRecord(buildTrueRecord(RELLENO, hex));
     assert.deepEqual(
       record.timestampHypothesis,
       { value: expectedTimestampHypothesis, unconfirmed: true },
@@ -68,8 +97,38 @@ test('records: parseFichadaRecord decodifica timestampHypothesis (minuto/segundo
   }
 });
 
+test('records: legajoHipotesis encadenado coincide con los legajos reales de control_fichada.csv (research.md §5.9)', () => {
+  const fixture = loadFixture('siete-registros-control-fichada.json');
+  const registros = fixture.registros;
+  // Fila 1 no se puede verificar sin el header real de esa sesion puntual
+  // (no quedo documentado aparte, research.md §5.9) — se arranca desde la
+  // fila 2, usando el campo4 de la fila anterior como legajo.
+  for (let i = 1; i < registros.length; i += 1) {
+    const legajoHex = hexToBuffer(registros[i - 1].hex).subarray(16, 20).toString('hex');
+    const record = parseFichadaRecord(buildTrueRecord(legajoHex, registros[i].hex));
+    assert.equal(
+      record.legajoHipotesis.value,
+      registros[i].csv.legajo,
+      `fila ${i + 1}: legajo real ${registros[i].csv.legajo} (${registros[i].csv.hora})`
+    );
+  }
+});
+
+test('records: decodeTimestampHypothesis resuelve la hora usando el flag AM/PM del bit0 cuando alcanza, y devuelve null cuando sigue ambiguo (research.md §5.10)', () => {
+  const fixture = loadFixture('muestras-hora-ampm-2026-07-03.json');
+  for (const { hex, legajoReal, horaReal, expectedTimestampHypothesis, nota } of fixture.registros) {
+    const record = parseFichadaRecord(hexToBuffer(hex));
+    assert.equal(record.legajoHipotesis.value, legajoReal, `legajo real ${legajoReal} (${nota})`);
+    assert.deepEqual(
+      record.timestampHypothesis,
+      { value: expectedTimestampHypothesis, unconfirmed: true },
+      `hora real ${horaReal}: ${nota}`
+    );
+  }
+});
+
 test('records: parseFichadaRecord devuelve timestampHypothesis.value null cuando los bits de flag no calzan con el formato esperado', () => {
-  const raw = hexToBuffer('01 00 00 16 F9 71 FF FF 00 00 00 01 00 00 00 10 99 02 00 00');
+  const raw = buildTrueRecord('00000000', '01 00 00 16 F9 71 FF FF 00 00 00 01 00 00 00 10 99 02 00 00');
   const record = parseFichadaRecord(raw);
   assert.deepEqual(record.timestampHypothesis, { value: null, unconfirmed: true });
 });
@@ -79,7 +138,7 @@ test('records: parseFichadaRecord rechaza un buffer que no mide exactamente 20 b
 });
 
 test('records: parseFichadaRecord marca una anomalia cuando recordTypeConstant no es el valor confirmado', () => {
-  const raw = hexToBuffer('01 00 00 16 F9 71 02 05 00 00 00 02 00 00 00 10 99 02 00 00');
+  const raw = buildTrueRecord('00000000', '01 00 00 16 F9 71 02 05 00 00 00 02 00 00 00 10 99 02 00 00');
   const record = parseFichadaRecord(raw);
   assert.equal(record.recordTypeConstant, '00000002');
   assert.equal(record.anomaly, true);

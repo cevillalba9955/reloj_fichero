@@ -19,6 +19,7 @@ export function parseCliArgs(argv) {
         'output-dir': { type: 'string', default: './output' },
         'log-dir': { type: 'string', default: './logs' },
         'timeout-ms': { type: 'string', default: '5000' },
+        'full-handshake': { type: 'boolean', default: false },
       },
       strict: true,
     }));
@@ -45,6 +46,7 @@ export function parseCliArgs(argv) {
     outputDir: values['output-dir'],
     logDir: values['log-dir'],
     timeoutMs,
+    fullHandshake: values['full-handshake'],
   };
 }
 
@@ -69,6 +71,7 @@ export async function runAndReport(
     timeoutMs: options.timeoutMs,
     sessionId,
     logger,
+    fullHandshake: options.fullHandshake,
   });
 
   if (session.status === 'error') {
