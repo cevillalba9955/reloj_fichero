@@ -67,7 +67,7 @@ test('runAndReport: caso 0 fichadas pendientes -> exit 0, exporta records: [] y 
   });
 });
 
-test('runAndReport: caso N fichadas pendientes -> exporta el JSON y avisa de campos no confirmados', async () => {
+test('runAndReport: caso N fichadas pendientes -> exporta el JSON y avisa de fecha sin resolver', async () => {
   await withTempDirs(async ({ outputDir, logDir }) => {
     const options = { host: '127.0.0.1', port: 5005, outputDir, logDir, timeoutMs: 2000 };
     const fakeSession = {
@@ -90,7 +90,7 @@ test('runAndReport: caso N fichadas pendientes -> exporta el JSON y avisa de cam
 
     assert.equal(exitCode, 0);
     assert.ok(printed.some((l) => l.includes('Fichadas exportadas: 1')));
-    assert.ok(printed.some((l) => l.includes('campos no confirmados')));
+    assert.ok(printed.some((l) => l.includes('sin fecha resuelta')));
     const jsonLine = printed.find((l) => l.startsWith('JSON exportado:'));
     assert.ok(jsonLine);
     const outputFilePath = jsonLine.replace('JSON exportado: ', '');

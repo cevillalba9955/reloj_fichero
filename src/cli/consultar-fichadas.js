@@ -86,12 +86,29 @@ export async function runAndReport(
   print(`Host consultado: ${session.deviceHost}:${session.devicePort}`);
   print(`Fichadas pendientes declaradas (0xB4): ${session.declaredPendingCount}`);
   print(`Fichadas exportadas: ${records.length}`);
-  const conCamposNoConfirmados = records.filter((r) => r.verificationMethodLabel.unconfirmed || r.anomaly);
-  if (conCamposNoConfirmados.length > 0) {
-    print(
-      `Advertencia: ${conCamposNoConfirmados.length} fichada(s) exportada(s) con campos no confirmados por el protocolo ` +
-      '(ver "unresolvedFields" y "verificationMethodLabel.unconfirmed" en el JSON exportado).'
-    );
+  // FR-005/FR-015: fecha/hora/legajo/metodo son valores directos (null si
+  // no se pudo resolver, o si se sabe que no es confiable para ese caso
+  // puntual); avisar por campo en vez de un mensaje generico "no
+  // confirmado" (research.md §5.11).
+  if (records.length > 0) {
+    const sinFecha = records.length; // la fecha nunca se resuelve todavia
+    print(`Advertencia: ${sinFecha} fichada(s) sin fecha resuelta (campo no decodificado aun, ver research.md §5.5/§5.7).`);
+    const sinHora = records.filter((r) => r.hora === null).length;
+    if (sinHora > 0) {
+      print(`Advertencia: ${sinHora} fichada(s) sin hora resuelta (ambigua para esa combinacion de bytes, ver research.md §5.10).`);
+    }
+    const sinLegajo = records.filter((r) => r.legajo === null).length;
+    if (sinLegajo > 0) {
+      print(`Advertencia: ${sinLegajo} fichada(s) sin legajo resuelto (metodo tarjeta o codigo de metodo desconocido, ver research.md §5.9).`);
+    }
+    const sinMetodo = records.filter((r) => r.metodo === null).length;
+    if (sinMetodo > 0) {
+      print(`Advertencia: ${sinMetodo} fichada(s) con metodo de verificacion no reconocido (ver "verificationMethodCode" en el JSON exportado).`);
+    }
+    const conAnomalia = records.filter((r) => r.anomaly).length;
+    if (conAnomalia > 0) {
+      print(`Advertencia: ${conAnomalia} fichada(s) con recordTypeConstant distinto del valor esperado (ver log de sesion).`);
+    }
   }
   print(`JSON exportado: ${outputFilePath}`);
   print(`Log de la sesion: ${logger.logFilePath}`);

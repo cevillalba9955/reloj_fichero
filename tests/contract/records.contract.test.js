@@ -36,9 +36,10 @@ test('records: parseFichadaRecord decodifica el registro real de "un registro pe
   assert.equal(record.rawHex, raw.toString('hex').toUpperCase());
   assert.equal(record.recordTypeConstant, '00000001');
   assert.equal(record.verificationMethodCode, '00000010');
-  assert.deepEqual(record.verificationMethodLabel, { value: 'huella', unconfirmed: true });
+  assert.equal(record.metodo, 'huella');
   // research.md §5.9: header "01 00 00 00" = legajo 1 = Cesar Villalba (confirmado).
-  assert.deepEqual(record.legajoHipotesis, { value: 1, unconfirmed: true });
+  assert.equal(record.legajo, 1);
+  assert.equal(record.fecha, null);
   assert.equal(record.unresolvedFields.legajoRaw, '01000000');
   assert.equal(record.unresolvedFields.field0, '01000016');
   assert.equal(record.unresolvedFields.field1, 'F9710205');
@@ -58,17 +59,15 @@ test('records: parseFichadaRecord decodifica los dos registros reales de "dos re
   assert.equal(record1.verificationMethodCode, '00000010');
   assert.equal(record2.verificationMethodCode, '00000040');
   assert.notEqual(record1.verificationMethodCode, record2.verificationMethodCode);
-  assert.equal(record1.verificationMethodLabel.unconfirmed, true);
-  assert.equal(record2.verificationMethodLabel.unconfirmed, true);
-  assert.equal(record1.verificationMethodLabel.value, 'huella');
-  assert.equal(record2.verificationMethodLabel.value, 'rostro');
+  assert.equal(record1.metodo, 'huella');
+  assert.equal(record2.metodo, 'rostro');
   // research.md §5.9: mismo empleado en ambos registros de esta captura (el
   // header y el campo4 del registro 1 son ambos "01 00 00 00" = legajo 1).
-  assert.deepEqual(record1.legajoHipotesis, { value: 1, unconfirmed: true });
-  assert.deepEqual(record2.legajoHipotesis, { value: 1, unconfirmed: true });
+  assert.equal(record1.legajo, 1);
+  assert.equal(record2.legajo, 1);
 });
 
-test('records: parseFichadaRecord decodifica el registro real por tarjeta (verificationMethodCode 0x30, confirmado 2026-07-02)', () => {
+test('records: parseFichadaRecord decodifica el registro real por tarjeta (verificationMethodCode 0x30, confirmado 2026-07-02) con legajo numerico', () => {
   const fixture = loadFixture('tres-registros-pendientes-tarjeta.json');
   // Encadenamos: el legajo del 3er registro viene del campo4 del 2do
   // (no se capturo el header de esta sesion por separado, research.md §5.9).
@@ -76,10 +75,17 @@ test('records: parseFichadaRecord decodifica el registro real por tarjeta (verif
   const record = parseFichadaRecord(buildTrueRecord(legajoHex, fixture.registros[2]));
 
   assert.equal(record.verificationMethodCode, '00000030');
-  assert.deepEqual(record.verificationMethodLabel, { value: 'tarjeta', unconfirmed: true });
+  assert.equal(record.metodo, 'tarjeta');
+  // research.md §5.9/§5.11: el legajo se decodifica igual para tarjeta que
+  // para huella/rostro (confirmado con las fichadas por tarjeta de
+  // control_fichada.csv, ver el test de "legajo encadenado" mas abajo).
+  // Esta fixture puntual no tiene legajo real conocido (no se capturo un
+  // CSV de control para esa sesion), asi que solo verificamos que decodifica
+  // a un numero, no a null.
+  assert.equal(typeof record.legajo, 'number');
 });
 
-test('records: parseFichadaRecord decodifica timestampHypothesis (minuto/segundo confirmados, hora mod 8) contra research/control_fichada.csv', () => {
+test('records: parseFichadaRecord decodifica hora (minuto/segundo confirmados, hora mod 8) contra research/control_fichada.csv', () => {
   const fixture = loadFixture('siete-registros-control-fichada.json');
   // El timestamp/metodo/tipo de la fila i viven en el propio registro viejo
   // i (bytes 0-15, ahora en offset 4-19 del buffer re-encuadrado); no
@@ -89,15 +95,15 @@ test('records: parseFichadaRecord decodifica timestampHypothesis (minuto/segundo
   const RELLENO = '00000000';
   for (const { hex, csv, expectedTimestampHypothesis } of fixture.registros) {
     const record = parseFichadaRecord(buildTrueRecord(RELLENO, hex));
-    assert.deepEqual(
-      record.timestampHypothesis,
-      { value: expectedTimestampHypothesis, unconfirmed: true },
+    assert.equal(
+      record.hora,
+      expectedTimestampHypothesis,
       `hora real ${csv.hora} (${csv.modo}, legajo ${csv.legajo}) deberia decodificar a ${expectedTimestampHypothesis}`
     );
   }
 });
 
-test('records: legajoHipotesis encadenado coincide con los legajos reales de control_fichada.csv (research.md §5.9)', () => {
+test('records: legajo encadenado coincide con los legajos reales de control_fichada.csv (research.md §5.9)', () => {
   const fixture = loadFixture('siete-registros-control-fichada.json');
   const registros = fixture.registros;
   // Fila 1 no se puede verificar sin el header real de esa sesion puntual
@@ -107,30 +113,30 @@ test('records: legajoHipotesis encadenado coincide con los legajos reales de con
     const legajoHex = hexToBuffer(registros[i - 1].hex).subarray(16, 20).toString('hex');
     const record = parseFichadaRecord(buildTrueRecord(legajoHex, registros[i].hex));
     assert.equal(
-      record.legajoHipotesis.value,
+      record.legajo,
       registros[i].csv.legajo,
       `fila ${i + 1}: legajo real ${registros[i].csv.legajo} (${registros[i].csv.hora})`
     );
   }
 });
 
-test('records: decodeTimestampHypothesis resuelve la hora usando el flag AM/PM del bit0 cuando alcanza, y devuelve null cuando sigue ambiguo (research.md §5.10)', () => {
+test('records: parseFichadaRecord resuelve la hora usando el flag AM/PM del bit0 cuando alcanza, y devuelve null cuando sigue ambiguo (research.md §5.10)', () => {
   const fixture = loadFixture('muestras-hora-ampm-2026-07-03.json');
   for (const { hex, legajoReal, horaReal, expectedTimestampHypothesis, nota } of fixture.registros) {
     const record = parseFichadaRecord(hexToBuffer(hex));
-    assert.equal(record.legajoHipotesis.value, legajoReal, `legajo real ${legajoReal} (${nota})`);
-    assert.deepEqual(
-      record.timestampHypothesis,
-      { value: expectedTimestampHypothesis, unconfirmed: true },
+    assert.equal(record.legajo, legajoReal, `legajo real ${legajoReal} (${nota})`);
+    assert.equal(
+      record.hora,
+      expectedTimestampHypothesis,
       `hora real ${horaReal}: ${nota}`
     );
   }
 });
 
-test('records: parseFichadaRecord devuelve timestampHypothesis.value null cuando los bits de flag no calzan con el formato esperado', () => {
+test('records: parseFichadaRecord devuelve hora null cuando los bits de flag no calzan con el formato esperado', () => {
   const raw = buildTrueRecord('00000000', '01 00 00 16 F9 71 FF FF 00 00 00 01 00 00 00 10 99 02 00 00');
   const record = parseFichadaRecord(raw);
-  assert.deepEqual(record.timestampHypothesis, { value: null, unconfirmed: true });
+  assert.equal(record.hora, null);
 });
 
 test('records: parseFichadaRecord rechaza un buffer que no mide exactamente 20 bytes (FR-010)', () => {
@@ -142,4 +148,11 @@ test('records: parseFichadaRecord marca una anomalia cuando recordTypeConstant n
   const record = parseFichadaRecord(raw);
   assert.equal(record.recordTypeConstant, '00000002');
   assert.equal(record.anomaly, true);
+});
+
+test('records: parseFichadaRecord devuelve fecha null y metodo null cuando el codigo no se reconoce', () => {
+  const raw = buildTrueRecord('00000000', '01 00 00 16 F9 71 02 05 00 00 00 01 00 00 00 99 99 02 00 00');
+  const record = parseFichadaRecord(raw);
+  assert.equal(record.fecha, null);
+  assert.equal(record.metodo, null);
 });

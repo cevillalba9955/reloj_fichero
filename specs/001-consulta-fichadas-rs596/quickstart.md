@@ -49,9 +49,10 @@ implementada. No incluye código de implementación — ver `tasks.md`
 2. Ejecutar el script apuntando a `localhost` y al puerto que exponga el
    mock.
 3. Confirmar que el JSON exportado contiene la misma cantidad de registros
-   que la fixture simulada, con los campos no resueltos (`unresolvedFields`,
-   `verificationMethodLabel.unconfirmed = true`) presentes tal como exige
-   `output-schema.json`.
+   que la fixture simulada, con los campos legibles (`fecha`, `hora`,
+   `legajo`, `metodo`) presentes tal como exige `output-schema.json` —
+   `fecha` siempre `null`; `hora`/`metodo`/`legajo` con un valor o `null`
+   según haya podido resolverse, nunca un valor inventado.
 
 ## Correr la suite de tests
 

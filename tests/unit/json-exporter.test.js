@@ -39,9 +39,8 @@ test('json-exporter: escribe un archivo JSON valido con la forma de contracts/ou
     assert.equal(document.receivedRecordCount, 1);
     assert.equal(document.records.length, 1);
     assert.match(document.records[0].rawHex, /^[0-9A-F]{40}$/);
-    assert.equal(document.records[0].verificationMethodLabel.unconfirmed, true);
-    assert.equal(document.records[0].legajoHipotesis.unconfirmed, true);
-    assert.equal(typeof document.records[0].legajoHipotesis.value, 'number');
+    assert.equal(document.records[0].fecha, null);
+    assert.equal(typeof document.records[0].legajo, 'number');
     assert.ok(outputFilePath.includes('192.168.1.50'));
   });
 });

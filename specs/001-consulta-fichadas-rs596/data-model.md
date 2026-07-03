@@ -21,17 +21,25 @@ re-encuadrado es `[legajo(0-3)] [campo0(4-7)] [campo1(8-11)]
 Mezcla campos confirmados por el protocolo con campos no resueltos, sin
 combinarlos como si tuvieran el mismo nivel de certeza (spec FR-005).
 
+**Formato de campos legibles (2026-07-03, research.md §5.11):** `metodo`,
+`legajo`, `hora` y `fecha` son valores directos, sin wrapper de confianza
+(`{value, unconfirmed}`). Un valor presente tiene evidencia real detrás;
+`null` significa que no se pudo resolver, o que se sabe que no es
+confiable para ese caso puntual — nunca se combina un valor sin evidencia
+con uno confirmado (spec FR-005/FR-015).
+
 | Campo | Tipo | Confirmado | Descripción |
 |---|---|---|---|
 | `rawHex` | string (40 caracteres hex) | — | Los 20 bytes ya re-encuadrados, siempre incluidos para trazabilidad |
-| `legajoHipotesis` | integer (0-255) | ❌ hipótesis (27/27 coincidencias contra dos sesiones reales independientes tras corregir el encuadre, ver research.md §5.9) | Primer byte del bloque de 4 bytes re-encuadrado (bytes 0-3); identifica al empleado. Sigue `unconfirmed: true` — no hay confirmación sobre los otros 3 bytes de ese bloque ni sobre el caso de verificación por tarjeta |
+| `legajo` | integer (0-255) \| `null` | ✅ (confirmado contra tres sesiones reales independientes, incluyendo huella/rostro/tarjeta, ver research.md §5.9/§5.11) | Primer byte del bloque de 4 bytes re-encuadrado (bytes 0-3); identifica al empleado. Se decodifica igual para los tres métodos de verificación — una sospecha anterior de que tarjeta no era confiable fue retractada (research.md §5.11) |
+| `metodo` | `"huella"` \| `"tarjeta"` \| `"rostro"` \| `null` | ✅ para tarjeta/rostro (comparación directa contra software oficial); fórmula fuerte para huella (research.md §5.6) | Interpretación legible de `verificationMethodCode`; `null` si el código crudo no coincide con ninguno de los tres valores observados |
+| `hora` | string (`HH:MM:SS`) \| `null` | ✅ (parcial: minuto/segundo confirmados; hora combina `hourMod8` con un flag AM/PM del bit0 —confirmado 7/7 contra horarios reales, research.md §5.10— y, cuando quedan 2 candidatos, un criterio de desempate al bloque 8-15hs —confirmado 4/4, research.md §5.12) | Hora local decodificada de campo[0]/campo[1] re-encuadrados; `null` únicamente si el byte de hora no tiene el formato esperado (bits de flag fijos inválidos) — ya no exige un valor específico en los bits bajos de `minuteByte` (gate eliminado, research.md §5.13: generaba falsos negativos) |
+| `fecha` | `null` | ❌ (research.md §5.5/§5.7) | Día/mes/año del evento; nunca se pudo decodificar, siempre `null` hasta que se resuelva ese campo del protocolo |
 | `recordTypeConstant` | string (hex, 8 caracteres) | ✅ (bytes), ❌ (significado) | campo[2] re-encuadrado, bytes 12–15; no es fijo entre sesiones (`00000001` el 2026-07-02, `00000002` el 2026-07-03, ver research.md §5.8); no es el legajo del empleado (hipótesis refutada, research.md §5.6) |
-| `verificationMethodCode` | string (hex, 8 caracteres) | ✅ (parcial) | campo[3] re-encuadrado, bytes 16–19; valor crudo confirmado como variable según método |
-| `verificationMethodLabel` | string \| `null` | ❌ hipótesis (`0x10`/`0x30`/`0x40` confirmados por comparación externa, ver research.md §5.6) | Interpretación humana de `verificationMethodCode` (ej. "huella", "rostro", "tarjeta"); se expone solo como hipótesis, con `unconfirmed: true` |
-| `timestampHypothesis` | string (`HH:MM:SS`) \| `null` | ❌ hipótesis (minuto y segundo confirmados; hora combina `hourMod8` con un flag AM/PM del bit0, confirmado 6/6 contra horarios reales, ver research.md §5.10) | Hora local decodificada de campo[0]/campo[1] re-encuadrados; `null` si el registro no calza con el formato esperado, o si el flag AM/PM no alcanza para desambiguar entre los 2 candidatos restantes de ese `hourMod8` |
-| `unresolvedFields.legajoRaw` | string (hex, 8 caracteres) | ❌ (salvo byte0, ver `legajoHipotesis`) | Bloque de 4 bytes re-encuadrado (bytes 0-3) completo, crudo |
-| `unresolvedFields.field0` | string (hex, 8 caracteres) | ❌ | campo[0] re-encuadrado, bytes 4–7 (el ultimo byte ya se usa para `timestampHypothesis`, pero se sigue exponiendo crudo aca tambien) |
-| `unresolvedFields.field1` | string (hex, 8 caracteres) | ❌ | campo[1] re-encuadrado, bytes 8–11 (bytes 2-3 ya se usan para `timestampHypothesis`; bytes 0-1 sin resolver) |
+| `verificationMethodCode` | string (hex, 8 caracteres) | ✅ (parcial) | campo[3] re-encuadrado, bytes 16–19; valor crudo confirmado como variable según método; base de `metodo` |
+| `unresolvedFields.legajoRaw` | string (hex, 8 caracteres) | ❌ (salvo byte0, ver `legajo`) | Bloque de 4 bytes re-encuadrado (bytes 0-3) completo, crudo |
+| `unresolvedFields.field0` | string (hex, 8 caracteres) | ❌ | campo[0] re-encuadrado, bytes 4–7 (el ultimo byte ya se usa para `hora`, pero se sigue exponiendo crudo aca tambien) |
+| `unresolvedFields.field1` | string (hex, 8 caracteres) | ❌ | campo[1] re-encuadrado, bytes 8–11 (bytes 2-3 ya se usan para `hora`; bytes 0-1 sin resolver) |
 
 **Validation rules**:
 - `rawHex` DEBE tener exactamente 40 caracteres hexadecimales (20 bytes); si
@@ -53,15 +61,12 @@ combinarlos como si tuvieran el mismo nivel de certeza (spec FR-005).
   NDJSON de sesión) cualquier valor que difiera de `00000001`, pero esta
   anomalía es ahora informativa, no necesariamente indicio de protocolo mal
   interpretado — no debe tratarse como motivo para descartar el registro.
-- `verificationMethodLabel` NUNCA se presenta sin su contraparte
-  `verificationMethodCode` ni sin el flag de "no confirmado" explícito.
-- `timestampHypothesis` NUNCA se presenta sin el flag de "no confirmado"
-  explícito, por la misma razón: el componente de hora puede repetirse cada
-  8 horas (research.md §5.7), así que no es una garantía del protocolo.
-- `legajoHipotesis` NUNCA se presenta sin el flag de "no confirmado"
-  explícito: no hay evidencia sobre el caso de verificación por tarjeta
-  (research.md §5.9, fila 28 del lote del 2026-07-03 no coincidió con
-  ningún legajo real conocido).
+- `metodo` NUNCA se presenta sin su contraparte cruda `verificationMethodCode`
+  detrás, para poder auditar el valor original.
+- `legajo` siempre se decodifica (primer byte del bloque re-encuadrado
+  existe en cualquier registro válido de 20 bytes); no hay ningún método
+  de verificación conocido para el cual el legajo se sepa no confiable, así
+  que hoy nunca devuelve `null` en la práctica.
 
 ## 2. QuerySession
 

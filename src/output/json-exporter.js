@@ -28,12 +28,19 @@ export function exportSessionToJson({ session, records, outputDir }) {
     status: session.status,
     errorReason: session.errorReason ?? null,
     records: records.map((record) => ({
+      // Campos legibles primero (FR-005/FR-015): fecha/hora/legajo/metodo.
+      // Un valor presente tiene evidencia real detras; null significa que
+      // no se pudo resolver o que se sabe que no es confiable para ese
+      // caso puntual (ver research.md §5.9/§5.10/§5.11) — nunca se
+      // presenta un valor sin evidencia como si fuera confiable.
+      fecha: record.fecha,
+      hora: record.hora,
+      legajo: record.legajo,
+      metodo: record.metodo,
+      // Campos tecnicos crudos, para trazabilidad y diagnostico.
       rawHex: record.rawHex,
       recordTypeConstant: record.recordTypeConstant,
       verificationMethodCode: record.verificationMethodCode,
-      verificationMethodLabel: record.verificationMethodLabel,
-      timestampHypothesis: record.timestampHypothesis,
-      legajoHipotesis: record.legajoHipotesis,
       unresolvedFields: record.unresolvedFields,
     })),
   };

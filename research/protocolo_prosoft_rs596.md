@@ -596,6 +596,138 @@ lo que se hizo con la hora en esta misma sección.
 
 ---
 
+### 5.11 Formato de salida legible: se saca el wrapper `{value, unconfirmed}`, y se corrige una sospecha errónea sobre el legajo por tarjeta (2026-07-03)
+
+El usuario pidió un JSON de salida legible para `fecha`, `hora`, `legajo` y
+`metodo`, sin que cada campo repita un flag `unconfirmed: true` — y
+específicamente cuestionó por qué el legajo seguía marcado como hipótesis
+si ya tenía tanta evidencia detrás.
+
+**Corrección importante encontrada al revisar esto:** la sección 5.9 de
+este documento (y `spec.md` Assumptions/FR-015) decían que "el único caso
+de verificación por tarjeta capturado hasta ahora no coincidió con ningún
+legajo real conocido" — refiriéndose al valor `44` de la fila 28 del lote
+de 28 fichadas del 2026-07-03. Ese valor **nunca fue el legajo de la fila
+28**: como ya quedó documentado en la sección 5.9 (corrección de
+encuadre), `44` es el campo[4] **colgante** de esa fila, perteneciente a
+una fichada todavía no descargada — el legajo real y correcto de la fila
+28, una vez re-encuadrado, es `1` (tomado del campo[4] de la fila 27). La
+sospecha sobre tarjeta quedó arrastrada de un análisis anterior a la
+corrección de encuadre y nunca se volvió a verificar contra el dato ya
+corregido.
+
+**Verificación real:** el fixture de calibración de 7 registros
+(`research/control_fichada.csv`, sección 5.7) incluye **dos fichadas
+verificadas por tarjeta** (filas 3 y 6, `verificationMethodCode = 00000030`)
+mezcladas con fichadas por huella y rostro. Las 7 filas, sin excepción,
+decodifican su legajo real correctamente (`tests/contract/records.contract.test.js`,
+"legajo encadenado coincide con los legajos reales..."). No hay ninguna
+evidencia de que el legajo se codifique distinto según el método de
+verificación.
+
+**Cambio implementado:**
+- `src/protocol/records.js`: `FichadaRecord` ahora expone `metodo`,
+  `legajo`, `hora` y `fecha` como valores directos (sin wrapper). Un valor
+  presente tiene evidencia real; `null` significa "no resuelto" o "se sabe
+  que no es confiable para este caso" — ya no hace falta un flag aparte
+  para eso.
+- `legajo` se decodifica igual para los tres métodos de verificación (ya
+  no hay caso especial para tarjeta).
+- `metodo` es `null` si el código crudo no coincide con huella/tarjeta/
+  rostro (antes se exponía como hipótesis con `value: null`).
+- `fecha` se agrega como campo explícito, siempre `null` (nunca se
+  decodificó ese campo del protocolo).
+- `hora` sin cambios de comportamiento en este momento (ya devolvía `null`
+  cuando no podía resolverse); solo se le sacó el wrapper. **Ver §5.12**:
+  el mismo día se agregó un criterio de desempate que reduce varios de
+  esos casos `null` a un valor resuelto.
+- `contracts/output-schema.json`, `src/output/json-exporter.js`,
+  `src/cli/consultar-fichadas.js` (el resumen de consola ahora avisa por
+  campo específico: fecha/hora/legajo/método/anomalía, en vez de un
+  mensaje genérico de "campos no confirmados") y los tests
+  correspondientes se actualizaron.
+
+---
+
+### 5.12 Hora — criterio de desempate cuando quedan 2 candidatos: siempre el bloque 8-15hs (2026-07-03)
+
+El flag AM/PM (§5.10) reduce la ambigüedad de 3 candidatos a 1 o 2, pero
+cuando quedan 2 (grupos `hourMod8` 0-4 con flag "<=12", o 4-7 con flag
+">12"), hasta ahora se devolvía `null`. El usuario señaló que ya
+teníamos, de hecho, la ambigüedad resuelta en la práctica: cada vez que
+se consiguió confirmación externa para uno de estos casos de 2
+candidatos, el resultado correcto fue siempre el mismo lado.
+
+**Verificación (4/4 casos confirmados hasta ahora):**
+
+| `hourMod8` | Candidatos (2) | Hora real confirmada | ¿Es el candidato del bloque 8-15? |
+|---|---|---|---|
+| 3 | 3, 11 | 11 | ✅ (`3+8=11`) |
+| 4 | 4, 12 | 12 | ✅ (`4+8=12`) |
+| 5 | 13, 21 | 13 | ✅ (`5+8=13`) |
+| 6 | 14, 22 | 14 | ✅ (`6+8=14`) |
+
+En los cuatro casos donde se pudo confirmar la hora real externamente y
+quedaban 2 candidatos posibles, el resultado correcto fue siempre el
+candidato del bloque 8-15hs (`hourMod8 + 8` — el candidato "del medio" de
+los tres `{hourMod8, hourMod8+8, hourMod8+16}`, y el más cercano al
+mediodía en ambos lados de la partición del flag AM/PM).
+
+**Implementado:** `decodeHora` en `src/protocol/records.js` ahora
+devuelve `hourMod8 + 8` cuando el flag AM/PM deja 2 candidatos, en vez de
+`null`. Esto resuelve, por ejemplo, las 7 fichadas de
+`control_fichada.csv` (hora 14, antes `null`, hoy resuelven correctamente)
+y la fichada de hora 11 del lote de 4 fichadas (antes `null`, hoy
+resuelve correctamente).
+
+**Importante — esto es un criterio de desempate explícito, no un hecho de
+protocolo confirmado.** La justificación es empírica y probablemente
+ligada al horario típico de una jornada laboral de oficina (nadie fichó
+todavía, en los datos que tenemos, a las 3 de la mañana ni a las 9 de la
+noche) — no hay garantía de que generalice a turnos nocturnos, guardias, o
+un uso del reloj fuera de un horario de oficina convencional. Si en el
+futuro se confirma una hora real que **no** sea la del bloque 8-15 para
+alguno de estos grupos ambiguos, este criterio queda refutado y hay que
+volver a `null` (o a un criterio más fino) para ese grupo puntual.
+
+**Pendiente:**
+- Seguir juntando confirmaciones externas para los grupos `hourMod8`
+  todavía sin dato en el caso de 2 candidatos (0, 1, 2, 7).
+- Si alguna futura confirmación contradice el criterio del bloque 8-15
+  para algún grupo, documentarlo aquí y ajustar `decodeHora`.
+
+---
+
+### 5.13 Se elimina el gate de bits bajos de `minuteByte` (2026-07-03)
+
+El chequeo de validez de `decodeHora` exigía que los 2 bits bajos de
+`minuteByte` fueran exactamente `01` (confirmado así en la calibración
+original de 7 fichadas, research.md §5.7 — las 7 lo cumplían). Ese
+chequeo quedó documentado como sospechoso desde §5.10 ("hallazgo
+adicional"): los lotes reales posteriores (28, 4 y 5 fichadas) mostraron
+`minuteByte` con bits bajos en `10` y `00`, y en **todos** esos casos el
+minuto decodificado (`minuteByte >> 2`) coincidió igual con la hora real
+confirmada externamente (por ejemplo, las 4 fichadas de hora 11 y la
+fichada de hora 12 ya tenían bits bajos `01`, pero las de hora 16/6/7 del
+lote de 28 tenían `10`/`00`/`00` y el minuto también daba bien).
+
+**Se saca el chequeo.** `decodeHora` ya no exige ningún valor específico
+para los bits bajos de `minuteByte` — solo valida que `minuteByte >> 2`
+sea `<= 59` (rango válido de minuto) y que el byte de hora tenga el flag
+fijo esperado en sus bits 1-4. Esto significa que, combinado con el
+criterio de desempate de §5.12, `hora` ahora se resuelve en muchos más
+casos que antes (por ejemplo, las 7 fichadas de `control_fichada.csv`, que
+antes daban `null` por este gate, ahora resuelven correctamente a su hora
+real).
+
+**Qué sigue sin saberse:** qué codifican realmente los bits bajos de
+`minuteByte` (si es que codifican algo — podría ser ruido, o parte de un
+campo distinto todavía sin identificar). Al sacar el gate, se deja de usar
+esa información para validar, pero tampoco se interpreta; queda como
+`unresolvedFields` implícito dentro de `field1`.
+
+---
+
 ## 6. Ejemplos de capturas reales (hex)
 
 ### 6.1 Un registro pendiente (fichada única — Cesar Villalba)
@@ -878,6 +1010,8 @@ Dado que el campo de fecha/hora no está resuelto con certeza, se recomienda un 
 - [ ] (§5.9, 2026-07-03) Agregar el lote de 28 fichadas como fixture de contrato (`tests/contract/fixtures/`), ya con el encuadre corregido.
 - [x] (§5.10, 2026-07-03) Conseguir horarios reales para las horas todavía no confirmadas, especialmente el caso límite hora=12 — confirmado con fichada real (12:55:48), corrigió el límite del flag AM/PM de "hora<12" a "hora<=12".
 - [ ] (§5.10, 2026-07-03) Conseguir horarios reales para las horas que faltan (0,1,2,5,8,9,10,15,17-23), en particular hora=0 (medianoche), que podría no seguir el mismo patrón que 1-12.
-- [x] (§5.10, 2026-07-03) Implementar la resolución parcial de hora (flag AM/PM + hourMod8) en `decodeTimestampHypothesis`.
+- [x] (§5.10, 2026-07-03) Implementar la resolución parcial de hora (flag AM/PM + hourMod8) en `decodeHora`.
 - [ ] (§5.10, 2026-07-03) Decidir si se relaja también el gate de minuto (`minuteByte & 0b11`), dado que rechaza minutos correctos en los 28 registros del lote de §5.8/5.9 (hallazgo nuevo, ver arriba).
+- [x] (§5.12, 2026-07-03) Aplicar el criterio de desempate del bloque 8-15hs cuando el flag AM/PM deja 2 candidatos — confirmado 4/4 con horarios reales, implementado en `decodeHora`.
+- [ ] (§5.12, 2026-07-03) Seguir juntando confirmaciones externas para los grupos `hourMod8` sin dato en el caso de 2 candidatos (0, 1, 2, 7), para reforzar o refutar el criterio del bloque 8-15hs.
 - [ ] (§5.9, 2026-07-03) Confirmar con una tercera sesión (idealmente con más de un registro pendiente) que el re-encuadre de campo[4] es consistente y no depende del método de verificación ni de si hay borrado de por medio.

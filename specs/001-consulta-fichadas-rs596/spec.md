@@ -25,6 +25,9 @@
 - Q: FR-010 describe una validación de "tamaño múltiplo exacto de 20 bytes", pero la implementación real no hace ese chequeo de módulo — lee exactamente `declaredPendingCount*20` bytes por construcción; el exceso se detecta vía FR-014 y el déficit se manifiesta como timeout genérico (FR-009). ¿Se corrige la redacción de FR-010 para reflejar esto, o se implementa el chequeo de módulo original? → A: Reescribir FR-010 para describir el chequeo real (marcador `55 AA`) y los caminos de error que realmente existen (FR-014/FR-009), en vez de forzar un chequeo de módulo que no aporta nada dado cómo se lee el payload.
 - Q: FR-002 decía "dos consultas 0x13", pero la implementación real y probada hace tres. Se corrieron experimentos dirigidos contra el equipo real para determinar si los `0x13` son necesarios, incluyendo 10 corridas adicionales (5 sin ningún `0x13`, 5 con dos de tres) con timeout generoso (8000ms) para descartar que el único fallo observado antes fuera un timeout ajustado. ¿Qué mostraron? → A: **10 de 10 corridas exitosas** — el reloj respondió `0xB4` de forma estable y repetible tanto sin ningún `0x13` como con una secuencia parcial de dos, con el mismo conteo de pendientes en todas las corridas (sin efectos secundarios). El único fallo observado en todo el experimento (un timeout puntual en el primer intento) queda confirmado como circunstancial, no como comportamiento real del protocolo. Sigue sin probarse `0xA4` (descarga de detalle completo) bajo una secuencia reducida — ver `research/protocolo_prosoft_rs596.md` §6.6 — así que el script de producción sigue exigiendo la secuencia completa de tres `0x13` hasta validar eso, aunque la evidencia ya es fuerte a favor de que una secuencia reducida también funcionaría.
 - Q: Se extendió el experimento para pedir `0xA4` real (detalle completo de fichadas pendientes), no solo el conteo `0xB4`, reutilizando el mismo parser de producción. 3/3 corridas exitosas, decodificando los mismos registros que con la secuencia completa (13/13 corridas exitosas en total entre los tres experimentos). ¿Se simplifica `src/protocol/client.js`? → A: Sí — el script ahora ejecuta la secuencia **reducida** (solo `0x80`) por defecto, con un flag `--full-handshake` que restaura la secuencia completa de tres `0x13` sin necesidad de tocar código, para el caso de que un reloj distinto, un cambio de firmware, o cualquier otro parámetro del entorno la requiera. Ambos modos fueron confirmados de punta a punta contra el equipo real después de implementar el cambio.
+- Q: El JSON de salida marcaba método, timestamp y legajo con un wrapper `{value, unconfirmed: true}` en cada campo, incluso cuando había evidencia real fuerte detrás. El usuario pidió un formato legible sin ese flag repetido. ¿Se puede sacar el flag `unconfirmed` sin perder la distinción entre dato confiable y no resuelto? → A: Sí, con matices por campo, no una remoción general: **método** y **legajo** pasan a exponerse como valores directos (sin wrapper) — incluye la corrección de un error de análisis anterior: la sospecha de que el legajo no era confiable para verificación por tarjeta estaba basada en un valor que en realidad pertenecía a un registro colgante distinto (research.md §5.9), no a la fichada por tarjeta; con el encuadre corregido, dos fichadas reales por tarjeta en `control_fichada.csv` (filas 3 y 6) decodifican su legajo correctamente, igual que huella/rostro. La **hora** sigue devolviendo el valor si se pudo resolver o `null` si no (sin cambios, el `null` ya comunica la falta de certeza sin necesitar un flag aparte). La **fecha** se agrega como campo explícito, siempre `null` (nunca se decodificó). `metodo` devuelve `null` si el código crudo no coincide con ninguno de los tres valores observados, en vez de inventar un cuarto valor.
+- Q: La ambigüedad de hora (flag AM/PM con 2 candidatos posibles, ver research.md §5.10) ya se había resuelto en la práctica cada vez que se consiguió confirmación externa: en los 4 casos confirmados hasta ahora (horas 11, 12, 13, 14), el resultado correcto fue siempre el candidato del bloque 8-15hs. ¿Se aplica ese criterio explícitamente en vez de devolver `null`? → A: Sí. `decodeHora` ahora resuelve a `hourMod8 + 8` cuando quedan 2 candidatos, en vez de `null` — confirmado 4/4 contra horarios reales (research.md §5.12). Es un criterio de desempate empírico (probablemente ligado al horario típico de una jornada de oficina), no un hecho de protocolo confirmado; si una futura fichada real contradice el criterio para algún grupo `hourMod8`, hay que revisarlo puntualmente.
+- Q: El script recién corrido contra el equipo real seguía devolviendo `hora: null` en varias fichadas a pesar de que ya había información suficiente para resolverla (minuto/segundo decodificables, flag de hora válido). ¿Qué lo estaba bloqueando? → A: Un chequeo adicional de validez sobre los bits bajos de `minuteByte` (exigía el valor exacto `01`, confirmado así solo contra la calibración original de 7 fichadas). Datos reales posteriores (lotes de 28, 4 y 5 fichadas) mostraron `minuteByte` con otros bits bajos (`10`, `00`) donde el minuto decodificado igual coincidía con la hora real confirmada externamente. Se sacó ese chequeo (research.md §5.13): ahora `hora` se resuelve en todos los casos donde el flag de hora y el criterio de desempate de bloque 8-15hs alcanzan, sin depender de un valor específico de esos bits bajos (cuyo significado real sigue sin identificarse).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -68,26 +71,30 @@ de este documento), para no tomar decisiones de negocio sobre datos que
 podrían ser incorrectos.
 
 **Why this priority**: El documento de protocolo (`research/protocolo_prosoft_rs596.md`,
-secciones 5.5-5.7) confirma minuto y segundo del timestamp de cada fichada,
-pero deja la hora como una hipótesis ambigua (se repite cada 8 horas) y la
-fecha (día/mes/año) totalmente sin tocar. Presentar el timestamp completo
-como si fuera confiable sin advertirlo generaría riesgo para cualquier
-sistema que consuma esta información (por ejemplo, nómina).
+secciones 5.5-5.7, 5.10, 5.12) confirma minuto y segundo del timestamp de
+cada fichada, y resuelve la hora en la mayoría de los casos combinando un
+flag AM/PM con un criterio de desempate empírico (bloque 8-15hs, ver
+FR-005) — pero sigue siendo una hipótesis basada en pocos puntos de
+calibración, y la fecha (día/mes/año) sigue totalmente sin tocar.
+Presentar el timestamp completo como si fuera confiable sin advertirlo
+generaría riesgo para cualquier sistema que consuma esta información (por
+ejemplo, nómina).
 
 **Independent Test**: Se puede probar inspeccionando la salida del script
-para un lote de fichadas conocido y confirmando que cada campo no resuelto
-o parcialmente resuelto aparece marcado como tal (no como un valor numérico
-"normal" indistinguible de un dato confirmado).
+para un lote de fichadas conocido y confirmando que cada campo (`metodo`,
+`legajo`, `hora`, `fecha`) trae un valor legible cuando hay evidencia real
+detrás, y `null` cuando no se pudo resolver o no es confiable para ese
+caso puntual — nunca un valor inventado o indistinguible de uno confirmado.
 
 **Acceptance Scenarios**:
 
 1. **Given** una fichada descargada, **When** el script la reporta, **Then**
-   el campo de método de verificación (confirmado para `0x30`/`0x40`;
-   hipótesis fuerte sin confirmar de forma independiente para `0x10`) se
-   muestra como valor legible, y el campo de timestamp (minuto/segundo
-   confirmados, hora ambigua cada 8hs y fecha sin resolver) se muestra
-   marcado explícitamente como "sin confirmar" en su totalidad, junto con el
-   valor crudo capturado.
+   `metodo` y `legajo` se muestran como valores legibles directos (con
+   evidencia real detrás), `hora` se muestra como `HH:MM:SS` cuando la
+   fórmula de hora+AM/PM alcanza a resolverla sin ambigüedad o `null`
+   cuando no, y `fecha` se muestra siempre `null` (campo no decodificado
+   todavía) — junto con los códigos/bloques crudos sin interpretar, para
+   quien necesite auditar el dato original.
 
 ---
 
@@ -165,19 +172,31 @@ cambió.
   solicitar el detalle completo (comando `0xA4`) y separar la respuesta en
   registros individuales de 20 bytes, según la estructura documentada.
 - **FR-005**: Para cada registro, el script DEBE decodificar y presentar
-  como dato confiable únicamente los campos confirmados por el protocolo:
-  la constante de tipo de registro y el código crudo de método de
-  verificación. La interpretación humana de ese código (huella/tarjeta/
-  rostro) DEBE presentarse siempre marcada como "no confirmado" (`0x30`=
-  tarjeta y `0x40`=rostro están confirmados por comparación directa contra
-  el software oficial, pero se exponen igual como hipótesis por consistencia
-  con `0x10`=huella, que sigue sin confirmación independiente propia). El
-  timestamp de cada fichada DEBE presentarse también marcado como "no
-  confirmado" en su totalidad —aun cuando el componente de minuto y segundo
-  está confirmado por calibración real, la hora es una hipótesis ambigua
-  (se repite cada 8 horas) y la fecha no está resuelta— junto con su valor
-  crudo, sin combinar ninguno de estos campos con los campos confiables como
-  si tuvieran el mismo nivel de certeza.
+  cuatro campos legibles como valores directos (sin wrapper de confianza):
+  `metodo`, `legajo`, `hora` y `fecha`. Un valor presente en cualquiera de
+  estos campos DEBE tener evidencia real detrás (comparación contra el
+  software oficial, calibración con horarios/legajos reales conocidos, o
+  fórmula validada contra múltiples capturas); si el campo no se pudo
+  resolver, o si se sabe que el valor decodificado no es confiable para ese
+  caso puntual, el script DEBE devolver `null` en vez de inventar o forzar
+  un valor. En particular: `metodo` es `null` si el código crudo no
+  coincide con ninguno de los tres valores observados (huella/tarjeta/
+  rostro); `hora` combina un flag AM/PM con el bloque de 8 horas del byte
+  de hora, y cuando esa combinación deja 2 candidatos posibles en vez de
+  1, el script DEBE resolverla al candidato del bloque 8-15hs (criterio de
+  desempate confirmado 4/4 contra horarios reales, ver
+  `research/protocolo_prosoft_rs596.md` §5.12). El script NO DEBE exigir
+  ningún valor específico en los bits bajos del byte de minuto para
+  aceptar la hora como resuelta (`research/protocolo_prosoft_rs596.md`
+  §5.13: ese chequeo generaba falsos negativos — minutos correctamente
+  decodificables que se descartaban igual). `hora` solo devuelve `null`
+  cuando el byte de hora no tiene el formato esperado en absoluto; `fecha`
+  es siempre `null` (el campo de fecha del protocolo no está decodificado).
+  El script DEBE además exponer
+  el código/bloque crudo sin interpretar detrás de cada campo legible
+  (`verificationMethodCode`, `unresolvedFields`) para trazabilidad y
+  diagnóstico, nunca mezclado con los valores legibles como si tuvieran el
+  mismo origen.
 - **FR-006**: El script DEBE entregar el resultado de la consulta como
   archivo local en formato JSON (uno por sesión de consulta, con timestamp
   de ejecución en el nombre), además de un resumen legible en consola;
@@ -230,29 +249,31 @@ cambió.
 - **FR-015**: El script DEBE decodificar el legajo/ID de empleado de cada
   fichada (primer byte del bloque de 4 bytes re-encuadrado que precede a
   los campos propios del registro, ver `research/protocolo_prosoft_rs596.md`
-  §5.9) y exponerlo como `legajoHipotesis`, siempre marcado explícitamente
-  como "no confirmado" (`unconfirmed: true`), junto con el bloque crudo
-  completo sin interpretar (`unresolvedFields.legajoRaw`) para trazabilidad.
-  Esta decodificación está confirmada con alta confianza (27/27
-  coincidencias verificadas contra dos sesiones reales independientes) para
-  fichadas verificadas por huella o rostro; NO hay evidencia suficiente
-  para el caso de verificación por tarjeta (ver Clarifications, sesión
-  2026-07-03), por lo que el script no debe tratar ese caso como resuelto.
+  §5.9) y exponerlo como `legajo`, un valor numérico directo, junto con el
+  bloque crudo completo sin interpretar (`unresolvedFields.legajoRaw`) para
+  trazabilidad. Esta decodificación está confirmada contra tres sesiones
+  reales independientes, incluyendo fichadas verificadas por huella, rostro
+  y tarjeta (dos fichadas por tarjeta en `research/control_fichada.csv`,
+  filas 3 y 6, decodificaron su legajo real correctamente) — no hay
+  evidencia de que el legajo se codifique distinto según el método de
+  verificación (ver Clarifications, sesión 2026-07-03, corrigiendo una
+  sospecha anterior sin fundamento sobre el caso de tarjeta).
 
 ### Key Entities *(include if feature involves data)*
 
 - **Fichada (registro de asistencia)**: evento crudo de 20 bytes leído del
   reloj (ya re-encuadrado, ver `research/protocolo_prosoft_rs596.md` §5.9).
-  Incluye un campo confirmado de método de verificación (código crudo
-  confirmado; interpretación humana confirmada contra el software oficial
-  para tarjeta `0x30` y rostro `0x40`, hipótesis fuerte sin confirmar de
-  forma independiente para huella `0x10`), un campo de fecha/hora
-  parcialmente decodificado (minuto y segundo confirmados, hora ambigua
-  cada 8hs, fecha sin resolver), un campo de legajo/ID de empleado
-  identificado (27/27 coincidencias verificadas, sin evidencia todavía para
-  el caso de verificación por tarjeta) y bytes restantes que, a la fecha,
-  siguen sin resolverse con certeza (ver `research/protocolo_prosoft_rs596.md`,
-  secciones 5.2 y 5.5-5.9).
+  Incluye `metodo` (código crudo confirmado; interpretación legible
+  confirmada contra el software oficial para tarjeta `0x30` y rostro
+  `0x40`, fórmula fuerte para huella `0x10`; `null` si el código no
+  coincide con ninguno de los tres), `legajo` (identificado y confirmado
+  contra tres sesiones reales independientes, incluyendo los tres métodos
+  de verificación), `hora` (parcialmente decodificada: minuto y segundo
+  confirmados, hora resuelta sin ambigüedad solo cuando la fórmula AM/PM
+  alcanza, `null` en caso contrario), `fecha` (siempre `null`, campo no
+  decodificado) y bytes restantes que, a la fecha, siguen sin resolverse
+  con certeza (ver `research/protocolo_prosoft_rs596.md`, secciones 5.2 y
+  5.5-5.11).
 - **Sesión de consulta**: agrupa una conexión TCP puntual al reloj —
   handshake, consultas de parámetros, consulta de pendientes, descarga de
   detalle y cierre— identificada por su propio contador de secuencia interno
@@ -290,20 +311,24 @@ cambió.
   herramienta de cara a usuarios finales sin capacitación).
 - El campo de fecha/hora del registro de fichada está solo parcialmente
   resuelto: minuto y segundo están confirmados por calibración contra el
-  software oficial, pero la hora es una hipótesis ambigua cada 8 horas y la
-  fecha (día/mes/año) sigue sin tocar (ver `research/protocolo_prosoft_rs596.md`,
-  secciones 5.5-5.7). Esta versión del script no garantiza timestamps
-  exactos por evento; queda documentado como limitación conocida y no como
-  defecto del script.
+  software oficial; la hora se resuelve combinando un flag AM/PM con un
+  criterio de desempate empírico (bloque 8-15hs, confirmado 4/4 contra
+  horarios reales) cuando la combinación de bits deja más de un candidato,
+  pero sigue siendo hipótesis basada en pocos puntos de calibración (7 de
+  24 horas posibles); la fecha (día/mes/año) sigue sin tocar (ver
+  `research/protocolo_prosoft_rs596.md`, secciones 5.5-5.7, 5.10, 5.12).
+  Esta versión del script no garantiza timestamps exactos por evento;
+  queda documentado como limitación conocida y no como defecto del script.
 - El número de legajo/identidad del empleado SÍ se identificó dentro del
-  registro de 20 bytes de la fichada (campo `legajoHipotesis`, ver
-  `research/protocolo_prosoft_rs596.md` §5.9 y `data-model.md` §1): 27/27
-  coincidencias verificadas contra dos sesiones reales independientes, una
-  vez corregido un error de encuadre de 4 bytes que el script tenía. Se
-  sigue exponiendo como hipótesis (`unconfirmed: true`) porque el único
-  caso de verificación por tarjeta capturado hasta ahora no coincidió con
-  ningún legajo real conocido — no hay evidencia suficiente para ese
-  método en particular.
+  registro de 20 bytes de la fichada (campo `legajo`, ver
+  `research/protocolo_prosoft_rs596.md` §5.9/§5.11 y `data-model.md` §1),
+  confirmado contra tres sesiones reales independientes, una vez corregido
+  un error de encuadre de 4 bytes que el script tenía. Se expone como
+  valor numérico directo (no como hipótesis marcada) para los tres métodos
+  de verificación (huella, rostro y tarjeta) por igual — una sospecha
+  anterior de que el legajo no era confiable para tarjeta resultó estar
+  basada en un valor mal atribuido (research.md §5.9/§5.11), no en una
+  limitación real del campo.
 - El borrado de fichadas ya descargadas (`0xA8`) se deja como una operación
   separada y explícita, no como parte del flujo de consulta simple, en línea
   con el principio de protección de datos de la constitución del proyecto.

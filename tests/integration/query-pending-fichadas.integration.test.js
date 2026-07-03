@@ -157,7 +157,7 @@ test('queryPendingFichadas: re-encuadra el header de 4 bytes como legajo del pri
     // legajo 1 = Cesar Villalba, confirmado. Antes de la correccion de
     // encuadre este byte se descartaba sin loguear y se perdia.
     const record = parseFichadaRecord(result.rawRecords[0]);
-    assert.deepEqual(record.legajoHipotesis, { value: 1, unconfirmed: true });
+    assert.equal(record.legajo, 1);
     socket.destroy();
     server.close();
   });

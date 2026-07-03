@@ -138,7 +138,7 @@ solo contra el mock, sino contra hardware real en múltiples sesiones
 - [X] T022 [US2] Validar en el exportador que el JSON generado cumple `contracts/output-schema.json` (en particular, `unconfirmed: true` siempre presente en `verificationMethodLabel`/`timestampHypothesis`/`legajoHipotesis`) en `src/output/json-exporter.js` (depende de T017)
 - [X] T023 [US2] Decodificar el legajo/ID de empleado (FR-015): primer byte del bloque re-encuadrado, expuesto como `legajoHipotesis` (siempre `unconfirmed: true`); confirmado con alta confianza (27+/27+ coincidencias contra tres sesiones reales independientes) para huella/rostro, sin evidencia para tarjeta, en `src/protocol/records.js` (research.md §5.9) (depende de T012, T015)
 - [X] T024 [US2] Decodificar parcialmente `timestampHypothesis` combinando `hourMod8` con un flag AM/PM (bit0 del byte de hora, límite `hora<=12`): resolver la hora sin ambigüedad cuando el flag alcanza a descartar 2 de los 3 candidatos posibles, devolver `null` en caso contrario; confirmado 7/7 contra horarios reales conocidos incluyendo el caso límite hora=12, en `src/protocol/records.js` (research.md §5.10) (depende de T015)
-- [ ] T025 [US2] Decidir y, si corresponde, relajar el gate de validez de minuto (`minuteByte` bits bajos, hoy exige `01` exacto) en `decodeTimestampHypothesis` — datos reales de dos sesiones (2026-07-03) muestran minutos correctamente decodificados que el gate actual rechaza (research.md §5.10, "hallazgo adicional") en `src/protocol/records.js`
+- [X] T025 [US2] Relajar el gate de validez de minuto (`minuteByte` bits bajos, exigía `01` exacto) en `decodeHora` — datos reales de múltiples sesiones (28, 4 y 5 fichadas, 2026-07-03) mostraban minutos correctamente decodificados que el gate rechazaba; se sacó el chequeo, solo queda validar `minuteByte >> 2 <= 59` (research.md §5.13) en `src/protocol/records.js`. También se agregó T024's criterio de desempate del bloque 8-15hs cuando el flag AM/PM deja 2 candidatos (research.md §5.12), confirmado 4/4 contra horarios reales.
 - [ ] T026 [P] [US2] Conseguir fichadas de calibración real para la hora `0` (medianoche) y las horas todavía sin confirmar, para seguir angostando la ambigüedad de `decodeTimestampHypothesis` (research.md §5.10 "pendiente")
 
 **Checkpoint**: US1 y US2 funcionan juntas — el operador distingue dato
@@ -271,9 +271,9 @@ Task: "Experimento 0x13 + 0xA4 real"
 
 MVP (US1) y US2 están funcionalmente completas y validadas contra
 hardware real, incluida la simplificación de la apertura de sesión (T036)
-con su flag de compatibilidad. Quedan pendientes, todas de bajo riesgo
-para lo ya entregado: el test dedicado de no-borrado (T027), la decisión
-sobre el gate de minuto (T025), calibración adicional de hora (T026), y
+con su flag de compatibilidad y la relajación del gate de minuto (T025).
+Quedan pendientes, todas de bajo riesgo para lo ya entregado: el test
+dedicado de no-borrado (T027), calibración adicional de hora (T026), y
 los ítems de Polish (T029, T031-T034) encontrados en la auditoría de
 `/speckit-analyze`.
 

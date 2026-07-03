@@ -1,38 +1,38 @@
 {
-  "description": "Muestras para confirmar el flag AM/PM del bit0 del byte de hora (research.md #5.10). El limite correcto del flag es 'hora<=12' (no 'hora<12', corregido 2026-07-03 con la fila de hora 12 al final de este fixture). Las primeras 3 filas son datos REALES del lote de 28 fichadas del 2026-07-03 con hora confirmada por el usuario (16, 6 y 7 respectivamente) — pero su timestampHypothesis sigue dando null porque minuteByte no cumple el flag de bits bajos '01' que exige decodeTimestampHypothesis (minuteByte observado: 0x1A, 0x90, 0x08 -> bits bajos 2, 0, 0, no 1). Esto es una limitacion PRE-EXISTENTE y distinta de la mejora de hora AM/PM (ver research.md #5.10, seccion 'hallazgo adicional'): el minuto decodificado (byte>>2) coincide con la hora real confirmada en los 3 casos, pero el gate de validez actual las descarta igual. Las filas 5 y 6 son sinteticas (bytes construidos a mano, no una captura real) solo para probar en aislamiento la logica de resolucion de hora AM/PM+hourMod8 con un minuteByte que si cumple el flag esperado. La fila 7 es REAL (sesion 2026-07-03T15:56) y fue la que forzo la correccion del limite '<=12'.",
-  "source": "research/protocolo_prosoft_rs596.md #5.9, #5.10, research/hipotesis_fichadas_2026-07-03.csv",
+  "description": "Muestras para confirmar el flag AM/PM del bit0 del byte de hora (research.md #5.10), el criterio de desempate del bloque 8-15hs (research.md #5.12), y la eliminacion del gate de bits bajos de minuteByte (research.md #5.13). El limite correcto del flag de hora es 'hora<=12' (no 'hora<12', corregido con la fila 7). Las filas 1-3 son datos REALES del lote de 28 fichadas del 2026-07-03 con hora confirmada por el usuario (16, 6 y 7 respectivamente): antes de research.md #5.13 daban null porque minuteByte no cumplia el viejo flag de bits bajos '01' (observado: 0x1A, 0x90, 0x08 -> bits bajos 2, 0, 0); ahora que se saco ese gate, las 3 resuelven correctamente. Las filas 5 y 6 son sinteticas (bytes construidos a mano, no una captura real) y ya no son necesarias para probar el gate de minuto (fue eliminado), pero se mantienen como cobertura adicional de la logica AM/PM+bloque 8-15hs en aislamiento. Las filas 4 y 7 son REALES (sesiones 2026-07-03T14:28 y T15:56) y ambas eran ambiguas por flag AM/PM solo (2 candidatos); con el criterio de desempate del bloque 8-15hs se resuelven correctamente. Los campos 'expectedTimestampHypothesis' de cada fila se comparan hoy contra record.hora (el nombre del campo del fixture quedo por compatibilidad historica, no representa la forma actual de FichadaRecord).",
+  "source": "research/protocolo_prosoft_rs596.md #5.9, #5.10, #5.12, #5.13, research/hipotesis_fichadas_2026-07-03.csv",
   "registros": [
     {
       "hex": "01 00 00 00 01 00 00 20 F9 71 02 1A 00 00 00 02 00 00 00 40",
       "legajoReal": 1,
       "horaReal": "16:06:32",
-      "expectedTimestampHypothesis": null,
+      "expectedTimestampHypothesis": "16:06:32",
       "esSintetico": false,
-      "nota": "hora real confirmada 16 (hourMod8=0, flag AM/PM resolveria a 16 sin ambiguedad) pero minuteByte=0x1A no cumple el flag de bits bajos '01' (da '10') -> sigue null por esa limitacion pre-existente, no relacionada con el flag de hora"
+      "nota": "hora real confirmada 16 (hourMod8=0, flag AM/PM resuelve a 16 sin ambiguedad). minuteByte=0x1A tiene bits bajos '10' (antes rechazado por el gate viejo, ver research.md #5.13); ya no importa, el minuto (byte>>2=6) coincide con la hora real."
     },
     {
       "hex": "02 00 00 00 01 00 00 2F F9 71 C3 90 00 00 00 02 00 00 00 40",
       "legajoReal": 2,
       "horaReal": "06:36:47",
-      "expectedTimestampHypothesis": null,
+      "expectedTimestampHypothesis": "06:36:47",
       "esSintetico": false,
-      "nota": "hora real confirmada 6 (hourMod8=6, flag AM/PM resolveria a 6 sin ambiguedad) pero minuteByte=0x90 no cumple el flag de bits bajos '01' (da '00') -> sigue null por esa limitacion pre-existente"
+      "nota": "hora real confirmada 6 (hourMod8=6, flag AM/PM resuelve a 6 sin ambiguedad). minuteByte=0x90 tiene bits bajos '00' (antes rechazado, ver research.md #5.13); ya no importa."
     },
     {
       "hex": "3B 00 00 00 01 00 00 27 F9 71 E3 08 00 00 00 02 00 00 00 10",
       "legajoReal": 59,
       "horaReal": "07:02:39",
-      "expectedTimestampHypothesis": null,
+      "expectedTimestampHypothesis": "07:02:39",
       "esSintetico": false,
-      "nota": "hora real confirmada 7 (hourMod8=7, flag AM/PM resolveria a 7 sin ambiguedad) pero minuteByte=0x08 no cumple el flag de bits bajos '01' (da '00') -> sigue null por esa limitacion pre-existente"
+      "nota": "hora real confirmada 7 (hourMod8=7, flag AM/PM resuelve a 7 sin ambiguedad). minuteByte=0x08 tiene bits bajos '00' (antes rechazado, ver research.md #5.13); ya no importa."
     },
     {
       "hex": "02 00 00 00 01 00 00 22 F9 71 63 59 00 00 00 01 00 00 00 40",
       "legajoReal": 2,
       "horaReal": "11:22:34",
-      "expectedTimestampHypothesis": null,
+      "expectedTimestampHypothesis": "11:22:34",
       "esSintetico": false,
-      "nota": "REAL, capturado con el encuadre ya corregido (sesion 2026-07-03T14:28). hourMod8=3 (grupo 0-3), flag AM/PM indica hora <12 -> sigue ambiguo entre 3 y 11 (no resuelto por el flag solo; la hora real 11 se confirmo externamente). minuteByte SI cumple el flag de bits bajos (0x59 -> '01')."
+      "nota": "REAL, capturado con el encuadre ya corregido (sesion 2026-07-03T14:28). hourMod8=3 (grupo 0-3), flag AM/PM indica hora <=12 -> quedan 2 candidatos (3 y 11); el criterio de desempate del bloque 8-15hs (research.md #5.12) elige 11, que coincide con la hora real confirmada externamente."
     },
     {
       "hex": "01 00 00 00 01 00 00 20 F9 71 02 19 00 00 00 02 00 00 00 40",
@@ -40,7 +40,7 @@
       "horaReal": "16:06:32 (sintetico)",
       "expectedTimestampHypothesis": "16:06:32",
       "esSintetico": true,
-      "nota": "SINTETICO: mismo hourByte real (0x02, hora 16 confirmada) pero con minuteByte=0x19 (bits bajos '01', minuto 6) para que cumpla el gate de minuto y se pueda probar la logica de hora AM/PM en aislamiento; no es una captura real"
+      "nota": "SINTETICO: mismo hourByte real (0x02, hora 16 confirmada) con minuteByte=0x19; cobertura adicional de la logica AM/PM en aislamiento (el gate de minuto que esto probaba originalmente ya no existe, ver research.md #5.13)"
     },
     {
       "hex": "3B 00 00 00 01 00 00 27 F9 71 E3 19 00 00 00 02 00 00 00 10",
@@ -48,15 +48,15 @@
       "horaReal": "07:06:39 (sintetico)",
       "expectedTimestampHypothesis": "07:06:39",
       "esSintetico": true,
-      "nota": "SINTETICO: mismo hourByte real (0xE3, hora 7 confirmada) con minuteByte=0x19 (bits bajos '01', minuto 6) para que cumpla el gate de minuto; no es una captura real"
+      "nota": "SINTETICO: mismo hourByte real (0xE3, hora 7 confirmada) con minuteByte=0x19; cobertura adicional (ver nota de la fila 5)"
     },
     {
       "hex": "01 00 00 00 01 00 00 30 F9 71 83 DD 00 00 00 01 00 00 00 10",
       "legajoReal": 1,
       "horaReal": "12:55:48",
-      "expectedTimestampHypothesis": null,
+      "expectedTimestampHypothesis": "12:55:48",
       "esSintetico": false,
-      "nota": "REAL (sesion 2026-07-03T15:56, 5to registro del lote). hourMod8=4, bit0=1. Con el limite viejo ('hora<12') esto resolvia mal como hora 4 (unico candidato <12 del grupo {4,12,20}); la hora real es 12. Con el limite corregido ('hora<=12'), tanto 4 como 12 caen del lado 'hora<=12' -> 2 candidatos -> ambiguo -> null (correcto: no se puede distinguir 4 de 12 solo con este byte). minuteByte=0xDD si cumple el flag de bits bajos ('01', minuto 55)."
+      "nota": "REAL (sesion 2026-07-03T15:56, 5to registro del lote). hourMod8=4, bit0=1 (flag <=12). Con el limite viejo ('hora<12') esto resolvia mal como hora 4 (unico candidato <12 del grupo {4,12,20}); la hora real es 12. Con el limite corregido ('hora<=12') quedan 2 candidatos (4 y 12); el criterio de desempate del bloque 8-15hs (research.md #5.12) elige 12, que coincide con la hora real."
     }
   ]
 }
