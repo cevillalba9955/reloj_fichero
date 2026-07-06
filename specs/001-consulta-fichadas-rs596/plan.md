@@ -7,12 +7,15 @@
 ## Summary
 
 Script de línea de comandos en Node.js que se conecta por TCP al reloj
-biométrico Prosoft RS596 (puerto `5005`), ejecuta la secuencia de sesión
-documentada en `research/protocolo_prosoft_rs596.md` (handshake `0x80`,
-parámetros `0x13`×2, conteo de pendientes `0xB4`, detalle `0xA4`), decodifica
-cada registro de 20 bytes separando campos confirmados de campos no
-resueltos, y exporta el resultado a un archivo JSON local más un resumen en
-consola — sin borrar nada del reloj ni escribir en Oracle en esta primera
+biométrico Prosoft RS596 (puerto `5005`) y ejecuta, por defecto, una
+secuencia de apertura reducida (handshake `0x80` únicamente, sin `0x13`,
+FR-002) antes de consultar el conteo de pendientes (`0xB4`) y el detalle
+(`0xA4`); opcionalmente, con `--full-handshake`, ejecuta la secuencia
+completa documentada en `research/protocolo_prosoft_rs596.md` (handshake
+`0x80` + tres `0x13`: parámetros, identificación, parámetros de nuevo).
+Decodifica cada registro de 20 bytes separando campos confirmados de campos
+no resueltos, y exporta el resultado a un archivo JSON local más un resumen
+en consola — sin borrar nada del reloj ni escribir en Oracle en esta primera
 versión. Toda la lógica del protocolo vive aislada en un módulo adaptador
 dedicado (Constitución, Principio III), con tests de contrato basados en las
 capturas hex reales incluidas en el propio documento de protocolo

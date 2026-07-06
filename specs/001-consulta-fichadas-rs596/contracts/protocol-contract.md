@@ -9,7 +9,7 @@ protocolo consume esta feature y qué queda explícitamente fuera).
 | Orden | Comando | Uso en este script |
 |---|---|---|
 | 1 | `0x80` | Handshake / apertura de sesión — obligatorio, primer mensaje de toda sesión |
-| 2 | `0x13` (×2) | Consulta de parámetros del equipo — se envían siempre, aunque este script no usa el contenido decodificado; el propio software oficial los pide al conectar y el research doc no confirma que el reloj acepte sesiones sin ellos |
+| 2 | `0x13` (×3, opcional) | Consulta de parámetros del equipo — **no se envía por defecto** (secuencia reducida, FR-002): 13/13 corridas reales confirmaron que el reloj responde `0xB4`/`0xA4` sin ningún `0x13`. Se envían los tres (parámetros, identificación, parámetros de nuevo) solo cuando se activa `--full-handshake`, para reproducir la secuencia del software oficial Pro-Soft o si un equipo/firmware distinto lo requiere |
 | 3 | `0xB4` | Consultar cantidad de fichadas pendientes — resultado usado para `QuerySession.declaredPendingCount` (FR-003) |
 | 4 | `0xA4` | Solicitar detalle de fichadas pendientes — solo si `declaredPendingCount > 0` (FR-004) |
 | 5 | `0x81` | Cierre de la operación de consulta |
@@ -22,7 +22,7 @@ protocolo consume esta feature y qué queda explícitamente fuera).
 | `0xA8` (borrar fichadas) | FR-007 prohíbe el borrado automático; queda para una feature futura separada |
 | `0xE9` / `0x98` / `0x96` (alta de usuario) | No relacionado con consulta de fichadas |
 | `0xC3` (identificación extendida) | Opcional según el research doc; no aporta nada requerido por esta spec |
-| `0xB2` (fecha/hora del equipo) | Aunque está decodificado con certeza, esta feature no lo necesita: el timestamp de cada fichada individual sigue sin resolverse (FR-005), así que conocer la hora actual del reloj no cierra ese gap en esta iteración |
+| `0xB2` (fecha/hora del equipo) | Aunque está decodificado con certeza, esta feature no lo necesita: el timestamp de cada fichada individual solo está parcialmente resuelto (hora/minuto/segundo cuando la fórmula AM/PM alcanza, fecha aún sin decodificar — FR-005), así que conocer la hora actual del reloj no cierra ese gap en esta iteración |
 
 ## Reglas de framing que este script DEBE respetar
 

@@ -30,7 +30,7 @@
             "type": ["integer", "null"],
             "minimum": 0,
             "maximum": 255,
-            "description": "Legajo/ID de empleado (research.md §5.9): primer byte del bloque re-encuadrado, confirmado 27+/27+ contra tres sesiones reales independientes para huella/rostro. null para verificacion por tarjeta (unica fichada de ese metodo decodificada hasta ahora dio un valor que no coincidio con ningun legajo real conocido)."
+            "description": "Legajo/ID de empleado (research.md §5.9/§5.11): primer byte del bloque re-encuadrado, confirmado contra tres sesiones reales independientes para los tres métodos de verificación (huella, rostro y tarjeta — dos fichadas por tarjeta en control_fichada.csv, filas 3 y 6, decodificaron su legajo real correctamente). No hay evidencia de que el legajo se codifique distinto según el método; una sospecha anterior sobre tarjeta se basaba en un valor mal atribuido a un registro colgante y quedó retractada (research.md §5.11)."
           },
           "metodo": {
             "type": ["string", "null"],

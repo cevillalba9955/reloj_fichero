@@ -125,9 +125,11 @@ cambió.
 - ¿Qué pasa si el reloj no tiene fichadas pendientes (0 registros)?
 - ¿Qué pasa si la conexión TCP se cae o da timeout a mitad de la secuencia
   (por ejemplo, después del handshake pero antes de recibir el detalle)?
-- ¿Qué pasa si el payload de detalle (`0xA4`) llega con un tamaño que no es
-  múltiplo exacto de 20 bytes (registro corrupto o protocolo mal
-  interpretado)?
+- ¿Qué pasa si la respuesta a `0xA4` no trae el marcador de payload esperado
+  (`55 AA`) al inicio? El script lee exactamente `declaredPendingCount * 20`
+  bytes calculados a partir de `0xB4`, por lo que no existe un chequeo de
+  "tamaño múltiplo de 20" independiente — ver FR-010 y el bullet siguiente
+  sobre discrepancias de conteo (FR-014/FR-009).
 - ¿Qué pasa si el campo de método de verificación trae un valor no
   documentado (ni huella ni rostro conocido)?
 - Si se ejecutan dos instancias del script en simultáneo contra el mismo

@@ -90,9 +90,16 @@ Agrupa una conexión TCP puntual al reloj: handshake, consultas y cierre
 sesión):
 
 ```
-connecting → handshake (0x80) → params (0x13 x2) → querying_pending (0xB4)
+connecting → handshake (0x80)
+   → [si fullHandshake=true] params (0x13 x3: parámetros, identificación, parámetros)
+   → querying_pending (0xB4)
    → downloading_detail (0xA4, solo si declaredPendingCount > 0)
    → exporting → closed(success)
+
+Por defecto (`fullHandshake=false`, FR-002) el paso `params` se omite:
+13/13 corridas reales confirmaron que el reloj responde igual sin ningún
+`0x13`. El flag `--full-handshake` restaura los tres llamados `0x13` para
+equipos/firmwares que sí los requieran.
 
 Cualquier paso puede transicionar a closed(error) directamente; FR-008
 exige que, incluso en error, el socket se cierre correctamente antes de
