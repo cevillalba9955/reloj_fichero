@@ -139,7 +139,7 @@ solo contra el mock, sino contra hardware real en múltiples sesiones
 - [X] T023 [US2] Decodificar el legajo/ID de empleado (FR-015): primer byte del bloque re-encuadrado, expuesto como `legajo` (valor numérico directo, sin wrapper); confirmado contra tres sesiones reales independientes para los tres métodos de verificación (huella, rostro y tarjeta — dos fichadas por tarjeta en control_fichada.csv, filas 3 y 6), en `src/protocol/records.js` (research.md §5.9/§5.11) (depende de T012, T015)
 - [X] T024 [US2] Decodificar parcialmente `hora` combinando `hourMod8` con un flag AM/PM (bit0 del byte de hora, límite `hora<=12`): resolver la hora sin ambigüedad cuando el flag alcanza a descartar 2 de los 3 candidatos posibles, devolver `null` en caso contrario; confirmado 7/7 contra horarios reales conocidos incluyendo el caso límite hora=12, en `src/protocol/records.js` (research.md §5.10) (depende de T015)
 - [X] T025 [US2] Relajar el gate de validez de minuto (`minuteByte` bits bajos, exigía `01` exacto) en `decodeHora` — datos reales de múltiples sesiones (28, 4 y 5 fichadas, 2026-07-03) mostraban minutos correctamente decodificados que el gate rechazaba; se sacó el chequeo, solo queda validar `minuteByte >> 2 <= 59` (research.md §5.13) en `src/protocol/records.js`. También se agregó T024's criterio de desempate del bloque 8-15hs cuando el flag AM/PM deja 2 candidatos (research.md §5.12), confirmado 4/4 contra horarios reales.
-- [ ] T026 [P] [US2] Conseguir fichadas de calibración real para la hora `0` (medianoche) y las horas todavía sin confirmar, para seguir angostando la ambigüedad de `decodeTimestampHypothesis` (research.md §5.10 "pendiente")
+- [ ] T026 [P] [US2] Conseguir fichadas de calibración real para la hora `0` (medianoche) y las horas todavía sin confirmar, para seguir angostando la ambigüedad de `decodeHora` (research.md §5.10 "pendiente") — **avance parcial 2026-07-06** (research.md §5.14): se consiguieron y confirmaron dos fichadas reales nuevas (00:15 y 23:45, posiciones 13/14 de `output/fichadas-192.168.1.82-2026-07-06T15_40_03.360Z.json`); el minuto sigue decodificando perfecto (15 y 45) y `hourMod8` también (0 y 7), pero ambas traen el flag de bits 1-4 en `0b1110` en vez del `0b0010` ya confirmado — un valor de flag nunca antes visto. Reusar la lógica de desempate actual con ese flag daría resultados incorrectos para las dos (`08:15` y `07:45` en vez de `00:15`/`23:45`), así que **no se tocó `decodeHora`**: sigue devolviendo `null` para este caso (conservador, sin inventar el valor). Falta al menos una tercera fichada bajo el flag `0b1110` para poder derivar una regla de desempate propia de ese grupo; la tarea sigue abierta
 
 **Checkpoint**: US1 y US2 funcionan juntas — el operador distingue dato
 confiable (método de verificación, legajo, y hora cuando el flag AM/PM
@@ -156,15 +156,15 @@ hardware real.
 
 ### Tests for User Story 3 (escribir PRIMERO, deben fallar antes de implementar)
 
-- [ ] T027 [P] [US3] Integration test que confirma que el cliente TCP nunca envía el comando `0xA8` durante el flujo de consulta simple, usando el mock TCP de T014 en `tests/integration/no-delete.integration.test.js` — hoy la garantía existe solo por ausencia de builder (T028), sin un test de regresión dedicado
+- [X] T027 [P] [US3] Integration test que confirma que el cliente TCP nunca envía el comando `0xA8` durante el flujo de consulta simple, en `tests/integration/no-delete.integration.test.js`: verifica que `commands.js` no expone ningún builder relacionado a borrado, y que el stream completo enviado por `runQuerySession` nunca trae el código de comando `0xA8` en la posición esperada (`55 AA 01 <CMD>`)
 
 ### Implementation for User Story 3
 
 - [X] T028 [US3] Confirmar que `src/protocol/commands.js` no expone ningún builder para `0xA8` y que `src/protocol/client.js` no lo invoca en el flujo de consulta (FR-007); comentario que referencia FR-007 ya presente en `src/protocol/commands.js` (depende de T009, T016)
 
 **Checkpoint**: Las tres historias de usuario funcionan de forma
-independiente contra hardware real; falta únicamente el test de
-regresión dedicado de T027.
+independiente contra hardware real, incluido el test de regresión
+dedicado de no-destructividad (T027).
 
 ---
 
@@ -172,12 +172,12 @@ regresión dedicado de T027.
 
 **Purpose**: Validación end-to-end, auditoría de cumplimiento constitucional, y cierre de gaps encontrados en `/speckit-analyze` (2026-07-03)
 
-- [ ] T029 [P] Ejecutar la guía de `quickstart.md` completa como checklist formal (casos: 0 pendientes, N pendientes, host inalcanzable, no-destructividad) — de facto ya validado en múltiples sesiones reales a lo largo de este documento, pero no como recorrido explícito de la guía
+- [X] T029 [P] Ejecutar la guía de `quickstart.md` completa como checklist formal (casos: 0 pendientes, N pendientes, host inalcanzable, no-destructividad) — recorrido explícito realizado el 2026-07-06 invocando el CLI real (`node src/cli/consultar-fichadas.js`) como subproceso contra un mock TCP, confirmando exit codes `0`/`0`/`1` y JSON exportado válido para los tres primeros casos; la no-destructividad queda cubierta por el test dedicado de T027
 - [X] T030 [P] Auditar `src/logging/session-logger.js` y los logs generados para confirmar que nunca se escribe el `rawHex` completo de una fichada ni ninguna credencial (Constitución, Principio V) — cubierto por test unitario dedicado en `tests/unit/session-logger.test.js`
-- [ ] T031 [P] Revisar la lista de "Edge Cases" de `spec.md` uno por uno contra la suite de tests existente y agregar el/los test(s) que falten (ej. conexión caída a mitad de secuencia, entre `0x80` y el primer `0x13`)
-- [ ] T032 [P] Agregar un test que mida el tiempo de ejecución contra un mock de ~100 fichadas pendientes y verifique el objetivo de SC-001 (<10s)
-- [ ] T033 [P] Agregar un test de integración que confirme FR-013: ejecutar el flujo dos veces contra el mismo estado de pendientes en el mock y verificar que ambas exportaciones contienen los mismos registros, sin deduplicar
-- [ ] T034 [P] Agregar los lotes reales de fichadas usados para validar legajo/hora (28 registros y 5 registros, sesiones del 2026-07-03) como fixtures de contrato versionadas en `tests/contract/fixtures/` (hoy solo documentados en `research.md` y en CSVs sueltos — research.md §5.9/§5.10 lo marca como pendiente)
+- [X] T031 [P] Revisar la lista de "Edge Cases" de `spec.md` uno por uno contra la suite de tests existente y agregar el/los test(s) que falten — agregado `tests/integration/edge-cases.integration.test.js` (2026-07-06) con 3 casos: conexión caída después del handshake y antes de la respuesta a `0xB4` (secuencia reducida), conexión caída entre `0x80` y el primer `0x13` (`--full-handshake`), y conexión caída a mitad del payload de `0xA4` (déficit de bytes, FR-009 en vez de discrepancia FR-014)
+- [X] T032 [P] Agregar un test que mida el tiempo de ejecución contra un mock de ~100 fichadas pendientes y verifique el objetivo de SC-001 (<10s) — `tests/integration/performance.integration.test.js` (2026-07-06), mide sesión TCP + parseo + export completo
+- [X] T033 [P] Agregar un test de integración que confirme FR-013: ejecutar el flujo dos veces contra el mismo estado de pendientes en el mock y verificar que ambas exportaciones contienen los mismos registros, sin deduplicar — `tests/integration/no-dedup.integration.test.js` (2026-07-06), corre `runAndReport` dos veces seguidas contra un mock que repite el mismo lote y compara `rawHex` de ambas exportaciones
+- [ ] T034 [P] Agregar los lotes reales de fichadas usados para validar legajo/hora (28 registros y 5 registros, sesiones del 2026-07-03) como fixtures de contrato versionadas en `tests/contract/fixtures/` — sigue bloqueado: los CSVs de origen (`research/hipotesis_fichadas_2026-07-03.csv`, `research/todas-las-fichadas-decodificadas-2026-07-03.csv`) no están en el working tree (no se commitearon, probablemente por contener legajos reales) y research.md no incluye el hex crudo de esos lotes en prosa; hace falta volver a capturarlos contra el equipo real
 - [X] T035 [P] Extender el experimento sin `0x13` para pedir `0xA4` real (fichadas pendientes), no solo `0xB4`, reutilizando `queryPendingFichadas`/`parseFichadaRecord` de producción — 3/3 corridas exitosas, mismos registros decodificados que con la secuencia completa (`experiments/probar-solo-handshake-con-a4.mjs`, research.md §6.6). 13/13 corridas exitosas en total entre los tres experimentos.
 - [X] T036 [US1] Simplificar `src/protocol/client.js`: secuencia reducida (solo `0x80`) por defecto, con `fullHandshake`/`--full-handshake` para restaurar la secuencia completa de tres `0x13` sin tocar código si un equipo/firmware distinto lo requiere. FR-002, `contracts/cli-contract.md` y `tests/integration/client-session.integration.test.js` actualizados; ambos modos confirmados de punta a punta contra el equipo real (research.md §6.6)
 
@@ -267,15 +267,22 @@ Task: "Experimento 0x13 + 0xA4 real"
 4. User Story 3 → probar de forma independiente → garantía de no-destructividad
 5. Cada historia agrega valor sin romper las anteriores
 
-### Estado actual (2026-07-03)
+### Estado actual (2026-07-06)
 
-MVP (US1) y US2 están funcionalmente completas y validadas contra
+MVP (US1), US2 y US3 están funcionalmente completas y validadas contra
 hardware real, incluida la simplificación de la apertura de sesión (T036)
-con su flag de compatibilidad y la relajación del gate de minuto (T025).
-Quedan pendientes, todas de bajo riesgo para lo ya entregado: el test
-dedicado de no-borrado (T027), calibración adicional de hora (T026), y
-los ítems de Polish (T029, T031-T034) encontrados en la auditoría de
-`/speckit-analyze`.
+con su flag de compatibilidad, la relajación del gate de minuto (T025), y
+el test dedicado de no-borrado (T027). Los ítems de Polish encontrados en
+la auditoría de `/speckit-analyze` (T029, T031, T032, T033) ya se
+implementaron: cobertura de edge cases de conexión caída a mitad de
+secuencia, test de performance para SC-001, test de no-deduplicación para
+FR-013, y recorrido formal de `quickstart.md` contra el CLI real.
+
+Quedan pendientes, ambos bloqueados por falta de datos/hardware real (no
+por trabajo de implementación): calibración adicional de hora para horas
+sin confirmar incluyendo medianoche (T026), y fixtures de contrato para
+los lotes reales de 28/5 registros (T034, cuyos CSVs de origen no están
+en el working tree).
 
 ---
 
@@ -285,6 +292,6 @@ los ítems de Polish (T029, T031-T034) encontrados en la auditoría de
 - [Story] mapea cada tarea a su historia de usuario para trazabilidad
 - Verificar que los tests fallen antes de implementar (Constitución Principio IV) — para las tareas nuevas (T025-T035) sigue aplicando
 - FR-014 (discrepancia `0xB4` vs `0xA4`) se implementa en T016 con el comportamiento interino documentado en research.md §5 — no inventar lógica de reconciliación adicional
-- FR-002 exige la secuencia completa de tres `0x13`; la validación técnica de que una secuencia reducida funciona ya está completa (T035) — reducirla en producción es ahora una decisión de diseño pendiente (T036), no una validación pendiente
+- FR-002 exige, por defecto, la secuencia reducida (solo `0x80`, sin `0x13`); la secuencia completa de tres `0x13` queda disponible como opción explícita (`--full-handshake`) para equipos/firmwares que la requieran (T035/T036 ya implementados)
 - Ningún archivo fuera de `src/protocol/` debe construir o interpretar bytes crudos del protocolo (Constitución Principio III; ver contracts/protocol-contract.md)
 - Detenerse en cada checkpoint para validar la historia de forma independiente antes de continuar

@@ -728,6 +728,82 @@ esa información para validar, pero tampoco se interpreta; queda como
 
 ---
 
+### 5.14 Dos fichadas reales calibran hora=0 (medianoche) y hora=23, pero refutan que el flag fijo de bits 1-4 sea siempre `0b0010` (2026-07-06)
+
+El usuario confirmó, contra el software oficial, dos fichadas reales del
+JSON `output/fichadas-192.168.1.82-2026-07-06T15_40_03.360Z.json`:
+posición 13 = **00:15** (medianoche) y posición 14 = **23:45** — exactamente
+dos de los horarios que §5.12 marcaba como pendientes de calibrar
+(`hourMod8` 0 y 7, casos límite de bloque).
+
+| Posición | `rawHex` | `hourByte` | `minuteByte` | Hora real | `minuteByte>>2` | ¿Minuto OK? |
+|---|---|---|---|---|---|---|
+| 13 | `0100000001000007E1110F3C0000000100000010` | `0x0F` (`00001111`) | `0x3C` (`00111100`) | 00:15 | 15 | ✅ |
+| 14 | `0100000001000004E111EFB60000000100000010` | `0xEF` (`11101111`) | `0xB6` (`10110110`) | 23:45 | 45 | ✅ |
+
+**Lo que se confirma:** el minuto (`minuteByte >> 2`) sigue decodificando
+perfecto en ambos casos (15 y 45), y `hourByte >> 5` (`hourMod8`) también
+sigue siendo consistente: `0x0F >> 5 = 0` (00:15 → `0 mod 8 = 0` ✅),
+`0xEF >> 5 = 7` (23:45 → `23 mod 8 = 7` ✅). El framing general (bytes
+7/10/11 = segundo/hora/minuto) queda reforzado, no cuestionado.
+
+**Lo que se refuta:** el chequeo de "flag fijo" de `decodeHora`
+(`hourByte & 0b00011110 === 0b00010`) asumía que esos 4 bits eran
+constantes (`0010`) en **todas** las fichadas — confirmado hasta ahora
+solo contra fichadas de las horas 6, 7, 11, 12, 13, 14, 16 (§5.7/§5.10).
+Estas dos fichadas nuevas traen ese mismo campo en `0b1110` (`0x0E`) en
+vez de `0b0010` — un valor nunca antes observado. Como el gate de
+`decodeHora` sigue exigiendo literalmente `0b0010`, estas dos fichadas
+**ya devuelven `hora: null`** con el código actual (comportamiento
+verificado en el JSON: ambos registros traen `"hora": null`) — es decir,
+el script no inventa ni fuerza un valor incorrecto para ellas, se
+mantiene conservador.
+
+**Por qué NO se extiende `decodeHora` todavía:** si se relajara el gate
+para aceptar también `0b1110` y se reutilizara tal cual la lógica de
+desempate existente (bit0 = flag "hora<=12", empate → `hourMod8+8`,
+§5.10/§5.12), el resultado sería **incorrecto para las dos fichadas**:
+
+- Fila 13 (`hourMod8=0`, bit0=1): candidatos `{0, 8, 16}` con `<=12` →
+  `{0, 8}`, 2 candidatos → desempate actual da `0+8=8`. Real: **0**.
+  Resultado sería `08:15`, no `00:15`.
+- Fila 14 (`hourMod8=7`, bit0=1): candidatos `{7, 15, 23}` con `<=12` →
+  solo `{7}` (single match, sin desempate) → resultado `07`. Real: **23**.
+  Resultado sería `07:45`, no `23:45`.
+
+Es decir, reusar la lógica actual con el flag nuevo produciría un valor
+**inventado y activamente incorrecto** en ambos casos — peor que el
+`null` actual. Con solo 2 puntos de dato bajo este flag nuevo (que además
+resuelven a los dos extremos opuestos, 0 y 23, con el mismo bit0=1, sin
+que bit0 alcance para distinguirlos) no hay evidencia suficiente para
+derivar con confianza qué combinación de bits sí discrimina el candidato
+correcto para el grupo `0b1110` — hacerlo ahora repetiría el patrón que
+este documento ya tuvo que revertir varias veces (§5.6, §5.8: aceptar una
+fórmula con muy pocos puntos de calibración y tener que retractarla
+después).
+
+**Decisión (2026-07-06):** no se toca `src/protocol/records.js`. Se deja
+documentado este hallazgo y se amplía el conteo de horas con evidencia
+real de 7/24 a 9/24 (0, 6, 7, 11, 12, 13, 14, 16, 23) — pero el conteo de
+horas que la fórmula implementada puede **decodificar** sigue en 7/24
+(6, 7, 11, 12, 13, 14, 16); las horas 0 y 23 quedan confirmadas como
+dato crudo pero todavía no cubiertas por `decodeHora`, a la espera de más
+calibración bajo el flag `0b1110` (idealmente una tercera fichada bajo
+ese mismo flag, en una hora que permita distinguir si el criterio es
+"extremo bajo vs extremo alto del rango 0-23" o alguna otra combinación
+de bits).
+
+**Pendiente:**
+- Conseguir una tercera fichada real bajo el flag `0b1110` (u otro valor
+  distinto de `0b0010`) para tener al menos 3 puntos y poder proponer una
+  regla de desempate específica para ese grupo, en vez de reusar la de
+  `0b0010` a ciegas.
+- Confirmar si existen más valores de flag además de `0b0010` y `0b1110`
+  (ej. capturando fichadas en otras horas del día que todavía no se
+  probaron: 1, 2, 3, 5, 8, 9, 10, 15, 17-22).
+
+---
+
 ## 6. Ejemplos de capturas reales (hex)
 
 ### 6.1 Un registro pendiente (fichada única — Cesar Villalba)
@@ -1013,5 +1089,6 @@ Dado que el campo de fecha/hora no está resuelto con certeza, se recomienda un 
 - [x] (§5.10, 2026-07-03) Implementar la resolución parcial de hora (flag AM/PM + hourMod8) en `decodeHora`.
 - [ ] (§5.10, 2026-07-03) Decidir si se relaja también el gate de minuto (`minuteByte & 0b11`), dado que rechaza minutos correctos en los 28 registros del lote de §5.8/5.9 (hallazgo nuevo, ver arriba).
 - [x] (§5.12, 2026-07-03) Aplicar el criterio de desempate del bloque 8-15hs cuando el flag AM/PM deja 2 candidatos — confirmado 4/4 con horarios reales, implementado en `decodeHora`.
-- [ ] (§5.12, 2026-07-03) Seguir juntando confirmaciones externas para los grupos `hourMod8` sin dato en el caso de 2 candidatos (0, 1, 2, 7), para reforzar o refutar el criterio del bloque 8-15hs.
+- [ ] (§5.12, 2026-07-03) Seguir juntando confirmaciones externas para los grupos `hourMod8` sin dato en el caso de 2 candidatos (0, 1, 2, 7) **bajo el flag ya confirmado `0b0010`** — sigue pendiente; las dos fichadas nuevas de §5.14 (hourMod8 0 y 7) llegaron con un flag distinto (`0b1110`), por lo que no resuelven este punto tal cual estaba planteado.
 - [ ] (§5.9, 2026-07-03) Confirmar con una tercera sesión (idealmente con más de un registro pendiente) que el re-encuadre de campo[4] es consistente y no depende del método de verificación ni de si hay borrado de por medio.
+- [ ] (§5.14, 2026-07-06) Conseguir una tercera fichada real bajo el flag `0b1110` (o cualquier valor de flag distinto de `0b0010`) para poder derivar con confianza una regla de desempate propia de ese grupo, en vez de dejar `hora: null` para esos casos indefinidamente.
