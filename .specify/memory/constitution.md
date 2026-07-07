@@ -1,25 +1,17 @@
 <!--
 Sync Impact Report
 ==================
-Version change: TEMPLATE → 1.0.0 (initial ratification)
-Modified principles: N/A (first fill of template placeholders)
+Version change: 1.0.0 → 1.1.0
+Modified principles: none
 Added sections:
-  - I. Arquitectura Frontend basada en Componentes (React)
-  - II. Repositorio de Datos Oracle Aislado
-  - III. Protocolo del Reloj Biométrico Prosoft RS956 Documentado y Aislado (NON-NEGOTIABLE)
-  - IV. Test-First en Capas Críticas (Protocolo y Datos)
-  - V. Observabilidad y Protección de Datos Sensibles
-  - Stack Tecnológico y Restricciones
-  - Flujo de Desarrollo y Revisión
-  - Governance
-Removed sections: none (placeholders only)
+  - Flujo de Git (main / feat / worktree)
+Removed sections: none
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ no change needed (Constitution Check gate is derived dynamically from this file)
-  - .specify/templates/spec-template.md ✅ no change needed (no constitution-specific references)
-  - .specify/templates/tasks-template.md ✅ no change needed (no constitution-specific references)
-  - .specify/templates/checklist-template.md ✅ no change needed (no constitution-specific references)
-Follow-up TODOs:
-  - TODO(RATIFICATION_DATE): confirmed as the date this initial constitution was authored (2026-07-02); update if the team designates an earlier formal adoption date.
+  - .specify/templates/spec-template.md ✅ no change needed (no branching-specific references)
+  - .specify/templates/tasks-template.md ✅ no change needed (no branching-specific references)
+  - .specify/templates/checklist-template.md ✅ no change needed (no branching-specific references)
+Follow-up TODOs: none
 -->
 
 # RS956 Fichaje Constitution
@@ -127,6 +119,36 @@ suficiente para depurar fallos sin comprometer la privacidad de las personas.
 - Los flujos críticos (marcado de fichaje, sincronización con Oracle) no se
   mergean sin la cobertura de test exigida por el Principio IV.
 
+## Flujo de Git (main / feat / worktree)
+
+- **`main`**: rama estable y protegida. Solo recibe cambios ya revisados
+  (merge de una rama de feature); nunca se commitea directo contra `main`.
+- **Ramas de feature (`feat/<slug>`, o `NNN-slug` para features generadas por
+  spec-kit)**: todo desarrollo nuevo (feature o fix no trivial) vive en su
+  propia rama, creada desde `main` actualizado, con nombre descriptivo del
+  alcance (slug corto en minúsculas, separado por guiones).
+- **Worktrees (`git worktree add`)**: para trabajar en paralelo sobre más de
+  una rama sin perder el estado de la rama activa (por ejemplo, una
+  investigación exploratoria mientras sigue en curso el desarrollo de la
+  feature principal), se usa un worktree dedicado en vez de alternar con
+  `checkout`. Cada worktree vive en su propio directorio y en su propia
+  rama; no se comparte una misma rama entre dos worktrees activos al mismo
+  tiempo.
+- Todo hallazgo o corrección hecha en un worktree que sea relevante para la
+  rama en la que se sigue trabajando activamente DEBE integrarse de forma
+  explícita (merge, cherry-pick, o port manual documentado) antes de darse
+  por resuelto — no debe quedar aislado en el worktree indefinidamente sin
+  que el resto del trabajo se entere de que existe.
+- Ramas de feature y sus worktrees se eliminan una vez mergeados a `main`;
+  no se acumulan ramas obsoletas sin uso.
+
+**Rationale**: este proyecto ya pagó el costo de no aplicar esta regla — una
+corrección de decodificación de fichadas (fecha/hora/legajo) se resolvió por
+completo en un worktree paralelo y nunca se integró a la rama de trabajo
+activa, que durante días siguió operando (y documentando) sobre hipótesis ya
+refutadas en la otra rama. Un flujo explícito de integración evita que el
+conocimiento quede aislado en una rama que nadie vuelve a mirar.
+
 ## Governance
 
 Esta constitución prevalece sobre cualquier otra práctica, convención o
@@ -144,4 +166,4 @@ explícitamente (ver `Complexity Tracking` en el plan) o rechazarse. La guía
 operativa de desarrollo en tiempo de ejecución (si existe un `README.md` o
 `CLAUDE.md` en el repositorio) debe mantenerse alineada con estos principios.
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-02 | **Last Amended**: 2026-07-02
+**Version**: 1.1.0 | **Ratified**: 2026-07-02 | **Last Amended**: 2026-07-07
