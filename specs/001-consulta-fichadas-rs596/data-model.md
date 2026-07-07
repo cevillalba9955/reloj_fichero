@@ -31,24 +31,28 @@ con uno confirmado (spec FR-005/FR-015).
 | Campo | Tipo | Confirmado | Descripción |
 |---|---|---|---|
 | `rawHex` | string (40 caracteres hex) | — | Los 20 bytes ya re-encuadrados, siempre incluidos para trazabilidad |
-| `legajo` | integer (0-255) \| `null` | ✅ (confirmado contra tres sesiones reales independientes, incluyendo huella/rostro/tarjeta, ver research.md §5.9/§5.11) | Primer byte del bloque de 4 bytes re-encuadrado (bytes 0-3); identifica al empleado. Se decodifica igual para los tres métodos de verificación — una sospecha anterior de que tarjeta no era confiable fue retractada (research.md §5.11) |
+| `legajo` | integer (entero de 4 bytes) \| `null` | ✅ (confirmado contra tres sesiones reales independientes, incluyendo huella/rostro/tarjeta, ver research.md §5.9/§5.11; ancho de campo corregido en research.md §5.15) | Los 4 bytes del bloque re-encuadrado (bytes 0-3), leídos como entero little-endian; identifica al empleado. Se decodifica igual para los tres métodos de verificación — una sospecha anterior de que tarjeta no era confiable fue retractada (research.md §5.11). Corregido de "solo el primer byte" a "los 4 bytes completos" tras una fichada de prueba real con legajo 9999, que no entra en 1 byte (research.md §5.15) |
 | `metodo` | `"huella"` \| `"tarjeta"` \| `"rostro"` \| `null` | ✅ para tarjeta/rostro (comparación directa contra software oficial); fórmula fuerte para huella (research.md §5.6) | Interpretación legible de `verificationMethodCode`; `null` si el código crudo no coincide con ninguno de los tres valores observados |
-| `hora` | string (`HH:MM:SS`) \| `null` | ✅ (parcial: minuto/segundo confirmados; hora combina `hourMod8` con un flag AM/PM del bit0 —confirmado 7/7 contra horarios reales, research.md §5.10— y, cuando quedan 2 candidatos, un criterio de desempate al bloque 8-15hs —confirmado 4/4, research.md §5.12) | Hora local decodificada de campo[0]/campo[1] re-encuadrados; `null` únicamente si el byte de hora no tiene el formato esperado (bits de flag fijos inválidos) — ya no exige un valor específico en los bits bajos de `minuteByte` (gate eliminado, research.md §5.13: generaba falsos negativos) |
-| `fecha` | `null` | ❌ (research.md §5.5/§5.7) | Día/mes/año del evento; nunca se pudo decodificar, siempre `null` hasta que se resuelva ese campo del protocolo |
+| `hora` | string (`HH:MM:SS`) \| `null` | ✅ (research.md §5.7/§5.16: segundo y minuto binarios directos; hora = `hourMod8` (bits5-7 de byte10) + 8×bloque, bloque leído directo de bits0-1 de byte11 — sin ambigüedad ni criterio de desempate, confirmado con horas 0/10/11/12/23 reales) | Hora local decodificada de campo[0]/campo[1] re-encuadrados; `null` únicamente si el registro no calza con los flags fijos esperados en byte8/byte9 |
+| `fecha` | string (`YYYY-MM-DD`) \| `null` | ✅ (research.md §5.16, 2026-07-06: año=`(byte8>>2)+1964` confirmado con 3 años (2015/2020/2026); mes=nibble alto de byte9, confirmado con 3 meses; día=bits0-4 de byte10 binario directo, confirmado con 5 días distintos y retroactivamente contra `control_fichada.csv`) | Día/mes/año del evento, antes creído indecodificable — en realidad vivía dentro de lo que se pensaba que era el "byte de hora" (el día) y los bytes que se creían constantes de fecha (año/mes); `null` en el mismo caso que `hora` |
 | `recordTypeConstant` | string (hex, 8 caracteres) | ✅ (bytes), ❌ (significado) | campo[2] re-encuadrado, bytes 12–15; no es fijo entre sesiones (`00000001` el 2026-07-02, `00000002` el 2026-07-03, ver research.md §5.8); no es el legajo del empleado (hipótesis refutada, research.md §5.6) |
 | `verificationMethodCode` | string (hex, 8 caracteres) | ✅ (parcial) | campo[3] re-encuadrado, bytes 16–19; valor crudo confirmado como variable según método; base de `metodo` |
 | `unresolvedFields.legajoRaw` | string (hex, 8 caracteres) | ❌ (salvo byte0, ver `legajo`) | Bloque de 4 bytes re-encuadrado (bytes 0-3) completo, crudo |
-| `unresolvedFields.field0` | string (hex, 8 caracteres) | ❌ | campo[0] re-encuadrado, bytes 4–7 (el ultimo byte ya se usa para `hora`, pero se sigue exponiendo crudo aca tambien) |
-| `unresolvedFields.field1` | string (hex, 8 caracteres) | ❌ | campo[1] re-encuadrado, bytes 8–11 (bytes 2-3 ya se usan para `hora`; bytes 0-1 sin resolver) |
+| `unresolvedFields.field0` | string (hex, 8 caracteres) | ✅ byte3 (segundo, ver `hora`); ❌ bytes 0-2 | campo[0] re-encuadrado, bytes 4–7; bytes 0-2 son una constante fija (`01 00 00`) de significado desconocido, se exponen crudos igual |
+| `unresolvedFields.field1` | string (hex, 8 caracteres) | ✅ completo (ver `fecha`/`hora`, research.md §5.16) | campo[1] re-encuadrado, bytes 8–11; ya totalmente usado para derivar `fecha` y `hora`, se sigue exponiendo crudo para diagnóstico/auditoría |
 
 **Validation rules**:
 - `rawHex` DEBE tener exactamente 40 caracteres hexadecimales (20 bytes); si
   no, el registro se descarta y la sesión se marca en error (ver FR-010).
-- El campo[4] (legajo) del **último** registro recibido en una respuesta de
-  `0xA4` queda colgando — pertenece a una fichada que todavía no llegó en
-  esa descarga — y se descarta explícitamente en `src/protocol/client.js`;
-  no debe asignarse a ningún `FichadaRecord` de la sesión actual
-  (research.md §5.9).
+- Siempre sobran 4 bytes al final de cada respuesta de `0xA4`, sin importar
+  cuántos registros se declararon pendientes, y se descartan explícitamente
+  en `src/protocol/client.js` sin asignarse a ningún `FichadaRecord` de la
+  sesión actual. research.md §5.9 los explicaba como "el legajo de una
+  fichada que todavía no llegó"; esa explicación quedó retractada
+  (research.md §5.14) — no se sostiene cuando `declaredPendingCount=1`, caso
+  en el que no puede haber ningún pendiente más. Su significado real es
+  desconocido; el contenido se loguea (no se descarta en silencio) para
+  poder investigarlo a futuro.
 - `recordTypeConstant` NO es un valor fijo entre sesiones: se observó
   `00000001` en la sesión de calibración del 2026-07-02 y `00000002` de
   forma uniforme en una sesión completa (28 registros) del 2026-07-03
@@ -63,10 +67,11 @@ con uno confirmado (spec FR-005/FR-015).
   interpretado — no debe tratarse como motivo para descartar el registro.
 - `metodo` NUNCA se presenta sin su contraparte cruda `verificationMethodCode`
   detrás, para poder auditar el valor original.
-- `legajo` siempre se decodifica (primer byte del bloque re-encuadrado
-  existe en cualquier registro válido de 20 bytes); no hay ningún método
-  de verificación conocido para el cual el legajo se sepa no confiable, así
-  que hoy nunca devuelve `null` en la práctica.
+- `legajo` siempre se decodifica (los 4 bytes del bloque re-encuadrado
+  existen en cualquier registro válido de 20 bytes, leídos little-endian —
+  research.md §5.15); no hay ningún método de verificación conocido para el
+  cual el legajo se sepa no confiable, así que hoy nunca devuelve `null` en
+  la práctica.
 
 ## 2. QuerySession
 

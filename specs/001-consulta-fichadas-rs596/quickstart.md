@@ -50,9 +50,9 @@ implementada. No incluye código de implementación — ver `tasks.md`
    mock.
 3. Confirmar que el JSON exportado contiene la misma cantidad de registros
    que la fixture simulada, con los campos legibles (`fecha`, `hora`,
-   `legajo`, `metodo`) presentes tal como exige `output-schema.json` —
-   `fecha` siempre `null`; `hora`/`metodo`/`legajo` con un valor o `null`
-   según haya podido resolverse, nunca un valor inventado.
+   `legajo`, `metodo`) presentes tal como exige `output-schema.json` — cada
+   uno con un valor o `null` según haya podido resolverse, nunca un valor
+   inventado.
 
 ## Correr la suite de tests
 

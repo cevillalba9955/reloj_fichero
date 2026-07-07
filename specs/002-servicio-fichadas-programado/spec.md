@@ -242,11 +242,10 @@ esperado.
   día (entrada/salida), el servicio mantiene si el empleado está completo
   o incompleto.
 - **Fichada**: evento de marcación de un Empleado, tal como lo entrega el
-  cliente existente (método de verificación, hora parcial cuando se pudo
-  resolver, y fecha siempre `null` por limitación del protocolo — ver
-  Assumptions). Cada Fichada queda asociada a un Empleado, a un Período, y
-  — cuando corresponde — al momento esperado (entrada/salida) cuya ventana
-  de aceptación la contiene.
+  cliente existente (método de verificación, hora y fecha decodificadas por
+  completo desde 2026-07-07 — ver Assumptions). Cada Fichada queda asociada
+  a un Empleado, a un Período, y — cuando corresponde — al momento esperado
+  (entrada/salida) cuya ventana de aceptación la contiene.
 - **Período (AñoMes)**: agrupación mensual bajo la cual se acumulan las
   Fichadas de un Empleado (por ejemplo, "2026-07"). Sirve como clave de
   organización del almacenamiento en memoria, pensada para un eventual uso
@@ -288,12 +287,14 @@ esperado.
   queda fuera de alcance de esta feature, en línea con el Principio II de
   la constitución (que exige una capa de repositorio dedicada, todavía no
   construida para esta feature).
-- El campo `fecha` de cada Fichada, tal como lo entrega el cliente
-  existente, siempre es `null` (el protocolo RS956 no decodifica la fecha
-  del evento — ver `001-consulta-fichadas-rs596`, FR-005). Por lo tanto, el
-  Período (año-mes) de cada Fichada se determina por la fecha en que el
-  servicio la recolectó, no por un dato de fecha propio capturado por el
-  reloj.
+- **Actualizado 2026-07-07:** el campo `fecha` de cada Fichada ya se
+  decodifica por completo (`001-consulta-fichadas-rs596`, FR-005/research.md
+  §5.16) — la suposición anterior de que siempre era `null` quedó obsoleta.
+  Esta spec, redactada antes de esa corrección, todavía determina el
+  Período (año-mes) por la fecha en que el servicio recolectó la fichada,
+  no por el campo `fecha` propio del evento; queda pendiente de revisar si
+  conviene usar el dato ya decodificado en vez de la fecha de recolección
+  antes de implementar esta feature.
 - Los momentos esperados (entrada/salida) y sus márgenes son configurables,
   pero se asume un único par de horarios compartido por todos los
   empleados activos (no hay turnos distintos por empleado en esta primera

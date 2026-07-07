@@ -22,7 +22,7 @@ protocolo consume esta feature y qué queda explícitamente fuera).
 | `0xA8` (borrar fichadas) | FR-007 prohíbe el borrado automático; queda para una feature futura separada |
 | `0xE9` / `0x98` / `0x96` (alta de usuario) | No relacionado con consulta de fichadas |
 | `0xC3` (identificación extendida) | Opcional según el research doc; no aporta nada requerido por esta spec |
-| `0xB2` (fecha/hora del equipo) | Aunque está decodificado con certeza, esta feature no lo necesita: el timestamp de cada fichada individual solo está parcialmente resuelto (hora/minuto/segundo cuando la fórmula AM/PM alcanza, fecha aún sin decodificar — FR-005), así que conocer la hora actual del reloj no cierra ese gap en esta iteración |
+| `0xB2` (fecha/hora del equipo) | Esta feature no lo necesita: el timestamp de cada fichada individual ya se decodifica por completo desde el propio registro de 20 bytes (FR-005, research.md §5.16), sin depender de la hora actual del reloj |
 
 ## Reglas de framing que este script DEBE respetar
 

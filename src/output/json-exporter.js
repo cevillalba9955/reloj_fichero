@@ -31,7 +31,7 @@ export function exportSessionToJson({ session, records, outputDir }) {
       // Campos legibles primero (FR-005/FR-015): fecha/hora/legajo/metodo.
       // Un valor presente tiene evidencia real detras; null significa que
       // no se pudo resolver o que se sabe que no es confiable para ese
-      // caso puntual (ver research.md §5.9/§5.10/§5.11) — nunca se
+      // caso puntual (ver research.md §5.9/§5.11/§5.16) — nunca se
       // presenta un valor sin evidencia como si fuera confiable.
       fecha: record.fecha,
       hora: record.hora,

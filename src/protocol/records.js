@@ -16,14 +16,18 @@ const VERIFICATION_METHOD_LABELS = {
   '00000040': 'rostro',
 };
 
-// research.md §5.9/§5.11: el legajo (primer byte del bloque re-encuadrado)
-// se confirmo contra tres sesiones reales independientes, incluyendo dos
+// research.md §5.9/§5.11: el legajo (bloque de 4 bytes re-encuadrado) se
+// confirmo contra tres sesiones reales independientes, incluyendo dos
 // fichadas verificadas por tarjeta dentro de la calibracion de 7
 // registros (control_fichada.csv, filas 3 y 6): decodifican igual que
 // huella/rostro, sin diferencia por metodo. (Una hipotesis anterior decia
 // que tarjeta no tenia legajo confiable, basada en un valor que en
 // realidad pertenecia a un registro colgante distinto, no a la fichada
 // por tarjeta misma — retractada, ver research.md §5.11).
+// research.md §5.15: el campo es un entero de 4 bytes little-endian, no
+// 1 byte — una fichada de prueba real con legajo 9999 (0x270F) trajo
+// legajoRaw "0F 27 00 00"; leer solo el primer byte daba 15, descartando
+// el resto del campo.
 
 function hexField(buffer, start, end) {
   return buffer.subarray(start, end).toString('hex').toUpperCase();
@@ -41,84 +45,79 @@ function pad2(n) {
 // (src/protocol/client.js) ya entrega el buffer con este encuadre corregido
 // (antepone el header de 4 bytes que antes se descartaba).
 
-// research.md §5.7: segundo (byte 7, binario directo) y minuto (byte 11 =
-// minuto*4+1) confirmados byte a byte contra research/control_fichada.csv
-// (7/7 y 8/8 coincidencias exactas).
+// research.md §5.7: segundo (byte 7, binario directo) confirmado byte a
+// byte contra research/control_fichada.csv (7/7 coincidencias exactas).
 //
-// research.md §5.10: el byte de hora (byte 10) trae, en sus bits 1-4, un
-// flag fijo "0001", y en el bit 0 un flag tipo AM/PM: 1 = hora real <= 12,
-// 0 = hora real > 12. Confirmado 7/7 contra los horarios reales conocidos
-// (13, 14, 16, 6, 7, 11, 12) — el limite correcto es "<=12", no "<12"
-// (corregido 2026-07-03 con una fichada real de hora 12: hourMod8=4,
-// bit0=1, que con el limite viejo se resolvia mal como hora 4). Los bits
-// 5-7 siguen dando solo "hourMod8" (se repite cada 8 horas). Combinando
-// ambos: de los 3 candidatos {hourMod8, hourMod8+8, hourMod8+16}, el flag
-// AM/PM separa los que son <=12 de los que son >12, dejando siempre 1 o 2
-// candidatos del lado que indica el flag.
+// research.md §5.16 (2026-07-06): modelo completo de fecha/hora, calibrado
+// probando el reloj a proposito con la fecha cambiada (dia, mes y año):
 //
-// research.md §5.12: cuando quedan 2 candidatos (hourMod8 0-4 con
-// flag<=12, o hourMod8 4-7 con flag>12), se desempata a favor del
-// candidato del bloque 8-15hs (`hourMod8 + 8`) — confirmado 4/4 veces
-// contra horarios reales externos (11, 12, 13, 14: en los cuatro casos el
-// candidato correcto fue siempre el del bloque 8-15, nunca el de 0-7 ni
-// el de 16-23). Es un criterio de desempate explicito basado en el
-// horario tipico de una jornada laboral, no un hecho de protocolo
-// confirmado — podria no generalizar a turnos nocturnos u otros horarios
-// fuera de oficina; falta calibracion para saberlo con certeza.
+//   byte8  (year):  bits 2-7 = (año - 1964); bits 0-1 = flag fijo "01"
+//   byte9  (month): bits 4-7 = mes (1-12);   bits 0-3 = flag fijo "0001"
+//   byte10 (day/h): bits 5-7 = hourMod8;     bits 0-4 = dia del mes (1-31, binario directo)
+//   byte11 (min/b): bits 2-7 = minuto (0-59); bits 0-1 = bloque de hora (0=0-7hs, 1=8-15hs, 2=16-23hs)
+//   hora = hourMod8 + 8*bloque
 //
-// Con 7 horas confirmadas (de 24 posibles) esto sigue siendo hipotesis sin
-// validar del todo (falta el resto de las horas, y hora=0 en particular,
-// que podria no seguir el mismo patron que 1-12). Cuando el byte no tiene
-// el formato esperado devuelve null — null ya comunica "no se sabe", no
-// hace falta un flag aparte (2026-07-03: se saco el wrapper
-// {value, unconfirmed} a pedido del usuario, ver research.md §5.11).
-//
-// research.md §5.13: el chequeo original exigia que los 2 bits bajos de
-// minuteByte fueran exactamente "01" (confirmado asi en la calibracion
-// original de 7 fichadas, research.md §5.7). Datos reales posteriores
-// (lotes de 28, 4 y 5 fichadas) muestran minuteByte con bits bajos en "10"
-// y "00" — y en todos esos casos el minuto decodificado (`minuteByte >> 2`)
-// coincidio igual con la hora real confirmada externamente. Ese chequeo
-// se saca: los bits bajos de minuteByte no son un flag de validez fijo
-// (probablemente codifican otra cosa, sin resolver todavia), y exigirlos
-// solo generaba falsos negativos (hora==null en fichadas perfectamente
-// decodificables).
-function decodeHora(buffer) {
+// Lo que una version anterior de este archivo interpretaba como "bit0 de
+// byte10 = flag AM/PM (hora<=12)" era en realidad el bit menos
+// significativo del dia del mes (dia impar/par) — solo parecia un flag de
+// hora porque toda la calibracion original vino de fichadas de un unico
+// dia real (2 de julio), asi que ese bit nunca varió por otro motivo que
+// no fuera la hora en ese dataset puntual. Y lo que se creia "criterio de
+// desempate, siempre bloque 8-15hs" era en realidad no leer el bloque de
+// hora real, ya presente en los bits 0-1 de byte11 — el "empate" nunca
+// existio, solo faltaba mirar el byte correcto. Confirmado con 8 fichadas
+// de prueba reales (dias 1, 10, 15, 30, 31; años 2015, 2020, 2026; horas
+// 0, 10, 11, 12, 23 — research/calibracion_fecha_hora_bytes_7_a_11.csv)
+// mas, retroactivamente, contra los 7 registros de control_fichada.csv y
+// las 5 fichadas de research/muestras-hora-ampm-2026-07-03.json: 100% de
+// coincidencia en dia/mes/año/hora/minuto/segundo, incluido el caso
+// hora=0 que antes fallaba (el criterio de desempate viejo elegia "8" en
+// vez de "0").
+function decodeFechaHora(buffer) {
   const second = buffer[7];
-  const hourByte = buffer[10];
-  const minuteByte = buffer[11];
+  const yearByte = buffer[8];
+  const monthByte = buffer[9];
+  const dayHourByte = buffer[10];
+  const minuteBlockByte = buffer[11];
 
+  const year = (yearByte >> 2) + 1964;
+  const month = monthByte >> 4;
+  const day = dayHourByte & 0b00011111;
+  const hourMod8 = dayHourByte >> 5;
+  const block = minuteBlockByte & 0b11;
+  const hour = hourMod8 + 8 * block;
+  const minute = minuteBlockByte >> 2;
+
+  // Los flags fijos (bits bajos de year/month) se mantienen como chequeo
+  // de plausibilidad barato: en todas las fichadas reales vistas hasta
+  // ahora nunca variaron; si no calzan, el registro probablemente no
+  // tiene este formato (o esta corrupto).
   const looksValid =
-    second <= 59 &&
-    (hourByte & 0b00011110) === 0b00010 &&
-    (minuteByte >> 2) <= 59;
+    (yearByte & 0b11) === 0b01 &&
+    (monthByte & 0b1111) === 0b0001 &&
+    month >= 1 && month <= 12 &&
+    day >= 1 && day <= 31 &&
+    minute <= 59 &&
+    second <= 59;
 
   if (!looksValid) {
-    return null;
+    return { fecha: null, hora: null };
   }
 
-  const hourMod8 = hourByte >> 5;
-  const isAtMostTwelve = (hourByte & 1) === 1;
-  const minute = minuteByte >> 2;
-
-  const candidates = [hourMod8, hourMod8 + 8, hourMod8 + 16];
-  const matching = candidates.filter((h) => (h <= 12) === isAtMostTwelve);
-  // matching.length es siempre 1 o 2; cuando es 2, "hourMod8 + 8" siempre
-  // esta entre los 2 (ver research.md §5.12) — se usa directo en vez de
-  // volver a filtrar.
-  const hour = matching.length === 1 ? matching[0] : hourMod8 + 8;
-
-  return `${pad2(hour)}:${pad2(minute)}:${pad2(second)}`;
+  return {
+    fecha: `${year}-${pad2(month)}-${pad2(day)}`,
+    hora: `${pad2(hour)}:${pad2(minute)}:${pad2(second)}`,
+  };
 }
 
 // Parsea un registro de fichada de 20 bytes segun
-// research/protocolo_prosoft_rs596.md §5.2/§5.9. Devuelve un FichadaRecord
-// (data-model.md §1) con los campos legibles (fecha, hora, legajo, metodo)
-// como valores directos: un valor presente significa que hay evidencia
-// real detras (research.md §5.6/§5.9/§5.10/§5.11); `null` significa que
-// todavia no se pudo resolver, o que se sabe que no es confiable para ese
-// caso puntual (spec FR-005/FR-015) — nunca se combina un valor sin
-// evidencia con uno confirmado.
+// research/protocolo_prosoft_rs596.md §5.2/§5.9/§5.16. Devuelve un
+// FichadaRecord (data-model.md §1) con los campos legibles (fecha, hora,
+// legajo, metodo) como valores directos: un valor presente significa que
+// hay evidencia real detras (research.md §5.6/§5.9/§5.11/§5.15/§5.16);
+// `null` significa que todavia no se pudo resolver, o que se sabe que no
+// es confiable para ese caso puntual (spec FR-005/FR-015) — nunca se
+// combina un valor sin evidencia con uno confirmado.
 export function parseFichadaRecord(buffer) {
   if (buffer.length !== RECORD_SIZE) {
     throw new RangeError(
@@ -132,7 +131,10 @@ export function parseFichadaRecord(buffer) {
   // research.md §5.9/§5.11: legajo se decodifica igual para los tres
   // metodos (huella, rostro, tarjeta) — confirmado contra dos fichadas
   // reales por tarjeta en control_fichada.csv.
-  const legajo = buffer[0];
+  // research.md §5.15: entero de 4 bytes little-endian, no solo el
+  // primer byte (ver comentario arriba).
+  const legajo = buffer.readUInt32LE(0);
+  const { fecha, hora } = decodeFechaHora(buffer);
 
   return {
     rawHex: buffer.toString('hex').toUpperCase(),
@@ -140,10 +142,8 @@ export function parseFichadaRecord(buffer) {
     anomaly: recordTypeConstant !== CONFIRMED_RECORD_TYPE,
     verificationMethodCode,
     metodo,
-    // research.md §5.5/§5.7: la fecha (dia/mes/año) nunca se pudo
-    // decodificar; siempre null hasta que se resuelva ese campo.
-    fecha: null,
-    hora: decodeHora(buffer),
+    fecha,
+    hora,
     legajo,
     unresolvedFields: {
       legajoRaw: hexField(buffer, 0, 4),

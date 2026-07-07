@@ -39,7 +39,9 @@ test('records: parseFichadaRecord decodifica el registro real de "un registro pe
   assert.equal(record.metodo, 'huella');
   // research.md §5.9: header "01 00 00 00" = legajo 1 = Cesar Villalba (confirmado).
   assert.equal(record.legajo, 1);
-  assert.equal(record.fecha, null);
+  // research.md §5.16: fecha ahora se decodifica (dia/mes/año); esta
+  // captura es del 2026-07-02 (research.md §6.1), que es justo lo que da.
+  assert.equal(record.fecha, '2026-07-02');
   assert.equal(record.unresolvedFields.legajoRaw, '01000000');
   assert.equal(record.unresolvedFields.field0, '01000016');
   assert.equal(record.unresolvedFields.field1, 'F9710205');
@@ -85,7 +87,7 @@ test('records: parseFichadaRecord decodifica el registro real por tarjeta (verif
   assert.equal(typeof record.legajo, 'number');
 });
 
-test('records: parseFichadaRecord decodifica hora (minuto/segundo confirmados, hora mod 8) contra research/control_fichada.csv', () => {
+test('records: parseFichadaRecord decodifica hora (segundo/minuto/hora) contra research/control_fichada.csv', () => {
   const fixture = loadFixture('siete-registros-control-fichada.json');
   // El timestamp/metodo/tipo de la fila i viven en el propio registro viejo
   // i (bytes 0-15, ahora en offset 4-19 del buffer re-encuadrado); no
@@ -120,9 +122,14 @@ test('records: legajo encadenado coincide con los legajos reales de control_fich
   }
 });
 
-test('records: parseFichadaRecord resuelve la hora usando el flag AM/PM del bit0 cuando alcanza, y devuelve null cuando sigue ambiguo (research.md §5.10)', () => {
+test('records: parseFichadaRecord decodifica la hora leyendo el bloque real de bits0-1 de minuteByte, sin desempate (research.md §5.16)', () => {
   const fixture = loadFixture('muestras-hora-ampm-2026-07-03.json');
-  for (const { hex, legajoReal, horaReal, expectedTimestampHypothesis, nota } of fixture.registros) {
+  // Las filas sinteticas de este fixture probaban el viejo "criterio de
+  // desempate" (ya retractado, research.md §5.16 lo reemplaza: el bloque de
+  // hora se lee directo de minuteByte, no se adivina). Solo las filas
+  // reales (esSintetico:false) siguen siendo una asercion valida.
+  for (const { hex, legajoReal, horaReal, expectedTimestampHypothesis, esSintetico, nota } of fixture.registros) {
+    if (esSintetico) continue;
     const record = parseFichadaRecord(hexToBuffer(hex));
     assert.equal(record.legajo, legajoReal, `legajo real ${legajoReal} (${nota})`);
     assert.equal(
@@ -150,9 +157,27 @@ test('records: parseFichadaRecord marca una anomalia cuando recordTypeConstant n
   assert.equal(record.anomaly, true);
 });
 
-test('records: parseFichadaRecord devuelve fecha null y metodo null cuando el codigo no se reconoce', () => {
+test('records: parseFichadaRecord devuelve metodo null cuando el codigo no se reconoce (fecha/hora se decodifican igual, son independientes de metodo)', () => {
   const raw = buildTrueRecord('00000000', '01 00 00 16 F9 71 02 05 00 00 00 01 00 00 00 99 99 02 00 00');
   const record = parseFichadaRecord(raw);
-  assert.equal(record.fecha, null);
   assert.equal(record.metodo, null);
+  assert.equal(record.fecha, '2026-07-02');
+  assert.equal(record.hora, '08:01:22');
+});
+
+test('records: parseFichadaRecord decodifica legajo de mas de 1 byte, little-endian (research.md §5.15, legajo de prueba real 9999)', () => {
+  const fixture = loadFixture('legajo-multibyte-9999.json');
+  for (const { hex, legajoReal, nota } of fixture.registros) {
+    const record = parseFichadaRecord(hexToBuffer(hex));
+    assert.equal(record.legajo, legajoReal, nota);
+  }
+});
+
+test('records: parseFichadaRecord decodifica fecha y hora completas (año/mes/día/hora/minuto/segundo), sin ambigüedad (research.md §5.16)', () => {
+  const fixture = loadFixture('fecha-hora-completa-2026-07-06.json');
+  for (const { hex, fechaReal, horaReal, nota } of fixture.registros) {
+    const record = parseFichadaRecord(hexToBuffer(hex));
+    assert.equal(record.fecha, fechaReal, `fecha real ${fechaReal}: ${nota}`);
+    assert.equal(record.hora, horaReal, `hora real ${horaReal}: ${nota}`);
+  }
 });

@@ -2,7 +2,7 @@
 
 **Estado:** Ingeniería inversa parcial, basada en análisis de tráfico de red (Wireshark) entre el software oficial "Gestión de Personal Pro-Soft" y el equipo.
 
-**Última actualización:** 2 de julio de 2026 (agregada sección 6.4: handshake/`0x13`/`0x81` confirmados vía tshark sobre `research/*.pcapng`; corregido el comando `0xA4` de la sección 6.1)
+**Última actualización:** 7 de julio de 2026 (§5.16: `fecha` y `hora` quedan totalmente decodificados sin ambigüedad; §5.15: `legajo` corregido a entero de 4 bytes; §5.14: retractada la hipótesis sobre el bloque de cierre de `0xA4`; se eliminaron las secciones con hipótesis ya refutadas — AM/PM, criterio de desempate — que llevaban a conclusiones erróneas sobre fichadas nuevas)
 
 **Advertencia:** Este documento no está basado en documentación oficial del fabricante (no existe públicamente). Es el resultado de observar tráfico real. Los campos marcados como "confirmado" fueron validados comparando múltiples capturas; los marcados como "hipótesis" o "sin resolver" son observaciones no verificadas y pueden estar incompletos o ser incorrectos.
 
@@ -123,20 +123,21 @@ El resto del bloque son ceros de relleno (padding fijo a 1040 bytes).
 > equivalentemente, el orden real de campos por fichada es
 > `[campo4, campo0, campo1, campo2, campo3]`, no
 > `[campo0, campo1, campo2, campo3, campo4]`). El campo[4] del último
-> registro de la respuesta queda colgando: es el legajo de una fichada que
-> todavía no llegó en esta descarga.
+> registro de la respuesta queda colgando; su significado real es
+> desconocido (retractada la hipótesis de que fuera "el legajo de una
+> fichada aún no llegada", ver §5.14).
 
 Cada registro de 20 bytes se divide en 5 campos de 4 bytes:
 
 | Campo | Bytes | Confirmado | Descripción |
 |---|---|---|---|
-| campo[0] | 0–3 | ⚠️ Hipótesis | Constante `01 00 00 XX` — el último byte varía por registro; no se pudo correlacionar con hora/fecha real |
-| campo[1] | 4–7 | ⚠️ Hipótesis | Primeros 2 bytes (`F9 71`) constantes en todas las capturas observadas; los 2 bytes finales varían. Fuerte candidato a contener parte de fecha/hora, pero no se logró decodificar la fórmula exacta |
-| campo[2] | 8–11 | ✅ Constante | Siempre `00 00 00 01` en todos los registros observados. Posible flag fijo (¿tipo de registro = asistencia?) |
-| campo[3] | 12–15 | ✅ Confirmado (parcial) | Varía entre registros con distinto método de verificación: `00 00 00 10` vs `00 00 00 40` (bits distintos → **candidato a "método de verificación": huella/rostro/tarjeta**, sin confirmar cuál bit corresponde a cuál método) |
-| campo[4] | 16–19 | ✅ Confirmado (byte0 = legajo, ver §5.9) | **Corrección (2026-07-03, §5.9):** el byte0 de este campo SÍ es un ID estable (legajo del empleado) — el parser actual lo asigna al registro equivocado por un error de encuadre de 4 bytes (ver §5.9); no leer esta fila sin la corrección de encuadre |
+| campo[0] | 0–3 | ✅ byte3 (segundo, ver §5.7); ❌ bytes 0-2 | Bytes 0-2 constantes `01 00 00` en todas las capturas vistas, de significado desconocido. Byte 3 es el segundo del evento (binario directo, 0-59) |
+| campo[1] | 4–7 | ✅ Completo (ver §5.16) | Año/mes/día/hora/minuto empaquetados: byte0=año (`(byte>>2)+1964`), byte1=mes (nibble alto), byte2=día del mes (bits 0-4) + `hourMod8` (bits 5-7), byte3=minuto (bits 2-7) + bloque de 8 horas (bits 0-1). `F9 71` (año 2026, mes julio) es la combinación vista en casi todas las capturas por ser el período en que se hicieron; cambia con fechas de prueba distintas |
+| campo[2] | 8–11 | ✅ (bytes), ❌ (significado) | No es fijo entre sesiones: `00 00 00 01` el 2026-07-02, `00 00 00 02` el 2026-07-03 (§5.8) — mismo valor para todos los registros de un lote, distinto entre lotes. Hipótesis vigente sin confirmar: contador de lote/sesión de descarga. Descartada la hipótesis de que fuera el legajo (§5.6) |
+| campo[3] | 12–15 | ✅ Confirmado (parcial) | Varía entre registros con distinto método de verificación: `00 00 00 10`/`00 00 00 30`/`00 00 00 40` (huella/tarjeta/rostro, ver §5.6) |
+| campo[4] | 16–19 | ✅ Confirmado (los 4 bytes = legajo, ver §5.9/§5.15) | El bloque completo de 4 bytes, leído little-endian, es el legajo del empleado — el parser actual lo asigna al registro equivocado por un error de encuadre de 4 bytes (ver §5.9); no leer esta fila sin la corrección de encuadre |
 
-> Nota: se confirmó por separado el comando `0xB2` que sí trae la fecha/hora del equipo en formato simple de bytes individuales (ver sección 5.4). El campo de timestamp dentro del registro de fichada sigue sin resolverse — no usa el mismo formato.
+> Nota: se confirmó por separado el comando `0xB2` que trae la fecha/hora *actual del equipo* en un formato simple de bytes individuales (ver sección 5.4), distinto del formato de campo[1] de arriba (empaquetado en bits, ver §5.16). Son dos formatos distintos para dos cosas distintas: la hora del reloj vs. el timestamp de cada fichada.
 
 ### 5.4 Comando de fecha/hora — decodificado ✅
 
@@ -169,20 +170,6 @@ Cada registro de 20 bytes se divide en 5 campos de 4 bytes:
 Verificado contra la fecha real del día de la captura (jueves 2 de julio de 2026, ~10:24:38) — **coincide exactamente**, incluyendo el día de la semana.
 
 **Importante:** este formato (byte por campo, año en `uint16` + resto en bytes individuales) es **distinto** del formato usado en los registros de fichada (sección 5.2), que parece usar un empaquetado binario diferente. Confirmar la hora del equipo no resolvió directamente el campo de timestamp de las fichadas, pero da una fórmula de referencia sólida por si el mismo empaquetado `año/mes/día/hora/min/seg en bytes separados` aparece en otras partes del protocolo aún no capturadas.
-
-### 5.5 Lo que NO se pudo confirmar (fichadas)
-
-**El campo exacto de fecha/hora no fue identificado con certeza.** Se probó exhaustivamente:
-- Interpretación como timestamp Unix estándar (segundos desde 1970) en little-endian y big-endian, en cada offset posible dentro del registro
-- Interpretación como formato compacto típico de estos equipos (segundos empaquetados con aritmética año-mes-día-hora-min-seg, año base 2000)
-- Interpretación BCD (dígitos decimales empaquetados en nibbles)
-
-Ninguna dio resultados consistentes con las horas reales conocidas de las fichadas de prueba (confirmadas por el usuario: 09:30:44, 09:31:15, 09:31:29 en una de las pruebas).
-
-**Hipótesis pendientes de investigar:**
-1. El timestamp podría requerir combinarse con un valor de referencia obtenido en otro comando no capturado aún (ej. "hora actual del equipo")
-2. Estos 20 bytes podrían ser solo una notificación de evento, y la fecha/hora completa se resuelva del lado del software cruzando contra su propia base de datos, no viajar completa por este canal
-3. Podría haber un desfase de alineación de bytes en el parsing (los límites de "registro" asumidos podrían no ser exactamente cada 20 bytes)
 
 ### 5.6 Dato de calibración real — fichada de prueba vs. software oficial (2026-07-02)
 
@@ -231,14 +218,6 @@ campo[2] = `00 00 00 01` (ver `tests/contract/fixtures/siete-registros-control-f
 Esto refuta la hipótesis "campo[2] = legajo": el campo no varía entre
 legajos distintos dentro de una misma sesión/lote. Ver sección 5.8 para la
 hipótesis vigente (contador de lote/sesión, no de legajo ni de empleado).
-
-**Timestamp:** sigue sin resolverse. Un solo punto de calibración (`13:56`,
-sin segundos) no alcanza para aislar una fórmula de empaquetado de fecha/hora
-entre los bytes candidatos (campo[1] y campo[4]); intentos previos con 3
-horas reales conocidas (sección 5.5) ya habían fallado con los formatos más
-comunes. Para avanzar hacer falta registrar el hex crudo de varias fichadas
-junto con la hora exacta (con segundos) que informe el software oficial para
-cada una.
 
 **"id: 72" del software:** no se encontró como ninguno de los bytes del
 registro (no aparece `0x48` en ningún campo). Es consistente con la
@@ -294,36 +273,12 @@ Coincide exacto en las 7 filas, y también en el dato de calibración previo
 de la sección 5.6 (`13:56` → `56*4+1=225=0xE1`, y en efecto el registro de
 esa fichada trae `F9 71 A2 E1`).
 
-**Hora — hipótesis parcial, NO confirmada del todo:** el 3er byte de
-campo[1] sigue la fórmula `(32 * hora + 2) mod 256`: hora 13 → `32*13+2=418`,
-`418 mod 256 = 162 = 0xA2` ✓; hora 14 → `32*14+2=450`, `450 mod 256 = 194 =
-0xC2` ✓. Ajusta perfecto para los dos valores de hora observados — **pero
-esta fórmula da el mismo resultado cada 8 horas** (`32*8=256=0`), es decir
-que con los datos actuales **no se puede distinguir, por ejemplo, la hora 6
-de la hora 14, o la hora 5 de la hora 13**. El 2do byte de campo[1] (`71` en
-todos los casos vistos hasta ahora) podría ser el que resuelve a qué bloque
-de 8 horas corresponde, pero no varió en ninguna prueba porque las horas 13
-y 14 caen en el mismo bloque (8-15) — hace falta un dato de calibración en
-un horario de un bloque distinto (ej. mañana temprano o de noche) para
-confirmarlo o descartarlo.
-
-**Fecha (día/mes/año):** sin tocar. El primer byte de campo[0] (`01`), sus
-2 bytes siguientes (`00 00`), y el 1er byte de campo[1] (`F9`) se mantienen
-constantes en **todas** las capturas vistas hasta ahora — pero todas son
-del mismo día calendario (2026-07-02), así que no hay todavía ningún dato
-que permita saber si esos bytes cambian entre días.
-
-**Cómo seguir:** para cerrar el formato completo haría falta una fichada de
-prueba en un horario de un bloque de 8 horas distinto al ya probado (0-7,
-16-23), e idealmente una prueba en un día calendario distinto, siempre
-comparando el hex crudo contra la hora exacta (con segundos) del software
-oficial, igual que en `research/control_fichada.csv`.
-
-**Decisión (2026-07-02):** el usuario dio por válido este formato sin más
-pruebas de calibración. Se implementó en `src/protocol/records.js`
-(`timestampHypothesis`, ver `data-model.md` §1) exponiendo minuto y segundo
-(confirmados) y la hora módulo 8 (con la ambigüedad de arriba sin resolver),
-siempre con `unconfirmed: true`.
+**Hora y fecha:** el 3er byte de campo[1] (byte10 del registro re-encuadrado)
+en un principio parecía dar solo `hourMod8` (se repite cada 8 horas) más un
+bit que se creyó un flag AM/PM — esa lectura quedó retractada: era en
+realidad el día del mes, mezclado con la hora en el mismo byte. Ver §5.16
+para el modelo completo y definitivo de fecha/hora, calibrado con fechas de
+prueba reales.
 
 ---
 
@@ -357,24 +312,6 @@ valores consecutivos, `01` y `02`) para distinguir entre "contador de día",
 "contador de lote/generación tras borrado" u otra causa. Hace falta
 observar el valor en una tercera sesión (idealmente sin borrado de por
 medio) para avanzar.
-
-**Timestamp — sin decodificar para este lote:** los 28 registros dieron
-`timestampHypothesis: null` en la implementación actual. Motivo: el chequeo
-de "flag fijo" de `decodeTimestampHypothesis` (bits bajos del byte de hora,
-`hourByte & 0b00011111 === 0b00010`) asume un valor constante (`2`) tomado
-de los únicos dos horarios calibrados hasta ahora (13 y 14 hs, sección
-5.7). En este lote nuevo aparecen bytes de hora con esos bits bajos en `2`
-**y también en `3`** (ej. `hourByte = 0x02` → bits bajos `00010` = 2, pero
-`hourByte = 0xC3` → bits bajos `00011` = 3), agrupados en bloques
-consistentes con los dos horarios aproximados informados por el usuario
-(~07:00 y ~16:00). Es decir, la fórmula de hora de la sección 5.7 no
-generaliza tal cual a estos nuevos bloques horarios: el bit bajo que se
-asumía "flag fijo" podría en realidad codificar información adicional de
-hora (por ejemplo, distinguir sub-bloques dentro de las 8 horas, o el
-bloque de 8 horas mismo en combinación con otro criterio). **No se ajusta
-la fórmula todavía** — hace falta un CSV de control con horas exactas (con
-segundos) para este lote, igual que en la sección 5.7, antes de tocar
-`decodeTimestampHypothesis`.
 
 **Qué no cambió:** los primeros 3 bytes de campo[0] (`01 00 00`) y el primer
 byte de campo[1] (`F9`) siguen constantes también en este lote de un día
@@ -429,9 +366,10 @@ comportamiento temporal extraño:
   sesión anterior perdida.
 - El campo[4] del ÚLTIMO registro de cada respuesta queda "colgando"
   (no pertenece a ningún registro con campo0-3 disponible en esta
-  respuesta) — es simplemente el legajo de una fichada aún no llegada
-  a esta descarga (pendiente o futura), no un caso especial de método de
-  verificación.
+  respuesta). **Retractado en §5.14:** en su momento se creyó que era el
+  legajo de una fichada aún no llegada; un contraejemplo con
+  `declaredPendingCount=1` (donde no puede haber ningún pendiente más)
+  refuta esa explicación — su significado real es desconocido.
 
 **Verificación contra capturas reales independientes (no la CSV
 derivada):**
@@ -453,8 +391,8 @@ derivada):**
   71, 72, 73, 74, 76, 79`); el legajo de la fila 1 (`72`) es el que
   hubiera estado en el header de *esta* sesión (no capturado por
   separado porque `src/protocol/client.js` lo descarta sin loguearlo);
-  el campo[4] de la fila 28 (`44`) queda colgando, perteneciente a una
-  fichada aún no descargada.
+  el campo[4] de la fila 28 (`44`) queda colgando (ver §5.14 para la
+  retractación de qué significa ese bloque).
 
 **Conclusión:** el legajo/ID de empleado viaja en el primer byte de un
 bloque de 4 bytes que el parser actual ubica en el lugar equivocado
@@ -485,114 +423,6 @@ capturas reales existentes (`un-registro-pendiente.json`,
 Pendiente, no bloqueante: agregar el lote de 28 fichadas del 2026-07-03
 como fixture de contrato nuevo (ver `research/hipotesis_fichadas_2026-07-03.csv`
 como fuente).
-
----
-
-### 5.10 Hora — bit0 del byte de hora es un flag AM/PM (hora <= 12), NO un marcador de bloque 00-07 (2026-07-03)
-
-**Hipótesis anterior RETRACTADA:** en un lote de 4 fichadas nuevas
-(mismo host `192.168.1.82`, sesión `2026-07-03T14:28`) se había propuesto
-que el bit bajo del byte de hora (`hourByte & 0x1F = 3`, en vez del `2`
-asumido originalmente) indicaba directamente que la hora real estaba en el
-bloque 00-07hs. El usuario confirmó que la hora real de esas 4 fichadas es
-**11**, no 3 — la hipótesis de "flag=3 ⟹ bloque 00-07" queda **refutada**
-(hora 11 está en el bloque 8-15, no en 0-7).
-
-**Hipótesis corregida y confirmada 7/7 contra todos los horarios reales
-conocidos hasta ahora:** el bit bajo (bit0) del byte de hora es un flag
-tipo AM/PM — `1` si la hora real es **menor o igual a 12**, `0` si es
-**mayor a 12** — independiente del bloque de 8 horas (bits altos). Los
-otros 4 bits bajos (bits 1-4) son fijos en `0001`. Verificación completa:
-
-| Hora real | hourByte | bit0 (¿hora \<= 12?) | Coincide |
-|---|---|---|---|
-| 13 | `0xA2` | 0 (no) | ✅ |
-| 14 | `0xC2` | 0 (no) | ✅ |
-| 16 | `0x02` | 0 (no) | ✅ |
-| 6 | `0xC3` | 1 (sí) | ✅ |
-| 7 | `0xE3` | 1 (sí) | ✅ |
-| 11 | `0x63` | 1 (sí) | ✅ |
-| 12 | `0x83` | 1 (sí) | ✅ |
-
-> **Corrección de límite (2026-07-03):** la primera versión de esta
-> hipótesis usaba el límite "hora < 12" en vez de "hora <= 12". Con solo
-> horas 6/7/11/13/14/16 confirmadas, ambos límites daban exactamente el
-> mismo resultado (ninguna de esas horas es igual a 12). Una 5ta fichada
-> nueva (sesión `2026-07-03T15:56`) resultó ser justo la hora límite: real
-> **12:55**, `hourMod8=4`, bit0=1. Con el límite viejo ("< 12") el código
-> resolvía esto como hora **4** (único candidato `< 12` del grupo
-> `{4,12,20}`) — **incorrecto**. Con el límite corregido ("<= 12"), tanto
-> `4` como `12` caen del lado "sí" del flag, así que el grupo `m=4` con
-> flag=1 pasa a ser **ambiguo** (ya no se resuelve solo con este byte) en
-> vez de resolverse mal. Ver `tests/contract/fixtures/muestras-hora-ampm-2026-07-03.json`
-> (fila 7) para el caso real que forzó esta corrección.
-
-**Qué resuelve y qué no:** combinado con `hourMod8` (bits altos, ya
-confirmado), este flag a veces alcanza para resolver la ambigüedad de 8
-horas por completo, y a veces no. Regla general: de los 3 candidatos
-`{hourMod8, hourMod8+8, hourMod8+16}`, si **exactamente uno** cae del lado
-que indica el flag (`<=12` o `>12`), la hora queda resuelta; si quedan 2
-candidatos del mismo lado, sigue ambigua. Con `m = hourMod8` (0-7):
-
-- `m ∈ {0,1,2,3}`: con flag=0 (hora >12) queda **resuelto** como `m+16`
-  (único candidato >12). Con flag=1 (hora <=12) sigue **ambiguo entre `m`
-  y `m+8`** (ambos <=12) — caso de las 4 fichadas de hora 11 (`m=3`,
-  candidatos `3` u `11`).
-- `m = 4` (caso especial, afectado por la corrección de límite): con
-  flag=1 (hora <=12) sigue **ambiguo entre `4` y `12`** (ambos <=12 bajo
-  el límite corregido — este es el caso de la fichada de hora 12). Con
-  flag=0 (hora >12) queda **resuelto** como `20` (único candidato >12).
-- `m ∈ {5,6,7}`: con flag=1 (hora <=12) queda **resuelto** como `m` (único
-  candidato <=12 de ese grupo, ya que `m+8` va de 13 a 15). Con flag=0
-  (hora >12) sigue **ambiguo entre `m+8` y `m+16`** (caso de las horas
-  13/14, `m=5`/`m=6`).
-
-Con solo 7 horas reales confirmadas hasta ahora (13, 14, 16, 6, 7, 11, 12),
-esta hipótesis tiene buen soporte pero no cubre ni un tercio de las 24
-horas posibles, y sigue sin dato alguno para la hora `0` (medianoche) —
-no debe tratarse como fórmula definitiva sin más calibración.
-
-**Confirmado con estos lotes:** las 4 fichadas de la sesión `14:28`
-decodifican como `11:22:34`, `11:24:16`, `11:25:10`, `11:26:33` — minuto y
-segundo ya coincidían con la fórmula existente, solo la hora necesitó
-confirmación externa. La 5ta fichada de la sesión `15:56` (mismas 4 más
-una nueva) decodifica como `12:55:48` — confirmó el caso límite hora=12 y
-forzó la corrección de arriba.
-
-**Implementado (2026-07-03, corregido el mismo día):**
-`decodeTimestampHypothesis` en `src/protocol/records.js` acepta el flag de
-hora en `2` o `3` (en vez de exigir exactamente `2`), calcula los 3
-candidatos de hora y resuelve solo cuando exactamente uno cae del lado que
-indica el flag AM/PM (límite `<=12`/`>12`), devolviendo `null` en caso
-contrario. Cubierto por `tests/contract/fixtures/muestras-hora-ampm-2026-07-03.json`
-(incluye el caso límite hora=12) y el test correspondiente en
-`records.contract.test.js`.
-
-**Hallazgo adicional al armar los tests (2026-07-03): el gate de minuto
-también parece demasiado estricto.** `decodeTimestampHypothesis` exige que
-los 2 bits bajos de `minuteByte` sean `01` para considerar el registro
-válido — ese chequeo viene de antes de esta sesión (research.md §5.7),
-confirmado originalmente solo contra las 7 fichadas de
-`control_fichada.csv` (las 7 cumplían `01`). Al revisar los 28 registros
-del lote de la sección 5.8/5.9 con hora ya confirmada por el usuario
-(bloques 16-23 y 00-07), **ninguno de los 28 cumple ese flag** (`minuteByte`
-observado con bits bajos `10` en el bloque 16-23, `00` en el bloque 00-07),
-y sin embargo el minuto decodificado (`minuteByte >> 2`) coincide
-exactamente con la hora real confirmada en todos los casos verificados
-(filas 14, 15 y 27, por ejemplo). Es decir, igual que pasó con el byte de
-hora: el gate de minuto probablemente esté rechazando registros
-perfectamente decodificables. **No se tocó este gate todavía** — queda
-como hallazgo pendiente de confirmar y de decidir si se relaja, análogo a
-lo que se hizo con la hora en esta misma sección.
-
-**Pendiente:**
-- Decidir si conviene relajar también el gate de minuto (`minuteByte & 0b11`)
-  ahora que hay evidencia de que rechaza minutos correctos, o esperar mas
-  calibración.
-- Seguir juntando horas reales confirmadas para terminar de validar el
-  flag AM/PM (faltan 17 de 24 horas posibles; el caso límite hora=12 ya se
-  confirmó y corrigió — ver arriba). Sigue sin dato la hora `0`
-  (medianoche), que podría no seguir el mismo patrón que 1-12.
 
 ---
 
@@ -638,9 +468,9 @@ verificación.
 - `fecha` se agrega como campo explícito, siempre `null` (nunca se
   decodificó ese campo del protocolo).
 - `hora` sin cambios de comportamiento en este momento (ya devolvía `null`
-  cuando no podía resolverse); solo se le sacó el wrapper. **Ver §5.12**:
-  el mismo día se agregó un criterio de desempate que reduce varios de
-  esos casos `null` a un valor resuelto.
+  cuando no podía resolverse); solo se le sacó el wrapper. Ver §5.16 para
+  el modelo completo y definitivo, que reemplaza los intentos posteriores
+  de esta misma fecha (ya retractados).
 - `contracts/output-schema.json`, `src/output/json-exporter.js`,
   `src/cli/consultar-fichadas.js` (el resumen de consola ahora avisa por
   campo específico: fecha/hora/legajo/método/anomalía, en vez de un
@@ -649,158 +479,168 @@ verificación.
 
 ---
 
-### 5.12 Hora — criterio de desempate cuando quedan 2 candidatos: siempre el bloque 8-15hs (2026-07-03)
+### 5.14 CORRECCIÓN ❌: el bloque de 4 bytes que sobra al final de cada respuesta `0xA4` NO es "el legajo de una fichada aún no llegada" (2026-07-06)
 
-El flag AM/PM (§5.10) reduce la ambigüedad de 3 candidatos a 1 o 2, pero
-cuando quedan 2 (grupos `hourMod8` 0-4 con flag "<=12", o 4-7 con flag
-">12"), hasta ahora se devolvía `null`. El usuario señaló que ya
-teníamos, de hecho, la ambigüedad resuelta en la práctica: cada vez que
-se consiguió confirmación externa para uno de estos casos de 2
-candidatos, el resultado correcto fue siempre el mismo lado.
+§5.9 explicaba el bloque de 4 bytes sobrante al final de cada respuesta
+`0xA4` (después de trocear `header + recordsBuffer` en bloques de
+`RECORD_SIZE`) así: *"es simplemente el legajo de una fichada aún no
+llegada a esta descarga (pendiente o futura)"*. Esa explicación no
+sobrevive al caso de un solo registro pendiente.
 
-**Verificación (4/4 casos confirmados hasta ahora):**
+**Contraejemplo, verificado directo contra
+`tests/contract/fixtures/un-registro-pendiente.json` (research.md §6.1,
+"Cesar Villalba"):** `0xB4` declaró `declaredPendingCountFromB4: 1`, y
+`0xA4` entregó exactamente ese único registro completo (el legajo,
+decodificado vía el `header`, coincide con el empleado real). No hay
+ningún otro pendiente que explicar — la cuenta ya está saldada en 1 de 1
+— y sin embargo sigue sobrando el mismo bloque de 4 bytes al final
+(`99 02 00 00`). Lo mismo pasa en `dos-registros-pendientes.json`
+(`declaredPendingCountFromB4: 2`, 2 registros entregados y decodificados
+correctamente, y aun así sobra `DA 04 00 00` al final). Si la cuenta de
+pendientes ya está completa, ese bloque no puede ser el legajo de "el
+próximo pendiente que todavía no llegó" — sencillamente no hay next.
 
-| `hourMod8` | Candidatos (2) | Hora real confirmada | ¿Es el candidato del bloque 8-15? |
-|---|---|---|---|
-| 3 | 3, 11 | 11 | ✅ (`3+8=11`) |
-| 4 | 4, 12 | 12 | ✅ (`4+8=12`) |
-| 5 | 13, 21 | 13 | ✅ (`5+8=13`) |
-| 6 | 14, 22 | 14 | ✅ (`6+8=14`) |
+**Lo que sí sigue firme (no se toca):** el corrimiento en sí — anteponer
+el `header` de 4 bytes leído antes de `recordsBuffer` y trocear desde el
+offset 0 — es necesario para que los tres patrones ya confirmados
+(`field0` empieza con `01 00 00`, `field1` empieza con `F9 71`,
+`recordTypeConstant = 00000001`) cuadren en **todos** los registros de una
+respuesta, no solo en el primero. El corrimiento describe correctamente
+dónde empieza cada fichada; lo que estaba mal era solo la interpretación
+del bloque final.
 
-En los cuatro casos donde se pudo confirmar la hora real externamente y
-quedaban 2 candidatos posibles, el resultado correcto fue siempre el
-candidato del bloque 8-15hs (`hourMod8 + 8` — el candidato "del medio" de
-los tres `{hourMod8, hourMod8+8, hourMod8+16}`, y el más cercano al
-mediodía en ambos lados de la partición del flag AM/PM).
-
-**Implementado:** `decodeHora` en `src/protocol/records.js` ahora
-devuelve `hourMod8 + 8` cuando el flag AM/PM deja 2 candidatos, en vez de
-`null`. Esto resuelve, por ejemplo, las 7 fichadas de
-`control_fichada.csv` (hora 14, antes `null`, hoy resuelven correctamente)
-y la fichada de hora 11 del lote de 4 fichadas (antes `null`, hoy
-resuelve correctamente).
-
-**Importante — esto es un criterio de desempate explícito, no un hecho de
-protocolo confirmado.** La justificación es empírica y probablemente
-ligada al horario típico de una jornada laboral de oficina (nadie fichó
-todavía, en los datos que tenemos, a las 3 de la mañana ni a las 9 de la
-noche) — no hay garantía de que generalice a turnos nocturnos, guardias, o
-un uso del reloj fuera de un horario de oficina convencional. Si en el
-futuro se confirma una hora real que **no** sea la del bloque 8-15 para
-alguno de estos grupos ambiguos, este criterio queda refutado y hay que
-volver a `null` (o a un criterio más fino) para ese grupo puntual.
-
-**Pendiente:**
-- Seguir juntando confirmaciones externas para los grupos `hourMod8`
-  todavía sin dato en el caso de 2 candidatos (0, 1, 2, 7).
-- Si alguna futura confirmación contradice el criterio del bloque 8-15
-  para algún grupo, documentarlo aquí y ajustar `decodeHora`.
+**Estado actual:** el bloque de cierre de 4 bytes se retracta a
+"significado desconocido" — no se sabe si es un contador, un checksum, un
+marcador de fin de mensaje, o algo distinto. Desde esta revisión,
+`src/protocol/client.js` loguea su contenido crudo (no son datos
+biométricos, solo framing de protocolo — Constitución Principio V lo
+permite) para poder contrastarlo a futuro contra el primer legajo nuevo
+que aparezca en la sesión siguiente, y así confirmar o descartar
+definitivamente cualquier hipótesis sobre su significado. Hasta entonces,
+se sigue descartando sin usarlo para decodificar ningún campo — este
+cambio es solo de trazabilidad, no de comportamiento.
 
 ---
 
-### 5.13 Se elimina el gate de bits bajos de `minuteByte` (2026-07-03)
+### 5.15 CORRECCIÓN ❌: `legajo` no es 1 byte — son los 4 bytes del campo, little-endian (2026-07-06)
 
-El chequeo de validez de `decodeHora` exigía que los 2 bits bajos de
-`minuteByte` fueran exactamente `01` (confirmado así en la calibración
-original de 7 fichadas, research.md §5.7 — las 7 lo cumplían). Ese
-chequeo quedó documentado como sospechoso desde §5.10 ("hallazgo
-adicional"): los lotes reales posteriores (28, 4 y 5 fichadas) mostraron
-`minuteByte` con bits bajos en `10` y `00`, y en **todos** esos casos el
-minuto decodificado (`minuteByte >> 2`) coincidió igual con la hora real
-confirmada externamente (por ejemplo, las 4 fichadas de hora 11 y la
-fichada de hora 12 ya tenían bits bajos `01`, pero las de hora 16/6/7 del
-lote de 28 tenían `10`/`00`/`00` y el minuto también daba bien).
+Todas las fichadas reales vistas hasta ahora tenían legajo `<= 255`
+(máximo observado: 79), y `legajoRaw` siempre traía sus 3 bytes altos en
+`00 00 00`. Con eso, leer solo `buffer[0]` (el primer byte) daba el mismo
+resultado que leer el campo completo — la implementación nunca se puso a
+prueba con un legajo que necesitara más de 1 byte.
 
-**Se saca el chequeo.** `decodeHora` ya no exige ningún valor específico
-para los bits bajos de `minuteByte` — solo valida que `minuteByte >> 2`
-sea `<= 59` (rango válido de minuto) y que el byte de hora tenga el flag
-fijo esperado en sus bits 1-4. Esto significa que, combinado con el
-criterio de desempate de §5.12, `hora` ahora se resuelve en muchos más
-casos que antes (por ejemplo, las 7 fichadas de `control_fichada.csv`, que
-antes daban `null` por este gate, ahora resuelven correctamente a su hora
-real).
+**Prueba real, con legajo de prueba `9999` a propósito (2026-07-06,
+sesión `192.168.1.82-2026-07-06T13-39-02-649Z`):** la fichada trajo
+`legajoRaw: "0F 27 00 00"`. `buffer[0]` da `0x0F = 15` — descarta el
+resto del campo. Leyendo los 4 bytes como entero little-endian
+(`0x0000270F`) da `9999`, exactamente el legajo de prueba usado. Esto
+confirma dos cosas a la vez: el campo tiene más de 1 byte de ancho, y el
+orden de los bytes es little-endian (el byte menos significativo va
+primero — `0F` aporta las unidades/decenas bajas, `27` aporta los miles).
 
-**Qué sigue sin saberse:** qué codifican realmente los bits bajos de
-`minuteByte` (si es que codifican algo — podría ser ruido, o parte de un
-campo distinto todavía sin identificar). Al sacar el gate, se deja de usar
-esa información para validar, pero tampoco se interpreta; queda como
-`unresolvedFields` implícito dentro de `field1`.
+**Corrección aplicada:** `legajo` se decodifica ahora con
+`buffer.readUInt32LE(0)` en vez de `buffer[0]` (`src/protocol/records.js`).
+No cambia ningún resultado ya confirmado (todos los legajos reales previos
+tenían bytes altos en cero, dan el mismo valor con cualquiera de los dos
+métodos) — solo corrige el caso, antes no probado, de un legajo que
+necesita más de 1 byte. Ver también
+`tests/contract/fixtures/legajo-multibyte-9999.json`.
+
+**Qué queda pendiente:** con un solo punto de calibración (`9999`) queda
+confirmado que el campo es little-endian de al menos 2 bytes
+significativos; no hay todavía un caso real con legajo `> 65535` que
+distinga "2 bytes" de "4 bytes completos" — se usa `readUInt32LE` (los 4
+bytes enteros) porque es el ancho real del campo en el registro, no
+porque haya evidencia de un legajo que necesite el tercer o cuarto byte.
 
 ---
 
-### 5.14 Dos fichadas reales calibran hora=0 (medianoche) y hora=23, pero refutan que el flag fijo de bits 1-4 sea siempre `0b0010` (2026-07-06)
+### 5.16 CORRECCIÓN COMPLETA ✅: `fecha` y `hora` quedan totalmente decodificados — el "flag AM/PM" y el "criterio de desempate" eran el día del mes, mal interpretado (2026-07-06)
 
-El usuario confirmó, contra el software oficial, dos fichadas reales del
-JSON `output/fichadas-192.168.1.82-2026-07-06T15_40_03.360Z.json`:
-posición 13 = **00:15** (medianoche) y posición 14 = **23:45** — exactamente
-dos de los horarios que §5.12 marcaba como pendientes de calibrar
-(`hourMod8` 0 y 7, casos límite de bloque).
+Probando el reloj a propósito con la fecha cambiada (día, mes y año) e
+haciendo una fichada en cada caso — `01/01/20`, `31/01/20`, `31/12/20` (día,
+mes y año en formato DD/MM/YY), más una cuarta con el reloj en `31/12/20`
+pero la hora llevada manualmente a `00:50`, y una segunda tanda de 8
+fichadas más (días 1, 10, 15, 30, 31; años 2015, 2020, 2026; horas límite
+0/12/23 — `research/calibracion_fecha_hora_bytes_7_a_11.csv`) — se aisló
+el modelo completo y definitivo de los bytes 7-11 de cada registro:
 
-| Posición | `rawHex` | `hourByte` | `minuteByte` | Hora real | `minuteByte>>2` | ¿Minuto OK? |
-|---|---|---|---|---|---|---|
-| 13 | `0100000001000007E1110F3C0000000100000010` | `0x0F` (`00001111`) | `0x3C` (`00111100`) | 00:15 | 15 | ✅ |
-| 14 | `0100000001000004E111EFB60000000100000010` | `0xEF` (`11101111`) | `0xB6` (`10110110`) | 23:45 | 45 | ✅ |
+```
+byte7  (segundo):  binario directo, 0-59
+byte8  (año):      bits 2-7 = (año - 1964); bits 0-1 = flag fijo "01"
+byte9  (mes):      bits 4-7 = mes (1-12);   bits 0-3 = flag fijo "0001"
+byte10 (día/hora): bits 5-7 = hourMod8;     bits 0-4 = día del mes (1-31, binario directo)
+byte11 (min/bloque): bits 2-7 = minuto (0-59); bits 0-1 = bloque de hora (0=0-7hs, 1=8-15hs, 2=16-23hs)
+hora = hourMod8 + 8×bloque
+```
 
-**Lo que se confirma:** el minuto (`minuteByte >> 2`) sigue decodificando
-perfecto en ambos casos (15 y 45), y `hourByte >> 5` (`hourMod8`) también
-sigue siendo consistente: `0x0F >> 5 = 0` (00:15 → `0 mod 8 = 0` ✅),
-`0xEF >> 5 = 7` (23:45 → `23 mod 8 = 7` ✅). El framing general (bytes
-7/10/11 = segundo/hora/minuto) queda reforzado, no cuestionado.
+**Mes — `byte9`, nibble alto:** confirmado con 3 meses distintos (julio
+real de 2026; enero y diciembre de prueba en 2020).
 
-**Lo que se refuta:** el chequeo de "flag fijo" de `decodeHora`
-(`hourByte & 0b00011110 === 0b00010`) asumía que esos 4 bits eran
-constantes (`0010`) en **todas** las fichadas — confirmado hasta ahora
-solo contra fichadas de las horas 6, 7, 11, 12, 13, 14, 16 (§5.7/§5.10).
-Estas dos fichadas nuevas traen ese mismo campo en `0b1110` (`0x0E`) en
-vez de `0b0010` — un valor nunca antes observado. Como el gate de
-`decodeHora` sigue exigiendo literalmente `0b0010`, estas dos fichadas
-**ya devuelven `hora: null`** con el código actual (comportamiento
-verificado en el JSON: ambos registros traen `"hora": null`) — es decir,
-el script no inventa ni fuerza un valor incorrecto para ellas, se
-mantiene conservador.
+**Año — `byte8`, bits altos ÷ 4:** `año = (byte8 >> 2) + 1964`, confirmado
+con 3 años distintos (2015, 2020, 2026).
 
-**Por qué NO se extiende `decodeHora` todavía:** si se relajara el gate
-para aceptar también `0b1110` y se reutilizara tal cual la lógica de
-desempate existente (bit0 = flag "hora<=12", empate → `hourMod8+8`,
-§5.10/§5.12), el resultado sería **incorrecto para las dos fichadas**:
+**Día y hora — el hallazgo clave:** lo que research.md llamaba "flag
+AM/PM" (bit0 de `byte10`) era en realidad el bit menos significativo del
+**día del mes** — con día 1 (impar) y día 10 (par) al mismo mes/año/hora,
+ese bit fue `1` y `0` respectivamente, coincidiendo con la paridad del día,
+no con si la hora era `<=12`. Nunca se había notado porque toda la
+calibración original venía de fichadas de un único día real (2 de julio),
+así que ese bit nunca varió por otro motivo que no fuera la hora en ese
+dataset particular — una correlación espuria de un dataset demasiado
+angosto, no una propiedad real del protocolo. El modelo completo de
+`byte10` es: bits 0-4 = día del mes (1-31), bits 5-7 = `hourMod8` —
+confirmado exacto con día 1, 10, 15, 30 y 31.
 
-- Fila 13 (`hourMod8=0`, bit0=1): candidatos `{0, 8, 16}` con `<=12` →
-  `{0, 8}`, 2 candidatos → desempate actual da `0+8=8`. Real: **0**.
-  Resultado sería `08:15`, no `00:15`.
-- Fila 14 (`hourMod8=7`, bit0=1): candidatos `{7, 15, 23}` con `<=12` →
-  solo `{7}` (single match, sin desempate) → resultado `07`. Real: **23**.
-  Resultado sería `07:45`, no `23:45`.
+Y lo que se llamaba "criterio de desempate al bloque 8-15hs" era
+simplemente no leer un byte que ya traía la respuesta: los 2 bits bajos de
+`byte11` ("minuteByte") son directamente el **bloque de 8 horas** (`0` =
+0-7hs, `1` = 8-15hs, `2` = 16-23hs) — no hace falta adivinar ni desempatar
+nada, `hora = hourMod8 + 8×bloque`. Confirmado con los 3 bloques usando los
+casos límite: hora 0 (bloque 0), hora 12 (bloque 1), hora 23 (bloque 2) —
+los tres decodifican exactos, incluido el caso de hora=0 que con el
+criterio de empate viejo daba `8` en vez de `0`.
 
-Es decir, reusar la lógica actual con el flag nuevo produciría un valor
-**inventado y activamente incorrecto** en ambos casos — peor que el
-`null` actual. Con solo 2 puntos de dato bajo este flag nuevo (que además
-resuelven a los dos extremos opuestos, 0 y 23, con el mismo bit0=1, sin
-que bit0 alcance para distinguirlos) no hay evidencia suficiente para
-derivar con confianza qué combinación de bits sí discrimina el candidato
-correcto para el grupo `0b1110` — hacerlo ahora repetiría el patrón que
-este documento ya tuvo que revertir varias veces (§5.6, §5.8: aceptar una
-fórmula con muy pocos puntos de calibración y tener que retractarla
-después).
+**Efecto retroactivo importante:** con el criterio de empate viejo,
+`decodeHora` elegía **siempre** el bloque 8-15hs cuando había ambigüedad —
+así que cualquier fichada real de los bloques 0-7hs o 16-23hs que lograra
+pasar el gate de bits 1-4 (que en realidad exigía un día específico, ver
+más abajo) quedaba con la hora **mal decodificada en 8 horas**, sin ningún
+indicio de error (no daba `null`, daba un valor incorrecto con confianza).
+El archivo de salida `fichadas-192.168.1.82-2026-07-06T12_24_17.891Z.json`
+generado antes de esta corrección tenía registros del bloque 8-15hs
+decodificados 8 horas tarde respecto de la hora real; cualquier JSON
+exportado antes de esta corrección con horas del bloque 8-15hs debe
+considerarse sospechoso.
 
-**Decisión (2026-07-06):** no se toca `src/protocol/records.js`. Se deja
-documentado este hallazgo y se amplía el conteo de horas con evidencia
-real de 7/24 a 9/24 (0, 6, 7, 11, 12, 13, 14, 16, 23) — pero el conteo de
-horas que la fórmula implementada puede **decodificar** sigue en 7/24
-(6, 7, 11, 12, 13, 14, 16); las horas 0 y 23 quedan confirmadas como
-dato crudo pero todavía no cubiertas por `decodeHora`, a la espera de más
-calibración bajo el flag `0b1110` (idealmente una tercera fichada bajo
-ese mismo flag, en una hora que permita distinguir si el criterio es
-"extremo bajo vs extremo alto del rango 0-23" o alguna otra combinación
-de bits).
+**Por qué el gate viejo (`hourByte & 0b00011110 === 0b00010`) rechazaba
+tantos registros reales, y por qué eso ocultó el bug de arriba:** ese gate
+exigía que los bits 1-4 de `byte10` fueran exactamente `0001` — bajo el
+modelo nuevo, bits 1-4 son parte del día (`día>>1`), así que el gate en
+realidad exigía `piso(día/2) = 1`, es decir, **día 2 o 3 del mes**. Toda la
+calibración original vino de fichadas de esos días exactos, por eso el
+gate "funcionaba" — no validaba nada del protocolo, coincidía con el día
+real de la única sesión de calibración disponible en ese momento.
+Cualquier fichada de otro día quedaba en `null` (falso negativo, seguro
+pero inútil) o, peor, si por casualidad los bits 1-4 daban `0001` por otro
+día que también cumpliera `piso(día/2)=1`, decodificaba con el criterio de
+empate viejo, que podía estar mal en 8 horas sin avisar.
 
-**Pendiente:**
-- Conseguir una tercera fichada real bajo el flag `0b1110` (u otro valor
-  distinto de `0b0010`) para tener al menos 3 puntos y poder proponer una
-  regla de desempate específica para ese grupo, en vez de reusar la de
-  `0b0010` a ciegas.
-- Confirmar si existen más valores de flag además de `0b0010` y `0b1110`
-  (ej. capturando fichadas en otras horas del día que todavía no se
-  probaron: 1, 2, 3, 5, 8, 9, 10, 15, 17-22).
+**Código:** `decodeHora` se reemplaza por `decodeFechaHora`
+(`src/protocol/records.js`), que decodifica año/mes/día/hora/minuto/segundo
+juntos a partir de bytes 7-11, sin gates basados en el día ni criterios de
+desempate — el único chequeo de plausibilidad que queda es que los flags
+fijos de `byte8`/`byte9` (bits bajos) sigan siendo `01`/`0001`, y que
+mes/día/minuto/segundo caigan en rango válido.
+
+**Qué sigue sin resolver:** el significado real de los flags fijos de
+`byte8` (bits 0-1), `byte9` (bits 0-3) y de los 3 bytes constantes de
+`field0` (bytes 4-6, `01 00 00`) — se usan solo como chequeo de
+plausibilidad, no se sabe qué codifican. Tampoco se probó un año fuera del
+rango 2015-2026 en los extremos (por ejemplo, año 2000 o 2099, para
+confirmar que la fórmula no tiene un techo/piso distinto fuera de ese
+rango).
 
 ---
 
@@ -1066,29 +906,36 @@ modos (servidor mock reducido y completo).
 
 ## 7. Recomendación práctica para integración
 
-Dado que el campo de fecha/hora no está resuelto con certeza, se recomienda un enfoque híbrido para producción:
+El timestamp de cada fichada (fecha y hora) y el legajo ya se decodifican
+por completo desde el propio registro de 20 bytes (§5.15/§5.16), sin
+depender del software oficial Pro-Soft ni de su hora actual. Recomendación
+vigente:
 
-1. **Usar este protocolo (`0xB4` + `0xA4`) solo como disparador de eventos** — "hay una fichada nueva" — sin depender del timestamp crudo que trae el registro binario.
-2. **Obtener la fecha/hora exacta desde el software oficial Pro-Soft**, vía su función de exportación (CSV/Excel/TXT), que sí interpreta correctamente el dato porque conoce el formato propietario completo.
-3. Considerar contactar a Pro-Soft solicitando formalmente documentación del protocolo o un SDK — sigue siendo el camino más confiable si se necesita una integración 100% autónoma sin depender del software oficial corriendo en paralelo.
+1. **Usar `0xB4` + `0xA4` como fuente completa del evento** (legajo, método,
+   fecha y hora), sin necesitar una fuente externa para el timestamp.
+2. Si en algún momento aparece una fichada con `fecha`/`hora` en `null`
+   (registro que no calza con los flags fijos esperados), tratarla como
+   caso a investigar puntualmente, no como la norma — con los datos vistos
+   hasta ahora eso solo ocurre con bytes corruptos o un formato de registro
+   distinto al confirmado.
+3. Considerar contactar a Pro-Soft solicitando formalmente documentación
+   del protocolo o un SDK sigue siendo válido para otros campos aún sin
+   resolver (campo[2]/`recordTypeConstant`, el bloque de cierre de 4 bytes
+   de cada `0xA4`, ver §5.8/§5.14), pero ya no es necesario para fecha/hora
+   ni legajo.
 
 ---
 
 ## 8. Próximos pasos sugeridos para completar la documentación
 
-- [ ] Capturar el comando de "consultar hora actual del equipo" (si existe) para tener una referencia de calibración
-- [ ] Exportar un reporte CSV del software con las fichadas de prueba ya realizadas, y correlacionar sus timestamps exactos contra los bytes crudos capturados
 - [ ] Capturar una sesión de alta de usuario completa (comandos `0xE9`/`0x98`/`0x96`) con más detalle para documentar ese flujo también
 - [ ] Confirmar el significado exacto de campo[3] (método de verificación) con pruebas dirigidas: una fichada solo por tarjeta, otra solo por PIN, etc.
-- [x] (§5.8→§5.9, 2026-07-03) Exportar un CSV de control con horas exactas para el lote de 28 fichadas del 2026-07-03 — resuelto vía confirmación directa del usuario contra la app oficial (bloques horarios, no segundos exactos por fila) más el cruce de legajos reales; ver `research/hipotesis_fichadas_2026-07-03.csv`.
-- [ ] (§5.8, 2026-07-03) Descargar una tercera sesión en un tercer día calendario (sin borrado `0xA8` de por medio si es posible) para determinar si campo[2] es un contador de día, un contador de lote/generación post-borrado, u otra cosa.
-- [x] (§5.9, 2026-07-03) Corregir el encuadre en `src/protocol/client.js`/`records.js`: dejar de descartar el header de 4 bytes (es el legajo del primer registro) y re-cortar cada fichada como `[campo4 anterior] + [campo0,1,2,3 propios]`; el campo[4] del último registro de la respuesta queda colgando (fichada aún no descargada) y ya no se asigna al último registro. Implementado y cubierto por tests.
-- [ ] (§5.9, 2026-07-03) Agregar el lote de 28 fichadas como fixture de contrato (`tests/contract/fixtures/`), ya con el encuadre corregido.
-- [x] (§5.10, 2026-07-03) Conseguir horarios reales para las horas todavía no confirmadas, especialmente el caso límite hora=12 — confirmado con fichada real (12:55:48), corrigió el límite del flag AM/PM de "hora<12" a "hora<=12".
-- [ ] (§5.10, 2026-07-03) Conseguir horarios reales para las horas que faltan (0,1,2,5,8,9,10,15,17-23), en particular hora=0 (medianoche), que podría no seguir el mismo patrón que 1-12.
-- [x] (§5.10, 2026-07-03) Implementar la resolución parcial de hora (flag AM/PM + hourMod8) en `decodeHora`.
-- [ ] (§5.10, 2026-07-03) Decidir si se relaja también el gate de minuto (`minuteByte & 0b11`), dado que rechaza minutos correctos en los 28 registros del lote de §5.8/5.9 (hallazgo nuevo, ver arriba).
-- [x] (§5.12, 2026-07-03) Aplicar el criterio de desempate del bloque 8-15hs cuando el flag AM/PM deja 2 candidatos — confirmado 4/4 con horarios reales, implementado en `decodeHora`.
-- [ ] (§5.12, 2026-07-03) Seguir juntando confirmaciones externas para los grupos `hourMod8` sin dato en el caso de 2 candidatos (0, 1, 2, 7) **bajo el flag ya confirmado `0b0010`** — sigue pendiente; las dos fichadas nuevas de §5.14 (hourMod8 0 y 7) llegaron con un flag distinto (`0b1110`), por lo que no resuelven este punto tal cual estaba planteado.
-- [ ] (§5.9, 2026-07-03) Confirmar con una tercera sesión (idealmente con más de un registro pendiente) que el re-encuadre de campo[4] es consistente y no depende del método de verificación ni de si hay borrado de por medio.
-- [ ] (§5.14, 2026-07-06) Conseguir una tercera fichada real bajo el flag `0b1110` (o cualquier valor de flag distinto de `0b0010`) para poder derivar con confianza una regla de desempate propia de ese grupo, en vez de dejar `hora: null` para esos casos indefinidamente.
+- [ ] (§5.8) Descargar una tercera sesión en un tercer día calendario (sin borrado `0xA8` de por medio si es posible) para determinar si campo[2]/`recordTypeConstant` es un contador de día, un contador de lote/generación post-borrado, u otra cosa.
+- [x] (§5.9, 2026-07-03) Corregir el encuadre en `src/protocol/client.js`/`records.js`: dejar de descartar el header de 4 bytes (es el legajo del primer registro) y re-cortar cada fichada como `[campo4 anterior] + [campo0,1,2,3 propios]`. Implementado y cubierto por tests.
+- [ ] (§5.9) Agregar el lote de 28 fichadas del 2026-07-03 como fixture de contrato (`tests/contract/fixtures/`), ya con el encuadre corregido.
+- [ ] (§5.9/§5.14) Confirmar con una tercera sesión (idealmente con más de un registro pendiente) que el re-encuadre de campo[4] es consistente y no depende del método de verificación ni de si hay borrado de por medio.
+- [x] (§5.14, 2026-07-06) Loguear el contenido crudo del bloque de 4 bytes que sobra al final de cada respuesta `0xA4` (en vez de descartarlo en silencio), para poder investigar su significado real a futuro.
+- [x] (§5.15, 2026-07-06) Corregir `legajo` a entero de 4 bytes little-endian (antes solo el primer byte) — confirmado con una fichada de prueba real con legajo 9999.
+- [x] (§5.16, 2026-07-06) Decodificar `fecha` y `hora` por completo (año/mes/día/hora/minuto/segundo), sin ambigüedad ni criterio de desempate — calibrado probando el reloj con fechas de prueba a propósito (3 años, varios días/meses, y los 3 casos límite de bloque horario: 0, 12, 23).
+- [ ] (§5.16) Probar un año fuera del rango 2015-2026 en los extremos (por ejemplo, año 2000 o 2099) para confirmar que la fórmula de año no tiene un techo/piso distinto fuera de ese rango.
+- [ ] (§5.16) Confirmar el significado real de los flags fijos de `byte8` (bits 0-1) y `byte9` (bits 0-3), y de los 3 bytes constantes de campo[0] (bytes 4-6, `01 00 00`) — hoy solo se usan como chequeo de plausibilidad.

@@ -1,0 +1,21 @@
+{
+  "description": "Captura real (2026-07-06, sesion 192.168.1.82-2026-07-06T13-39-02-649Z) con una fichada de prueba a proposito con legajo 9999, para confirmar que 'legajo' ocupa mas de 1 byte y que el orden de bytes es little-endian (research.md #5.15). legajoRaw '0F 27 00 00' leido solo como buffer[0] daba 15 (bug corregido); leido como entero de 4 bytes little-endian da 0x270F = 9999, el legajo de prueba real usado.",
+  "source": "research/protocolo_prosoft_rs596.md #5.15, output/fichadas-192.168.1.82-2026-07-06T13_39_02.650Z.json",
+  "registros": [
+    {
+      "hex": "01 00 00 00 01 00 00 38 F9 71 46 89 00 00 00 01 00 00 00 10",
+      "legajoReal": 1,
+      "nota": "primer registro de la sesion de prueba, legajo normal de 1 byte para contraste"
+    },
+    {
+      "hex": "0F 27 00 00 01 00 00 3A F9 71 46 8D 00 00 00 01 00 00 00 10",
+      "legajoReal": 9999,
+      "nota": "legajo de prueba 9999 (0x270F) a proposito, legajoRaw '0F 27 00 00'. buffer[0] solo da 15 (bug); little-endian de 4 bytes da 9999 (fix, research.md #5.15)."
+    },
+    {
+      "hex": "01 00 00 00 01 00 00 25 F9 71 46 91 00 00 00 06 00 00 00 10",
+      "legajoReal": 1,
+      "nota": "recordTypeConstant '00000006' en vez de '00000001' (anomaly:true) - registro de prueba, no cambia la decodificacion del legajo"
+    }
+  ]
+}

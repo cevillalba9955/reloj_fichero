@@ -1,0 +1,18 @@
+{
+  "description": "Dos tandas de fichadas de prueba reales (2026-07-06), hechas a proposito con la fecha del reloj cambiada (dia, mes y anio), para calibrar la decodificacion completa de fecha/hora (research.md #5.14). Fecha/hora real confirmada por el usuario contra Lista_241109.txt y Lista_241109_2.txt. El dia resulto ser los bits 0-4 de byte10 (antes creido un flag AM/PM); el bloque de hora (0/1/2 para 0-7/8-15/16-23hs) resulto ser los bits 0-1 de byte11 (antes creido un criterio de desempate). Detalle byte a byte completo en research/calibracion_fecha_hora_bytes_7_a_11.csv.",
+  "source": "research/protocolo_prosoft_rs596.md #5.14, research/Lista_241109.txt, research/Lista_241109_2.txt",
+  "registros": [
+    { "hex": "01 00 00 00 01 00 00 1A E1 11 61 C5 00 00 00 01 00 00 00 10", "fechaReal": "2020-01-01", "horaReal": "11:49:26", "nota": "dia 1 puesto por error en vez de dia 2, mismo asi sirve de calibracion" },
+    { "hex": "01 00 00 00 01 00 00 33 E1 11 7F C5 00 00 00 01 00 00 00 10", "fechaReal": "2020-01-31", "horaReal": "11:49:51", "nota": "dia 31, mismo mes/anio/hora que el anterior, distinto dia" },
+    { "hex": "01 00 00 00 01 00 00 06 E1 C1 7F C9 00 00 00 01 00 00 00 10", "fechaReal": "2020-12-31", "horaReal": "11:50:06", "nota": "mes diciembre, hora 11 (bloque 1, sin ambiguedad)" },
+    { "hex": "01 00 00 00 01 00 00 23 E1 C1 1F C8 00 00 00 01 00 00 00 10", "fechaReal": "2020-12-31", "horaReal": "00:50:35", "nota": "hora 0 exacta (bloque 0) - antes bugueado, el criterio de empate viejo elegia 8" },
+    { "hex": "01 00 00 00 01 00 00 04 E1 11 41 3D 00 00 00 01 00 00 00 10", "fechaReal": "2020-01-01", "horaReal": "10:15:04", "nota": "dia 1, hora 10 (bloque 1)" },
+    { "hex": "01 00 00 00 01 00 00 17 E1 11 4A 3D 00 00 00 01 00 00 00 10", "fechaReal": "2020-01-10", "horaReal": "10:15:23", "nota": "dia 10 (par) - distingue piso(dia/2) de piso((dia-1)/2)" },
+    { "hex": "01 00 00 00 01 00 00 2C E1 11 4F 3D 00 00 00 01 00 00 00 10", "fechaReal": "2020-01-15", "horaReal": "10:15:44", "nota": "dia 15, punto medio del rango" },
+    { "hex": "01 00 00 00 01 00 00 04 E1 11 5E 3D 00 00 00 01 00 00 00 10", "fechaReal": "2020-01-30", "horaReal": "10:15:04", "nota": "dia 30, cerca del techo del mes" },
+    { "hex": "01 00 00 00 01 00 00 1A CD 11 41 3D 00 00 00 01 00 00 00 10", "fechaReal": "2015-01-01", "horaReal": "10:15:26", "nota": "tercer anio (2015) - confirma que la formula del anio sigue lineal mas alla de 2020/2026" },
+    { "hex": "01 00 00 00 01 00 00 07 E1 11 0F 3C 00 00 00 01 00 00 00 10", "fechaReal": "2020-01-15", "horaReal": "00:15:07", "nota": "hora 0 (bloque 0), segundo punto de calibracion para este caso limite" },
+    { "hex": "01 00 00 00 01 00 00 04 E1 11 EF B6 00 00 00 01 00 00 00 10", "fechaReal": "2020-01-15", "horaReal": "23:45:04", "nota": "hora 23 (bloque 2), el otro extremo del rango" },
+    { "hex": "01 00 00 00 01 00 00 04 E1 11 8F 01 00 00 00 01 00 00 00 10", "fechaReal": "2020-01-15", "horaReal": "12:00:04", "nota": "hora 12 exacta, limite del viejo flag <=12" }
+  ]
+}

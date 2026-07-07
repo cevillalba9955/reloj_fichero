@@ -181,9 +181,24 @@ export async function queryPendingFichadas(socket, reader, logger, { timeoutMs, 
   // cuantos bytes leer es asumir que coinciden con lo declarado por 0xB4.
   const expectedRecordsBytes = declaredPendingCount * RECORD_SIZE;
   const recordsBuffer = await reader.readExact(expectedRecordsBytes, { timeoutMs });
+
+  // research.md §5.14 (2026-07-06): siempre sobran 4 bytes al final de este
+  // buffer, sin importar declaredPendingCount — incluso con
+  // declaredPendingCount=1, donde no puede haber "otro pendiente" esperando
+  // (la cuenta ya esta saldada). La explicacion previa ("es el legajo de una
+  // fichada aun no llegada") quedo retractada por ese contraejemplo; el
+  // significado real es desconocido. Se loguea el contenido crudo (framing
+  // de protocolo, no dato biometrico — Constitucion Principio V lo permite)
+  // para poder contrastarlo a futuro contra el primer legajo nuevo de la
+  // sesion siguiente.
+  const closingBlockHex = recordsBuffer
+    .subarray(recordsBuffer.length - 4)
+    .toString('hex')
+    .toUpperCase();
   logger.log('response_received', {
     commandCode: '0xA4',
     byteLength: ACK_SIZE + 2 + 4 + recordsBuffer.length,
+    detail: `bloqueCierre=${closingBlockHex}`,
   });
 
   // FR-014 (comportamiento interino, research.md §5): si ya llegaron mas
@@ -201,8 +216,11 @@ export async function queryPendingFichadas(socket, reader, logger, { timeoutMs, 
   // sin su legajo][legajo2][fichada2 sin su legajo]... Concatenando header +
   // recordsBuffer y volviendo a trocear en bloques de RECORD_SIZE se obtiene
   // exactamente declaredPendingCount fichadas bien encuadradas; sobran
-  // siempre los ultimos 4 bytes (el legajo de una fichada que todavia no
-  // llego en esta descarga), que se descartan a proposito.
+  // siempre los ultimos 4 bytes (closingBlockHex, arriba). research.md §5.14
+  // retracta la explicacion anterior de esos 4 bytes ("legajo de una fichada
+  // que todavia no llego") — no se sostiene con declaredPendingCount=1, donde
+  // no puede haber ningun pendiente mas. Se descartan sin usarlos para
+  // decodificar ningun campo; su significado real queda sin resolver.
   const fullBuffer = Buffer.concat([header, recordsBuffer]);
   const rawRecords = [];
   for (let i = 0; i < declaredPendingCount; i += 1) {

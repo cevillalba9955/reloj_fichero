@@ -91,11 +91,13 @@ export async function runAndReport(
   // puntual); avisar por campo en vez de un mensaje generico "no
   // confirmado" (research.md §5.11).
   if (records.length > 0) {
-    const sinFecha = records.length; // la fecha nunca se resuelve todavia
-    print(`Advertencia: ${sinFecha} fichada(s) sin fecha resuelta (campo no decodificado aun, ver research.md §5.5/§5.7).`);
+    const sinFecha = records.filter((r) => r.fecha === null).length;
+    if (sinFecha > 0) {
+      print(`Advertencia: ${sinFecha} fichada(s) sin fecha resuelta (bytes fuera del formato esperado, ver research.md §5.16).`);
+    }
     const sinHora = records.filter((r) => r.hora === null).length;
     if (sinHora > 0) {
-      print(`Advertencia: ${sinHora} fichada(s) sin hora resuelta (ambigua para esa combinacion de bytes, ver research.md §5.10).`);
+      print(`Advertencia: ${sinHora} fichada(s) sin hora resuelta (bytes fuera del formato esperado, ver research.md §5.16).`);
     }
     const sinLegajo = records.filter((r) => r.legajo === null).length;
     if (sinLegajo > 0) {
