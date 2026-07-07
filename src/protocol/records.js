@@ -145,10 +145,5 @@ export function parseFichadaRecord(buffer) {
     fecha,
     hora,
     legajo,
-    unresolvedFields: {
-      legajoRaw: hexField(buffer, 0, 4),
-      field0: hexField(buffer, 4, 8),
-      field1: hexField(buffer, 8, 12),
-    },
   };
 }

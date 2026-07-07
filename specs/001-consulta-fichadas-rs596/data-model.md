@@ -37,9 +37,6 @@ con uno confirmado (spec FR-005/FR-015).
 | `fecha` | string (`YYYY-MM-DD`) \| `null` | ✅ (research.md §5.16, 2026-07-06: año=`(byte8>>2)+1964` confirmado con 3 años (2015/2020/2026); mes=nibble alto de byte9, confirmado con 3 meses; día=bits0-4 de byte10 binario directo, confirmado con 5 días distintos y retroactivamente contra `control_fichada.csv`) | Día/mes/año del evento, antes creído indecodificable — en realidad vivía dentro de lo que se pensaba que era el "byte de hora" (el día) y los bytes que se creían constantes de fecha (año/mes); `null` en el mismo caso que `hora` |
 | `recordTypeConstant` | string (hex, 8 caracteres) | ✅ (bytes), ❌ (significado) | campo[2] re-encuadrado, bytes 12–15; no es fijo entre sesiones (`00000001` el 2026-07-02, `00000002` el 2026-07-03, ver research.md §5.8); no es el legajo del empleado (hipótesis refutada, research.md §5.6) |
 | `verificationMethodCode` | string (hex, 8 caracteres) | ✅ (parcial) | campo[3] re-encuadrado, bytes 16–19; valor crudo confirmado como variable según método; base de `metodo` |
-| `unresolvedFields.legajoRaw` | string (hex, 8 caracteres) | ❌ (salvo byte0, ver `legajo`) | Bloque de 4 bytes re-encuadrado (bytes 0-3) completo, crudo |
-| `unresolvedFields.field0` | string (hex, 8 caracteres) | ✅ byte3 (segundo, ver `hora`); ❌ bytes 0-2 | campo[0] re-encuadrado, bytes 4–7; bytes 0-2 son una constante fija (`01 00 00`) de significado desconocido, se exponen crudos igual |
-| `unresolvedFields.field1` | string (hex, 8 caracteres) | ✅ completo (ver `fecha`/`hora`, research.md §5.16) | campo[1] re-encuadrado, bytes 8–11; ya totalmente usado para derivar `fecha` y `hora`, se sigue exponiendo crudo para diagnóstico/auditoría |
 
 **Validation rules**:
 - `rawHex` DEBE tener exactamente 40 caracteres hexadecimales (20 bytes); si
@@ -72,6 +69,14 @@ con uno confirmado (spec FR-005/FR-015).
   research.md §5.15); no hay ningún método de verificación conocido para el
   cual el legajo se sepa no confiable, así que hoy nunca devuelve `null` en
   la práctica.
+- **Eliminado (2026-07-07):** `unresolvedFields` (`legajoRaw`, `field0`,
+  `field1`) se sacó de `FichadaRecord` y del JSON exportado. `legajoRaw` y
+  `field1` habían quedado completamente redundantes con `legajo`/`fecha`/
+  `hora` una vez decodificados (research.md §5.15/§5.16); `field0` conserva
+  una constante de 3 bytes (`01 00 00`, offsets 4-6) todavía sin explicar,
+  pero sigue disponible para quien la necesite dentro de `rawHex` (offsets
+  4-6 del registro completo) — no se perdió ningún byte, solo se dejó de
+  exponer por separado un dato ya presente en el crudo.
 
 ## 2. QuerySession
 

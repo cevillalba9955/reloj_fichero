@@ -41,7 +41,6 @@ export function exportSessionToJson({ session, records, outputDir }) {
       rawHex: record.rawHex,
       recordTypeConstant: record.recordTypeConstant,
       verificationMethodCode: record.verificationMethodCode,
-      unresolvedFields: record.unresolvedFields,
     })),
   };
 

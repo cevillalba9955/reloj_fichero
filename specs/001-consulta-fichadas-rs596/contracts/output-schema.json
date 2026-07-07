@@ -17,7 +17,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["fecha", "hora", "legajo", "metodo", "rawHex", "recordTypeConstant", "verificationMethodCode", "unresolvedFields"],
+        "required": ["fecha", "hora", "legajo", "metodo", "rawHex", "recordTypeConstant", "verificationMethodCode"],
         "description": "Campos legibles (fecha, hora, legajo, metodo) como valores directos, sin wrapper de confianza (research.md §5.11, 2026-07-03): un valor presente tiene evidencia real detras; null significa que no se pudo resolver, o que se sabe que no es confiable para ese caso puntual. Nunca se combina un valor sin evidencia con uno confirmado (spec FR-005/FR-015).",
         "properties": {
           "fecha": {
@@ -43,16 +43,7 @@
           },
           "rawHex": { "type": "string", "pattern": "^[0-9A-Fa-f]{40}$", "description": "20 bytes ya re-encuadrados (research.md §5.9): [legajo(0-3)][segundo/hora-minuto(4-11)][tipo(12-15)][metodo(16-19)], no el orden original del payload de 0xA4" },
           "recordTypeConstant": { "type": "string", "pattern": "^[0-9A-Fa-f]{8}$", "description": "No es un valor fijo entre sesiones (research.md §5.8); se expone crudo para diagnostico, ver tambien 'anomaly' si el registro lo trae" },
-          "verificationMethodCode": { "type": "string", "pattern": "^[0-9A-Fa-f]{8}$", "description": "Codigo crudo de metodo de verificacion, base de 'metodo'" },
-          "unresolvedFields": {
-            "type": "object",
-            "required": ["legajoRaw", "field0", "field1"],
-            "properties": {
-              "legajoRaw": { "type": "string", "pattern": "^[0-9A-Fa-f]{8}$", "description": "4 bytes crudos que son 'legajo' completo (entero little-endian, research.md §5.15); se exponen crudos igual para trazabilidad/auditoría" },
-              "field0": { "type": "string", "pattern": "^[0-9A-Fa-f]{8}$", "description": "byte3 (segundo, ver 'hora'); bytes 0-2 son una constante fija ('01 00 00') de significado desconocido" },
-              "field1": { "type": "string", "pattern": "^[0-9A-Fa-f]{8}$", "description": "ya totalmente usado para derivar 'fecha'/'hora' (research.md §5.16); se sigue exponiendo crudo para diagnóstico" }
-            }
-          }
+          "verificationMethodCode": { "type": "string", "pattern": "^[0-9A-Fa-f]{8}$", "description": "Codigo crudo de metodo de verificacion, base de 'metodo'" }
         }
       }
     }

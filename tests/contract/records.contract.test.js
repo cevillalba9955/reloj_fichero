@@ -42,9 +42,6 @@ test('records: parseFichadaRecord decodifica el registro real de "un registro pe
   // research.md §5.16: fecha ahora se decodifica (dia/mes/año); esta
   // captura es del 2026-07-02 (research.md §6.1), que es justo lo que da.
   assert.equal(record.fecha, '2026-07-02');
-  assert.equal(record.unresolvedFields.legajoRaw, '01000000');
-  assert.equal(record.unresolvedFields.field0, '01000016');
-  assert.equal(record.unresolvedFields.field1, 'F9710205');
 });
 
 test('records: parseFichadaRecord decodifica los dos registros reales de "dos registros pendientes" con distinto metodo de verificacion (encuadre corregido)', () => {
