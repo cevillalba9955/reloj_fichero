@@ -190,11 +190,14 @@ cambió.
   desempate al bloque 8-15hs" resultó estar mal interpretando el día del
   mes, ver `research/protocolo_prosoft_rs596.md` §5.16), y ambas devuelven
   `null` juntas únicamente cuando el registro no calza con los flags fijos
-  esperados en esos bytes. El script DEBE además exponer
-  el código/bloque crudo sin interpretar detrás de cada campo legible
-  (`verificationMethodCode`, `unresolvedFields`) para trazabilidad y
-  diagnóstico, nunca mezclado con los valores legibles como si tuvieran el
-  mismo origen.
+  esperados en esos bytes. El script DEBE además exponer `rawHex` (el
+  registro completo de 20 bytes) y `verificationMethodCode` (código crudo
+  de método) para trazabilidad y diagnóstico, nunca mezclados con los
+  valores legibles como si tuvieran el mismo origen. **Actualizado
+  2026-07-07:** se sacó `unresolvedFields` (`legajoRaw`/`field0`/`field1`)
+  del JSON exportado — quedó redundante con `legajo`/`fecha`/`hora` una vez
+  decodificados por completo; los pocos bytes que siguen sin explicarse
+  (constante de 3 bytes en `field0`) siguen disponibles dentro de `rawHex`.
 - **FR-006**: El script DEBE entregar el resultado de la consulta como
   archivo local en formato JSON (uno por sesión de consulta, con timestamp
   de ejecución en el nombre), además de un resumen legible en consola;
@@ -248,9 +251,11 @@ cambió.
   fichada (bloque de 4 bytes re-encuadrado que precede a los campos propios
   del registro, leído como entero little-endian, ver
   `research/protocolo_prosoft_rs596.md` §5.9/§5.15) y exponerlo como
-  `legajo`, un valor numérico directo, junto con el bloque crudo completo
-  sin interpretar (`unresolvedFields.legajoRaw`) para trazabilidad. Esta
-  decodificación está confirmada contra tres sesiones reales
+  `legajo`, un valor numérico directo; el mismo bloque de 4 bytes queda
+  disponible sin interpretar dentro de `rawHex` para quien necesite
+  auditarlo (`unresolvedFields.legajoRaw` se eliminó por redundante,
+  2026-07-07). Esta decodificación está confirmada contra tres sesiones
+  reales
   independientes, incluyendo fichadas verificadas por huella, rostro y
   tarjeta (dos fichadas por tarjeta en `research/control_fichada.csv`,
   filas 3 y 6, decodificaron su legajo real correctamente) — no hay
