@@ -1,6 +1,6 @@
 # Implementation Plan: Servicio de Consulta Programada de Fichadas
 
-**Branch**: `002-servicio-fichadas-programado` | **Date**: 2026-07-07 | **Spec**: [spec.md](./spec.md)
+**Branch**: `002-servicio-fichadas` | **Date**: 2026-07-07 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `/specs/002-servicio-fichadas-programado/spec.md`
 
