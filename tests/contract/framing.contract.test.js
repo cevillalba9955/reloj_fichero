@@ -52,6 +52,20 @@ test('framing: rechaza un ACK que no mide exactamente ACK_SIZE bytes', () => {
   assert.throws(() => parseAckHeader(hexToBuffer('AA 55 01 01 00 00')), /bytes exactos/i);
 });
 
+test('framing: parseAckHeader acepta ID DISPOSITIVO != 1 (research.md §5.17, equipo real con ID=99)', () => {
+  const ack = hexToBuffer('AA 55 63 01 00 00 00 00 01 00');
+  const header = parseAckHeader(ack);
+  assert.equal(header.deviceId, 99);
+  assert.equal(header.seq, 1);
+});
+
+test('framing: parseAckHeader rechaza un ACK sin el byte constante 01 en la posicion 3', () => {
+  assert.throws(
+    () => parseAckHeader(hexToBuffer('AA 55 63 02 00 00 00 00 01 00')),
+    /byte constante 01/i
+  );
+});
+
 test('framing: isKeepalive detecta el paquete de 6 bytes en 00 y no confunde otros tamaños', () => {
   assert.equal(isKeepalive(hexToBuffer('00 00 00 00 00 00')), true);
   assert.equal(isKeepalive(hexToBuffer('00 00 00 00 00 01')), false);
