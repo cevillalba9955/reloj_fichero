@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node src/cli/consultar-fichadas.js",
     "test": "node --test",
-    "smoke:oracle": "node scripts/smoke-oracle-roster.js"
+    "smoke:oracle": "node --env-file-if-exists=.env scripts/smoke-oracle-roster.js"
   },
   "dependencies": {
     "oracledb": "^6.5.1"
