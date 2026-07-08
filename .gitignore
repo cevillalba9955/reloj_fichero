@@ -9,3 +9,4 @@ Thumbs.db
 research/*.pcapng
 .claude/worktrees/
 research/control_fichada.csv
+config/active-employees.json

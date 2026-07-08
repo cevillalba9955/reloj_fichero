@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Estado en memoria del servicio de consulta programada",
+  "description": "Forma del snapshot devuelto por ServiceHandle.getState() (FR-014, data-model.md §5). No es un archivo de salida — es la estructura en memoria consultable en proceso.",
+  "type": "object",
+  "required": ["fechaServicio", "checkpoints", "empleados", "periodos", "ultimoCiclo"],
+  "properties": {
+    "fechaServicio": { "type": "string", "format": "date", "description": "Día que el scheduler tiene en curso (YYYY-MM-DD)" },
+    "checkpoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "horaEsperada", "margenMinutos", "estado"],
+        "properties": {
+          "id": { "type": "string", "enum": ["entrada", "salida"] },
+          "horaEsperada": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$" },
+          "margenMinutos": { "type": "integer", "minimum": 0 },
+          "estado": { "type": "string", "enum": ["pendiente", "abierto", "cerrado_completo", "cerrado_margen_agotado"] }
+        }
+      }
+    },
+    "empleados": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["legajo", "activo", "checkpoints"],
+        "properties": {
+          "legajo": { "type": "integer", "minimum": 0 },
+          "activo": { "type": "boolean" },
+          "checkpoints": {
+            "type": "object",
+            "description": "Mapa checkpointId -> estado de completitud para ese empleado",
+            "additionalProperties": {
+              "type": "object",
+              "required": ["completo"],
+              "properties": {
+                "completo": { "type": "boolean" },
+                "fichadaRawHex": { "type": ["string", "null"], "description": "rawHex de la Fichada que completó este checkpoint, null si sigue incompleto" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "periodos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "legajo", "fichadas"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$", "description": "YYYY-MM" },
+          "legajo": { "type": "integer", "minimum": 0 },
+          "fichadas": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["legajo", "metodo", "fecha", "hora", "rawHex", "periodo", "periodoAproximado", "checkpointId", "recolectadaEn"],
+              "properties": {
+                "legajo": { "type": "integer" },
+                "metodo": { "type": ["string", "null"], "enum": ["huella", "tarjeta", "rostro", null] },
+                "fecha": { "type": ["string", "null"], "format": "date" },
+                "hora": { "type": ["string", "null"], "pattern": "^[0-9]{2}:[0-5][0-9]:[0-5][0-9]$" },
+                "rawHex": { "type": "string", "pattern": "^[0-9A-Fa-f]{40}$", "description": "Identificador único de la fichada dentro del store (FR-017): nunca aparece repetido entre los elementos de 'fichadas' de un mismo período, ni en distintos períodos" },
+                "periodo": { "type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$" },
+                "periodoAproximado": { "type": "boolean" },
+                "checkpointId": { "type": ["string", "null"], "enum": ["entrada", "salida", null] },
+                "recolectadaEn": { "type": "string", "format": "date-time" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "ultimoCiclo": {
+      "type": "object",
+      "required": ["ejecutadoEn", "resultado", "fichadasNuevas", "duracionMs"],
+      "properties": {
+        "ejecutadoEn": { "type": "string", "format": "date-time" },
+        "resultado": { "type": "string", "enum": ["success", "error", "omitido"] },
+        "fichadasNuevas": { "type": "integer", "minimum": 0 },
+        "duracionMs": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # Feature Specification: Servicio de Consulta Programada de Fichadas
 
-**Feature Branch**: `002-servicio-fichadas-programado`
+**Feature Branch**: `002-servicio-fichadas`
 
 **Created**: 2026-07-06
 
@@ -33,6 +33,17 @@
   ocurra primero. Si una fichada de un momento ya cerrado (por margen
   agotado) aparece más tarde — incluso al día siguiente — se registra con
   normalidad, sin rechazarla ni marcarla como inválida.
+
+### Session 2026-07-07
+
+- Q: Dado que el reloj no borra fichadas (hereda FR-007 de
+  `001-consulta-fichadas-rs596`) y por lo tanto vuelve a reportar como
+  pendiente la misma fichada en cada ciclo de sondeo de 5 minutos hasta
+  que se elimine explícitamente, ¿debe el servicio deduplicar fichadas
+  repetidas entre ciclos, y con qué criterio de identidad? → A: Sí — las
+  fichadas duplicadas se ignoran comparando su `rawHex`; si una fichada
+  con el mismo `rawHex` ya está en el store en memoria, no se vuelve a
+  agregar (no se cuenta dos veces ni se duplica en `periodos[]`).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -148,10 +159,16 @@ esperado.
 - ¿Qué pasa si el servicio se reinicia a mitad de la ventana horaria? Al no
   haber persistencia, el progreso de recolección del día en curso se pierde
   y arranca de nuevo desde cero para lo que quede de ventana.
-- ¿Qué pasa si el reloj vuelve a reportar una fichada nueva de un empleado
-  que ya estaba "completo" para todos los momentos esperados del día? La
-  fichada se agrega igual al acumulado en memoria (no se descarta), sin que
-  eso reabra ningún momento ya cerrado.
+- ¿Qué pasa si el reloj vuelve a reportar una fichada nueva (`rawHex`
+  distinto) de un empleado que ya estaba "completo" para todos los
+  momentos esperados del día? La fichada se agrega igual al acumulado en
+  memoria (no se descarta), sin que eso reabra ningún momento ya cerrado.
+- ¿Qué pasa si el reloj vuelve a reportar, en un ciclo posterior, una
+  fichada que ya se había recolectado antes (mismo `rawHex`, ya que el
+  reloj no borra fichadas entre ciclos — hereda FR-007 de
+  `001-consulta-fichadas-rs596`)? El servicio la ignora: no se vuelve a
+  agregar al store ni se cuenta dos veces en `periodos[]` (ver
+  Clarifications, sesión 2026-07-07).
 - ¿Qué pasa si un empleado no fichó para un momento esperado cuando se
   agota su margen? El servicio no hace nada automáticamente (no alerta, no
   fuerza un valor); ese empleado queda expuesto como incompleto para ese
@@ -191,11 +208,14 @@ esperado.
   consultando una fuente externa (RRHH/Oracle a integrar), en vez de
   derivarlo dinámicamente de las fichadas que el reloj va reportando.
 - **FR-006**: El servicio DEBE considerar a un empleado activo "completo"
-  para un momento esperado cuando tiene al menos una fichada cuya hora
-  (cuando el cliente existente pudo resolverla) cae dentro de la ventana de
-  aceptación de ese momento (hora esperada ± margen); si la hora de la
-  fichada no se pudo resolver, el servicio DEBE asociarla al momento
-  esperado cuya ventana estaba abierta en el instante en que se descargó.
+  para un momento esperado cuando tiene al menos una fichada cuya hora cae
+  dentro de la ventana de aceptación de ese momento (hora esperada ±
+  margen). La hora ya viene decodificada de forma confiable por el cliente
+  existente en la práctica totalidad de los casos (`001-consulta-fichadas-rs596`,
+  research.md §5.16); en el caso excepcional de que una fichada puntual
+  venga con hora `null` (registro que no calza con el formato esperado), el
+  servicio DEBE asociarla igual al momento esperado cuya ventana estaba
+  abierta en el instante en que se descargó, en vez de descartarla.
 - **FR-007**: Si al cerrarse un momento esperado (por margen agotado) un
   empleado activo sigue sin una fichada válida para ese momento, el
   servicio NO DEBE generar ninguna alerta ni forzar un valor: DEBE dejar a
@@ -232,6 +252,12 @@ esperado.
 - **FR-016**: El servicio NO DEBE ejecutar el comando de borrado de fichadas
   del reloj — hereda la restricción de solo-lectura de
   `001-consulta-fichadas-rs596` (FR-007 de esa feature).
+- **FR-017**: Dado que el reloj no borra fichadas y por lo tanto puede
+  volver a reportar la misma fichada como pendiente en ciclos de sondeo
+  posteriores, el servicio DEBE ignorar (no volver a agregar al
+  acumulado en memoria) cualquier fichada cuyo `rawHex` ya se haya
+  recolectado antes, sin importar en qué ciclo o checkpoint se la vuelva
+  a recibir.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -245,7 +271,10 @@ esperado.
   cliente existente (método de verificación, hora y fecha decodificadas por
   completo desde 2026-07-07 — ver Assumptions). Cada Fichada queda asociada
   a un Empleado, a un Período, y — cuando corresponde — al momento esperado
-  (entrada/salida) cuya ventana de aceptación la contiene.
+  (entrada/salida) cuya ventana de aceptación la contiene. Su `rawHex` actúa
+  como identificador único dentro del acumulado en memoria: una Fichada con
+  un `rawHex` ya recolectado antes se ignora, no se vuelve a agregar
+  (FR-017).
 - **Período (AñoMes)**: agrupación mensual bajo la cual se acumulan las
   Fichadas de un Empleado (por ejemplo, "2026-07"). Sirve como clave de
   organización del almacenamiento en memoria, pensada para un eventual uso
@@ -288,13 +317,19 @@ esperado.
   la constitución (que exige una capa de repositorio dedicada, todavía no
   construida para esta feature).
 - **Actualizado 2026-07-07:** el campo `fecha` de cada Fichada ya se
-  decodifica por completo (`001-consulta-fichadas-rs596`, FR-005/research.md
-  §5.16) — la suposición anterior de que siempre era `null` quedó obsoleta.
-  Esta spec, redactada antes de esa corrección, todavía determina el
-  Período (año-mes) por la fecha en que el servicio recolectó la fichada,
-  no por el campo `fecha` propio del evento; queda pendiente de revisar si
-  conviene usar el dato ya decodificado en vez de la fecha de recolección
-  antes de implementar esta feature.
+  decodifica por completo y con 100% de coincidencia contra calibración real
+  (`001-consulta-fichadas-rs596`, FR-005/research.md §5.16) — la suposición
+  anterior de que siempre era `null` quedó obsoleta. En consecuencia, el
+  Período (año-mes) de cada Fichada DEBE determinarse a partir del campo
+  `fecha` ya decodificado del propio evento (año-mes real de la marcación),
+  no de la fecha en que el servicio la recolectó — esto también resuelve
+  con naturalidad el caso de fichadas que llegan tarde (incluso al día
+  siguiente, ver Edge Cases): quedan agrupadas en el período real al que
+  pertenecen, no en el de su recolección. Solo si `fecha` viniera `null`
+  para un registro puntual (caso hoy no observado, pero el cliente
+  existente puede devolverlo si el registro no calza con el formato
+  esperado) el servicio debe recurrir a la fecha de recolección como
+  respaldo, dejando constancia de que ese período es una aproximación.
 - Los momentos esperados (entrada/salida) y sus márgenes son configurables,
   pero se asume un único par de horarios compartido por todos los
   empleados activos (no hay turnos distintos por empleado en esta primera

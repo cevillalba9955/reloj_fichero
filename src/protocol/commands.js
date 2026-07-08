@@ -63,12 +63,37 @@ export function buildPendingCountCommand(seq) {
   return withSequence(PENDING_COUNT_BASE, seq);
 }
 
-export function buildPendingDetailCommand(seq, count) {
+// research.md §5.18 (2026-07-08, calibrado contra un equipo real con 53
+// pendientes, research/fichada_id_99.pcapng): el equipo se niega a
+// responder un solo 0xA4 pidiendo mas de este tope de registros (recordsBuffer
+// resultante quedaba sin ACK, timeout, socket cerrado). El software oficial
+// pagina en llamadas de a lo sumo este valor. 51 esta confirmado como
+// seguro (probado end-to-end); no se probo el limite exacto (podria
+// aceptar hasta 52, o el tope real podria ser un limite de bytes distinto
+// a 51*20 — ver research.md §5.18 para el detalle de la incertidumbre).
+export const MAX_RECORDS_PER_PAGE = 51;
+
+export function buildPendingDetailCommand(seq, count, byteLength = count * RECORD_SIZE) {
   const buffer = Buffer.from(PENDING_DETAIL_BASE);
   buffer.writeUInt32LE(count, 8);
-  buffer.writeUInt16LE(count * RECORD_SIZE, 12);
+  buffer.writeUInt16LE(byteLength, 12);
   encodeSequence(seq).copy(buffer, buffer.length - 2);
   return buffer;
+}
+
+// Continuacion de un 0xA4 paginado (research.md §5.18): a diferencia de la
+// primera llamada (donde el campo "count" de bytes 8-11 es el
+// declaredPendingCount total), reenviar el mismo count ahi hace que el
+// equipo reinicie la entrega desde el primer registro pendiente (probado
+// en vivo: se repetian los primeros registros). El software oficial usa en
+// cambio, en esa misma posicion, un valor que coincide con
+// "indice de pagina de continuacion (1-based) desplazado 16 bits"
+// (`pageIndex << 16`; confirmado un unico punto de calibracion,
+// pageIndex=1 -> 0x00010000). No se sabe si esta formula generaliza a mas
+// de dos paginas — no hay una captura real con >102 pendientes para
+// confirmarlo.
+export function buildPendingDetailContinuationCommand(seq, pageIndex, byteLength) {
+  return buildPendingDetailCommand(seq, pageIndex << 16, byteLength);
 }
 
 export function buildHandshakeCommand(seq) {

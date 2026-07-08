@@ -163,6 +163,59 @@ test('queryPendingFichadas: re-encuadra el header de 4 bytes como legajo del pri
   });
 });
 
+test('queryPendingFichadas: 53 fichadas pendientes pagina 0xA4 en 2 llamadas (captura real, research.md §5.18)', async () => {
+  await withTempLogDir(async (logDir) => {
+    const fixture = loadFixture('cincuenta-tres-pendientes-paginado.json');
+
+    const respuestaA4Pagina1 = [
+      fixture.respuestaA4Pagina1Ack,
+      fixture.respuestaA4Pagina1PayloadMarker,
+      fixture.respuestaA4Pagina1Header,
+      fixture.respuestaA4Pagina1RecordsBuffer,
+    ].join(' ');
+    const respuestaA4Pagina2 = [
+      fixture.respuestaA4Pagina2Ack,
+      fixture.respuestaA4Pagina2PayloadMarker,
+      fixture.respuestaA4Pagina2RecordsBuffer,
+    ].join(' ');
+
+    const steps = [
+      { expect: hexToBuffer(fixture.comandoB4), respond: hexToBuffer(fixture.respuestaB4) },
+      { expect: hexToBuffer(fixture.comandoA4Pagina1), respond: hexToBuffer(respuestaA4Pagina1) },
+      { expect: hexToBuffer(fixture.comandoA4Pagina2), respond: hexToBuffer(respuestaA4Pagina2) },
+    ];
+    const server = await startScriptedServer(steps);
+    const { port } = server.address();
+    const socket = await connectSocket('127.0.0.1', port, 2000);
+    const reader = new BufferedSocketReader(socket);
+    const logger = createSessionLogger({ sessionId: 's-paginado', logDir });
+
+    const result = await queryPendingFichadas(socket, reader, logger, { timeoutMs: 2000, seq: 5 });
+
+    assert.equal(result.declaredPendingCount, 53);
+    assert.equal(result.rawRecords.length, 53);
+    assert.equal(result.nextSeq, 8, 'debe reservar seq 6 (0xA4 pagina 1) y 7 (0xA4 pagina 2) para el proximo comando (0x81)');
+
+    const legajos = result.rawRecords.map((r) => parseFichadaRecord(r).legajo);
+    // Legajos reales del equipo de calibracion (research.md §5.18),
+    // decodificados con el mismo algoritmo de encadenamiento que produccion
+    // (ver script de verificacion usado para armar este fixture). Los
+    // ultimos 3 (legajo 1 = Cesar Villalba, ya visto varias veces en el
+    // lote) son datos de prueba repetidos, no un bug de duplicacion: el
+    // registro #37 (indice 36) trae el legajo de prueba multibyte 9999
+    // (research.md §5.15), que solo aparece una vez en todo el lote.
+    assert.equal(legajos[0], 10);
+    assert.equal(legajos[36], 9999, 'legajo de prueba multibyte, unico en todo el lote — confirma que la pagina 1 no se corrompio');
+    assert.equal(legajos[50], 1, 'ultimo registro de la pagina 1');
+    assert.equal(legajos[51], 1, 'primer registro de la pagina 2, encadenado desde el cierre de la pagina 1');
+    assert.equal(legajos[52], 1, 'ultimo registro de la pagina 2');
+    assert.equal(new Set(legajos).size, 15, 'legajos unicos esperados en este lote de calibracion real');
+
+    socket.destroy();
+    server.close();
+  });
+});
+
 test('queryPendingFichadas: discrepancia entre 0xB4 declarado y bytes extra recibidos en 0xA4 (FR-014) se reporta como error', async () => {
   await withTempLogDir(async (logDir) => {
     const unRegistro = loadFixture('un-registro-pendiente.json');

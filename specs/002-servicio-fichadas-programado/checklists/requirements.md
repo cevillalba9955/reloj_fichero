@@ -47,3 +47,12 @@
   cuenta en `/speckit-plan`: el mecanismo concreto de esa integración no se
   define acá a propósito (no es implementación), pero condiciona qué tan
   autónoma puede ser esta feature sin ese sistema disponible.
+- Sesión de clarificación 2026-07-07: se agregó FR-017 (deduplicación de
+  fichadas repetidas entre ciclos de sondeo, comparando `rawHex`), dado que
+  el reloj no borra fichadas y las vuelve a reportar como pendientes en
+  cada ciclo. Esta regla no estaba cubierta por ningún FR previo (FR-008
+  cubre fichadas *nuevas* fuera de ventana, no repeticiones exactas). Nota
+  para `/speckit-plan`/`/speckit-tasks`: `data-model.md` y `tasks.md` de
+  esta feature todavía documentan la suposición anterior ("no hay
+  deduplicación, queda fuera de alcance") y deberían actualizarse para
+  reflejar FR-017 antes de implementar.
