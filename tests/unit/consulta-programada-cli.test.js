@@ -3,17 +3,23 @@ import assert from 'node:assert/strict';
 import { parseCliArgs, InvalidArgsError, createRosterProvider } from '../../src/cli/consulta-programada.js';
 import { ConfiguracionPadronInvalidaError } from '../../src/db/oracle-roster-config.js';
 
-test('parseCliArgs: exige --host', () => {
-  assert.throws(() => parseCliArgs([]), InvalidArgsError);
+// Los tests pasan `env` explícito (normalmente `{}`) para ser herméticos: la
+// resolución CLI > FICHADAS_* > default no debe depender del entorno real.
+
+test('parseCliArgs: exige host (ni --host ni FICHADAS_HOST)', () => {
+  assert.throws(() => parseCliArgs([], {}), InvalidArgsError);
 });
 
 test('parseCliArgs: aplica los defaults de FR-002 y del adapter placeholder del padrón', () => {
-  const options = parseCliArgs(['--host', '192.168.1.82']);
+  const options = parseCliArgs(['--host', '192.168.1.82'], {});
   assert.equal(options.host, '192.168.1.82');
   assert.equal(options.port, 5005);
+  assert.equal(options.padron, 'archivo');
   assert.equal(options.rosterConfigPath, './config/active-employees.json');
   assert.equal(options.logDir, './logs');
   assert.equal(options.timeoutMs, 5000);
+  assert.equal(options.tickIntervalMs, 5 * 60 * 1000);
+  assert.equal(options.statusIntervalMs, 60 * 1000);
   assert.equal(options.fullHandshake, false);
   assert.deepEqual(options.checkpoints, {
     entrada: { horaEsperada: '07:00', margenMinutos: 30 },
@@ -21,14 +27,14 @@ test('parseCliArgs: aplica los defaults de FR-002 y del adapter placeholder del 
   });
 });
 
-test('parseCliArgs: permite sobreescribir horarios y márgenes de los checkpoints', () => {
+test('parseCliArgs: permite sobreescribir horarios y márgenes de los checkpoints por CLI', () => {
   const options = parseCliArgs([
     '--host', '192.168.1.82',
     '--entrada-hora', '08:00',
     '--entrada-margen', '15',
     '--salida-hora', '17:30',
     '--salida-margen', '20',
-  ]);
+  ], {});
   assert.deepEqual(options.checkpoints, {
     entrada: { horaEsperada: '08:00', margenMinutos: 15 },
     salida: { horaEsperada: '17:30', margenMinutos: 20 },
@@ -37,42 +43,114 @@ test('parseCliArgs: permite sobreescribir horarios y márgenes de los checkpoint
 
 test('parseCliArgs: rechaza --entrada-margen no numérico', () => {
   assert.throws(
-    () => parseCliArgs(['--host', '192.168.1.82', '--entrada-margen', 'abc']),
+    () => parseCliArgs(['--host', '192.168.1.82', '--entrada-margen', 'abc'], {}),
     InvalidArgsError
   );
 });
 
 test('parseCliArgs: rechaza --port no numérico', () => {
-  assert.throws(() => parseCliArgs(['--host', '192.168.1.82', '--port', 'abc']), InvalidArgsError);
+  assert.throws(() => parseCliArgs(['--host', '192.168.1.82', '--port', 'abc'], {}), InvalidArgsError);
 });
 
-// ---- US3 / FR-013: selección del origen del padrón por configuración ----
+// ---- Configuración por variables de entorno FICHADAS_* (spec 002) ----
 
-test('parseCliArgs: --padron por defecto es "archivo" (comportamiento de la feature 002 sin cambios)', () => {
-  const options = parseCliArgs(['--host', '192.168.1.82']);
-  assert.equal(options.padron, 'archivo');
+test('parseCliArgs: toma host y parámetros desde FICHADAS_* cuando no se pasan por CLI', () => {
+  const env = {
+    FICHADAS_HOST: '10.0.0.5',
+    FICHADAS_PORT: '6000',
+    FICHADAS_TIMEOUT_MS: '8000',
+    FICHADAS_TICK_INTERVAL_MS: '120000',
+    FICHADAS_STATUS_INTERVAL_MS: '30000',
+    FICHADAS_ENTRADA_HORA: '06:30',
+    FICHADAS_ENTRADA_MARGEN: '10',
+    FICHADAS_SALIDA_HORA: '18:00',
+    FICHADAS_SALIDA_MARGEN: '45',
+    FICHADAS_LOG_DIR: './otros-logs',
+    FICHADAS_ROSTER_CONFIG: './config/otro.json',
+  };
+  const options = parseCliArgs([], env);
+  assert.equal(options.host, '10.0.0.5');
+  assert.equal(options.port, 6000);
+  assert.equal(options.timeoutMs, 8000);
+  assert.equal(options.tickIntervalMs, 120000);
+  assert.equal(options.statusIntervalMs, 30000);
+  assert.equal(options.logDir, './otros-logs');
+  assert.equal(options.rosterConfigPath, './config/otro.json');
+  assert.deepEqual(options.checkpoints, {
+    entrada: { horaEsperada: '06:30', margenMinutos: 10 },
+    salida: { horaEsperada: '18:00', margenMinutos: 45 },
+  });
 });
 
-test('parseCliArgs: acepta --padron oracle', () => {
-  const options = parseCliArgs(['--host', '192.168.1.82', '--padron', 'oracle']);
-  assert.equal(options.padron, 'oracle');
+test('parseCliArgs: el argumento CLI tiene precedencia sobre FICHADAS_*', () => {
+  const env = { FICHADAS_HOST: '10.0.0.5', FICHADAS_PORT: '6000', FICHADAS_ENTRADA_HORA: '06:30' };
+  const options = parseCliArgs(['--host', '192.168.1.82', '--port', '7000', '--entrada-hora', '09:00'], env);
+  assert.equal(options.host, '192.168.1.82', 'la IP del CLI gana');
+  assert.equal(options.port, 7000, 'el puerto del CLI gana');
+  assert.equal(options.checkpoints.entrada.horaEsperada, '09:00', 'la hora del CLI gana');
 });
 
-test('parseCliArgs: rechaza un --padron desconocido', () => {
+test('parseCliArgs: FICHADAS_HOST satisface el requerido sin --host', () => {
+  const options = parseCliArgs([], { FICHADAS_HOST: '10.0.0.9' });
+  assert.equal(options.host, '10.0.0.9');
+});
+
+test('parseCliArgs: una variable FICHADAS_* vacía cae al default (no cuenta como provista)', () => {
+  const options = parseCliArgs(['--host', '1.2.3.4'], { FICHADAS_PORT: '' });
+  assert.equal(options.port, 5005);
+});
+
+test('parseCliArgs: rechaza FICHADAS_TICK_INTERVAL_MS no numérico', () => {
   assert.throws(
-    () => parseCliArgs(['--host', '192.168.1.82', '--padron', 'postgres']),
+    () => parseCliArgs(['--host', '1.2.3.4'], { FICHADAS_TICK_INTERVAL_MS: 'xx' }),
     InvalidArgsError
   );
 });
 
-test('createRosterProvider: modo archivo devuelve el adapter local (FR-013, sin tocar env)', () => {
-  const options = parseCliArgs(['--host', '192.168.1.82', '--padron', 'archivo']);
+test('parseCliArgs: rechaza FICHADAS_PORT <= 0', () => {
+  assert.throws(
+    () => parseCliArgs(['--host', '1.2.3.4'], { FICHADAS_PORT: '0' }),
+    InvalidArgsError
+  );
+});
+
+test('parseCliArgs: FICHADAS_FULL_HANDSHAKE=true activa el handshake completo', () => {
+  assert.equal(parseCliArgs(['--host', '1.2.3.4'], { FICHADAS_FULL_HANDSHAKE: 'true' }).fullHandshake, true);
+  assert.equal(parseCliArgs(['--host', '1.2.3.4'], { FICHADAS_FULL_HANDSHAKE: '1' }).fullHandshake, true);
+  assert.equal(parseCliArgs(['--host', '1.2.3.4'], { FICHADAS_FULL_HANDSHAKE: 'false' }).fullHandshake, false);
+  assert.equal(parseCliArgs(['--host', '1.2.3.4'], {}).fullHandshake, false);
+});
+
+test('parseCliArgs: --tick-interval-ms por CLI se expone y valida', () => {
+  const options = parseCliArgs(['--host', '1.2.3.4', '--tick-interval-ms', '90000'], {});
+  assert.equal(options.tickIntervalMs, 90000);
+  assert.throws(() => parseCliArgs(['--host', '1.2.3.4', '--tick-interval-ms', '-5'], {}), InvalidArgsError);
+});
+
+// ---- US3 / FR-013: selección del origen del padrón por configuración ----
+
+test('parseCliArgs: --padron por defecto es "archivo"', () => {
+  assert.equal(parseCliArgs(['--host', '192.168.1.82'], {}).padron, 'archivo');
+});
+
+test('parseCliArgs: acepta --padron oracle y FICHADAS_PADRON=oracle', () => {
+  assert.equal(parseCliArgs(['--host', '1.2.3.4', '--padron', 'oracle'], {}).padron, 'oracle');
+  assert.equal(parseCliArgs(['--host', '1.2.3.4'], { FICHADAS_PADRON: 'oracle' }).padron, 'oracle');
+});
+
+test('parseCliArgs: rechaza un padron desconocido (CLI o env)', () => {
+  assert.throws(() => parseCliArgs(['--host', '1.2.3.4', '--padron', 'postgres'], {}), InvalidArgsError);
+  assert.throws(() => parseCliArgs(['--host', '1.2.3.4'], { FICHADAS_PADRON: 'mysql' }), InvalidArgsError);
+});
+
+test('createRosterProvider: modo archivo devuelve el adapter local (FR-013)', () => {
+  const options = parseCliArgs(['--host', '192.168.1.82', '--padron', 'archivo'], {});
   const provider = createRosterProvider(options, { env: {} });
   assert.equal(typeof provider.getActiveEmployees, 'function');
 });
 
-test('createRosterProvider: modo oracle con env incompleto → fail-fast ConfiguracionPadronInvalidaError, sin exponer la password (FR-005)', () => {
-  const options = parseCliArgs(['--host', '192.168.1.82', '--padron', 'oracle']);
+test('createRosterProvider: modo oracle con env incompleto → fail-fast sin exponer la password (FR-005)', () => {
+  const options = parseCliArgs(['--host', '192.168.1.82', '--padron', 'oracle'], {});
   try {
     createRosterProvider(options, { env: { RRHH_ORACLE_PASSWORD: 'S3cr3tPassw0rd' } });
     assert.fail('debió fallar por configuración incompleta');
