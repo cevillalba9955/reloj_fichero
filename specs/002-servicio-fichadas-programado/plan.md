@@ -116,7 +116,7 @@ specs/002-servicio-fichadas-programado/
 
 ```text
 src/
-├── protocol/                        # (existente, feature 001 — sin cambios)
+├── protocol/                        # (existente, feature 001 — sin cambios POR esta feature; ver nota abajo)
 ├── logging/                         # (existente, feature 001)
 │   └── session-logger.js
 ├── output/                          # (existente, feature 001 — no usado por esta feature)
@@ -149,6 +149,14 @@ sin tocar `src/protocol/` (Principio III: sigue siendo el único lugar que
 conoce bytes crudos del protocolo). `src/service/` es el punto de entrada
 que orquesta los demás módulos nuevos más el cliente existente de
 `src/protocol/client.js`.
+
+> **Nota (2026-07-08)**: durante el desarrollo de esta feature, la rama incorporó
+> mantenimiento propio de `001-consulta-fichadas-rs596` sobre `src/protocol/`
+> (ID de dispositivo configurable y paginación del comando 0xA4 para lotes
+> grandes, commit `b2b2c86`), documentado en `research/protocolo_prosoft_rs596.md`
+> con fixture y tests de contrato propios. Ningún código nuevo de la feature 002
+> construye ni interpreta bytes del protocolo; la afirmación de aislamiento del
+> Principio III sigue vigente.
 
 ## Complexity Tracking
 

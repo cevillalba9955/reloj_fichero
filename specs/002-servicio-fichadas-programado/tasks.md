@@ -157,6 +157,13 @@ y el progreso por período.
 - [X] T027 [P] Revisar la lista de "Edge Cases" de `spec.md` uno por uno contra la suite de tests existente y agregar el/los test(s) que falten (arranque del servicio después de la hora esperada de un checkpoint, reinicio a mitad de ventana, fichada que llega al día siguiente para un checkpoint ya cerrado)
 - [X] T028 [P] Auditar el logger de ciclo (T009) para confirmar que nunca expone el `rawHex` completo de una Fichada ni credenciales (Constitución, Principio V), con el mismo criterio de test dedicado usado para `session-logger.js` en `001-consulta-fichadas-rs596`
 - [X] T029 [P] Documentar en un comentario de cabecera de `local-file-active-employees-provider.js` (y referenciar en el README si existe) que este adapter es temporal y debe reemplazarse por una integración real de Oracle/RRHH detrás de la misma interfaz `ActiveEmployeesProvider`, sin tocar el resto del servicio (research.md §4) — sin README en el repo (igual que 001-consulta-fichadas-rs596); comentario de cabecera ya presente en el archivo
+- [X] T030 [P] Agregar un CLI para correr el servicio (`src/cli/consulta-programada.js`)
+  que arranca `startService()` con la configuración por flags/env, imprime un resumen
+  del estado (`getState()`) al iniciar y periódicamente, y se detiene de forma limpia
+  con Ctrl+C, con test en `tests/unit/consulta-programada-cli.test.js` — materializa
+  SC-003 (un operador puede conocer el progreso sin leer logs ni código). Tarea
+  registrada retroactivamente: el CLI se implementó en el commit `0adc660` fuera de la
+  lista original de tareas.
 
 ---
 

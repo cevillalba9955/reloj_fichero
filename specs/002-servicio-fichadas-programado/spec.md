@@ -1,6 +1,6 @@
 # Feature Specification: Servicio de Consulta Programada de Fichadas
 
-**Feature Branch**: `002-servicio-fichadas-programado`
+**Feature Branch**: `002-servicio-fichadas`
 
 **Created**: 2026-07-06
 
