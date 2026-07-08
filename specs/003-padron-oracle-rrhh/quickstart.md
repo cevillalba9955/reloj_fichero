@@ -63,13 +63,23 @@
 1. Definir las 4 variables requeridas (`RRHH_ORACLE_USER`, `_PASSWORD`,
    `_CONNECT_STRING`, `_VISTA_PADRON`) apuntando a la vista provista por
    RRHH/DBA (usuario de SOLO lectura — Principio II).
-2. Ejecutar:
+2. **Forma repetible (recomendada)** — script de smoke dedicado, que ejerce
+   solo el camino del padrón Oracle (sin reloj RS956) y verifica de una vez
+   conectividad, cantidad, latencia y FR-014:
+   `npm run smoke:oracle`
+   **Esperado**: imprime `cantidadLegajos` > 0, `duracionMs` < 5000 (SC-004),
+   una muestra de legajos reales y `FR-014 OK: una sola consulta a la fuente`;
+   exit 0. Con configuración incompleta termina con exit 4 nombrando las
+   variables faltantes; ante fuente caída/credenciales inválidas, exit 1 con
+   la categoría (`conexion` / `autenticacion` / `timeout` / `consulta`), sin
+   exponer la credencial.
+3. **Forma end-to-end (con reloj)** — arrancar el servicio completo:
    `node src/cli/consulta-programada.js --host <ip-reloj> --padron oracle`
-3. **Esperado**: el resumen de estado del CLI muestra `empleados[]` con
-   los legajos reales del padrón; el log de padrón registra
-   `padron_fresco` con `cantidadLegajos` > 0 y `duracionMs` < 5000
-   (SC-004); una segunda evaluación del mismo día no genera nueva consulta
-   en la base (verificable con el DBA o `padron_fresco` único en el log).
+   **Esperado**: el resumen de estado del CLI muestra `empleados[]` con los
+   legajos reales del padrón; el log de padrón registra `padron_fresco` con
+   `cantidadLegajos` > 0 y `duracionMs` < 5000 (SC-004); una segunda
+   evaluación del mismo día no genera nueva consulta en la base (verificable
+   con el DBA o `padron_fresco` único en el log).
 4. Auditoría (SC-002): `git grep` de la password y del connect string en
    el repo y en `./logs/*.ndjson` → 0 ocurrencias.
 
