@@ -35,10 +35,18 @@ export function parseAckHeader(buffer) {
   if (buffer[0] !== MARKER_RESPONSE[0] || buffer[1] !== MARKER_RESPONSE[1]) {
     throw new Error('ACK invalido: no empieza con el marcador AA 55');
   }
-  if (buffer[2] !== 0x01 || buffer[3] !== 0x01) {
-    throw new Error('ACK invalido: bytes constantes 01 01 ausentes');
+  // research.md #5.17 (2026-07-08): el byte 2 no es una constante "01" — es
+  // el ID DISPOSITIVO configurado en el equipo (Menu > Configuracion), que
+  // el reloj hace eco en cada ACK. Con ID=1 (valor por defecto en todas las
+  // capturas previas) era indistinguible de una constante; confirmado al
+  // cambiar el parametro a 99 (0x63) y ver ese mismo valor en el byte 2 de
+  // la respuesta real. El byte 3 si sigue siendo una constante fija (01) en
+  // todas las capturas, con cualquier ID DISPOSITIVO.
+  if (buffer[3] !== 0x01) {
+    throw new Error('ACK invalido: byte constante 01 (posicion 3) ausente');
   }
   return {
+    deviceId: buffer[2],
     flagBytes: buffer.subarray(4, 8),
     seq: decodeSequence(buffer, 8),
   };

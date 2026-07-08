@@ -2,7 +2,7 @@
 
 **Estado:** Ingeniería inversa parcial, basada en análisis de tráfico de red (Wireshark) entre el software oficial "Gestión de Personal Pro-Soft" y el equipo.
 
-**Última actualización:** 7 de julio de 2026 (§5.16: `fecha` y `hora` quedan totalmente decodificados sin ambigüedad; §5.15: `legajo` corregido a entero de 4 bytes; §5.14: retractada la hipótesis sobre el bloque de cierre de `0xA4`; se eliminaron las secciones con hipótesis ya refutadas — AM/PM, criterio de desempate — que llevaban a conclusiones erróneas sobre fichadas nuevas)
+**Última actualización:** 8 de julio de 2026 (§5.18: analizada `research/fichada_id_99.pcapng`, captura real software oficial ↔ equipo con `ID DISPOSITIVO=99` y 53 fichadas pendientes — confirma que el byte 2 de los COMANDOS también es `ID DISPOSITIVO`, no una constante, y descubre paginación real de `0xA4` para lotes grandes; §5.17: decodificado el byte 2 del ACK — es `ID DISPOSITIVO`, no una constante; corregido `parseAckHeader` para no rechazar equipos con `ID DISPOSITIVO != 1`; §5.16: `fecha` y `hora` quedan totalmente decodificados sin ambigüedad; §5.15: `legajo` corregido a entero de 4 bytes; §5.14: retractada la hipótesis sobre el bloque de cierre de `0xA4`; se eliminaron las secciones con hipótesis ya refutadas — AM/PM, criterio de desempate — que llevaban a conclusiones erróneas sobre fichadas nuevas)
 
 **Advertencia:** Este documento no está basado en documentación oficial del fabricante (no existe públicamente). Es el resultado de observar tráfico real. Los campos marcados como "confirmado" fueron validados comparando múltiples capturas; los marcados como "hipótesis" o "sin resolver" son observaciones no verificadas y pueden estar incompletos o ser incorrectos.
 
@@ -43,8 +43,18 @@ Todos los mensajes usan un marcador fijo de 2 bytes al inicio para distinguir di
 Casi todas las respuestas empiezan con un ACK corto:
 
 ```
-AA 55 01 01 [4 bytes, normalmente 00000000] [2 bytes: mismo contador de secuencia] 00
+AA 55 [ID DISPOSITIVO, 1 byte] 01 [4 bytes, normalmente 00000000] [2 bytes: mismo contador de secuencia] 00
 ```
+
+> **Corrección (2026-07-08, ver §5.17):** el byte 2 (documentado hasta ahora
+> como parte de una constante `01 01`) **no es constante** — es el
+> parámetro `ID DISPOSITIVO` configurado en el equipo (`Menú >
+> Configuración`), que el reloj hace eco en cada ACK. Todas las capturas
+> previas de este documento vienen de equipos con `ID DISPOSITIVO = 1`, por
+> lo que ese byte siempre coincidió por casualidad con el byte 3 (que sí es
+> constante `01`), dando la falsa impresión de un par fijo `01 01`. El byte
+> 3 sigue siendo constante `01` en todas las capturas, con cualquier `ID
+> DISPOSITIVO`.
 
 Cuando el comando requiere devolver datos, el ACK va seguido inmediatamente del marcador `55 AA` y el payload de datos (ver secciones siguientes). Es decir, la respuesta con datos tiene esta forma:
 
@@ -644,6 +654,237 @@ rango).
 
 ---
 
+### 5.17 CORRECCIÓN ✅: el byte 2 del ACK es `ID DISPOSITIVO`, no una constante `01` — handshake fallaba con "ACK invalido" al cambiar ese parámetro (2026-07-08)
+
+El usuario cambió a propósito el parámetro `ID DISPOSITIVO` del equipo (Menú
+de configuración del reloj) de `1` (valor por defecto, usado en todas las
+capturas previas de este documento) a `99`. Desde ese cambio, toda sesión
+real fallaba de inmediato en el handshake con
+`ACK invalido: bytes constantes 01 01 ausentes` (`parseAckHeader`,
+`src/protocol/framing.js`).
+
+**Diagnóstico, contra el equipo real en `192.168.1.66`
+(`experiments/probar-handshake-raw.mjs`, dump crudo sin pasar por
+`parseAckHeader`):**
+
+```
+Comando:   55 AA 01 80 00 00 00 00 00 00 FF FF 00 00 01 00
+Respuesta: AA 55 63 01 00 00 00 00 01 00
+```
+
+`0x63` hex = `99` decimal — coincide exacto con el nuevo `ID DISPOSITIVO`.
+El byte 3 (`01`) se mantiene constante, igual que en todas las capturas
+previas con `ID DISPOSITIVO = 1`. Confirmado también en el ACK de `0xB4`
+en la misma sesión:
+
+```
+Comando:   55 AA 01 B4 08 00 00 00 00 00 FF FF 00 00 02 00
+Respuesta: AA 55 63 01 35 00 00 00 02 00   <- 35 hex = 53 pendientes
+```
+
+**Conclusión:** lo que §2.2 documentaba como "constante `01 01`" es en
+realidad `[ID DISPOSITIVO][0x01 constante]`. Con `ID DISPOSITIVO = 1` (el
+valor por defecto de fábrica, presente en todos los equipos vistos hasta
+ahora) ambos bytes daban `01 01`, indistinguibles de una constante doble.
+
+**Corrección aplicada:** `parseAckHeader` (`src/protocol/framing.js`) ya no
+exige `buffer[2] === 0x01` — solo valida `buffer[3] === 0x01` (el byte que
+sí es constante) y expone `buffer[2]` como campo `deviceId` en el resultado.
+Verificado end-to-end contra el equipo real (`192.168.1.66`, `ID
+DISPOSITIVO = 99`): el handshake y `0xB4` ya no fallan
+(`experiments/probar-0xa4-raw.mjs`). Suite completa (59/59) sigue en verde
+tras el cambio.
+
+**Hallazgo nuevo, sin resolver — no relacionado con este bug:** en esa
+misma sesión de prueba, `0xB4` declaró `declaredPendingCount = 53` (mucho
+mayor que cualquier lote visto antes, máximo previo 28 en §5.8), y el
+`0xA4` subsiguiente **no respondió nada** — el equipo cerró el socket sin
+enviar payload, incluso con un timeout de 8-10s (contra los ~5s que
+alcanzan sobradamente para lotes de hasta 28 registros). No hay evidencia
+de que esto esté relacionado con `ID DISPOSITIVO`: el comando `0xA4` se
+sigue enviando con byte 2 = `01` constante (no se probó todavía si el
+equipo espera su propio `ID DISPOSITIVO` de vuelta en el comando, en vez
+de la constante `01` histórica) y el handshake/`0xB4` de la misma sesión
+respondieron con normalidad usando esa misma constante. Hipótesis
+pendientes de probar, en orden de sospecha: (1) el equipo tiene un límite
+de registros por respuesta `0xA4` menor a 53 y no lo comunica con un error
+explícito, simplemente no responde; (2) el comando `0xA4` sí necesita el
+`ID DISPOSITIVO` real en el byte 2 en vez de la constante `01` para
+payloads grandes; (3) causa ajena al protocolo (memoria/timeout interno del
+firmware con un lote inusualmente grande). Sin descartar aún ninguna.
+
+---
+
+### 5.18 Captura real software oficial ↔ equipo `ID DISPOSITIVO=99`, 53 pendientes — DOS diferencias nuevas con el protocolo documentado (2026-07-08)
+
+`research/fichada_id_99.pcapng` (Wireshark, tráfico real entre "Gestión de
+Personal Pro-Soft" y el equipo en `192.168.1.66`, ya con `ID DISPOSITIVO`
+cambiado a `99`) contiene 4 streams TCP. Extraídos con
+`tshark -r research/fichada_id_99.pcapng -q -z "follow,tcp,hex,N"` (N=0..3):
+
+- **Stream 0 y 2:** solo `0x80` handshake, sin ninguna otra operación
+  (probablemente un chequeo de conectividad del software antes de abrir la
+  pantalla principal).
+- **Stream 1:** handshake completo (`0x80` + `0x13`x3 + `0xC3`) sin
+  `0xB4`/`0xA4` — consistente con una consulta de identificación del
+  equipo, sin descarga de fichadas.
+- **Stream 3:** handshake completo + `0xB4` (declara **53** pendientes) +
+  **dos** llamadas a `0xA4` + `0x81` cierre. Este stream es el relevante
+  para esta sección.
+
+#### Diferencia 1 — el byte 2 de los COMANDOS también es `ID DISPOSITIVO`, no una constante
+
+§2.1 documentaba el byte 2 de todo comando (`55 AA [01] [CMD] ...`) como
+"constante `01` observada en todos los comandos". Falso, por el mismo
+motivo que el byte 2 del ACK (§5.17): con `ID DISPOSITIVO=1` (todas las
+capturas previas) era indistinguible de una constante. En este stream, el
+software oficial envía **todos** sus comandos con byte 2 = `63` (99
+decimal, el `ID DISPOSITIVO` real del equipo), no `01`:
+
+```
+55 63 80 ...   (handshake)
+55 63 13 ...   (x3, params/identificacion)
+55 63 c3 ...   (identificacion extendida)
+55 63 b4 ...   (conteo pendientes)
+55 63 a4 ...   (detalle, x2)
+55 63 81 ...   (cierre)
+```
+
+(la tabla arriba omite el marcador `55 AA` inicial por brevedad; el byte
+mostrado es el 3er byte de cada trama real, ej. `55 AA 63 80 ...`)
+
+**Nota importante de compatibilidad:** el cliente propio de este proyecto
+(`src/protocol/commands.js`) sigue enviando `01` fijo en el byte 2 de
+todos los comandos, y **el equipo lo acepta igual** — se confirmó
+end-to-end contra este mismo equipo (`ID DISPOSITIVO=99`) en §5.17 que el
+handshake y `0xB4` funcionan con byte 2 = `01`. El equipo no parece exigir
+que el byte 2 del comando coincida con su propio `ID DISPOSITIVO` — pero
+el software oficial sí lo envía correctamente, así que **no puede
+descartarse que algún firmware o alguna operación distinta a
+handshake/0xB4 sí lo valide**. Recomendación: si se agrega soporte a
+multi-equipo (varios `ID DISPOSITIVO` en la misma red), replicar el
+comportamiento real del software oficial (usar el `deviceId` recién
+confirmado por el handshake en los comandos siguientes de la misma
+sesión) en vez de seguir confiando en que la constante `01` sea aceptada
+para siempre.
+
+#### Diferencia 2 — `0xA4` se pagina en llamadas sucesivas cuando hay muchos registros pendientes
+
+Con 53 pendientes, el software oficial **no pide los 53 de una sola vez**.
+Hace dos llamadas a `0xA4`:
+
+**Llamada 1** — pide count=53 pero limita el tamaño de respuesta:
+```
+Comando:  55 AA 63 A4 00 00 00 00  35 00 00 00  00 04  06 00
+                                    ^count=53LE32  ^byteLen=0x0400=1024  ^seq=6
+Respuesta: ACK(10) + 55 AA + header(4, legajo=10) + recordsBuffer(1024 bytes)
+```
+1024 bytes de `recordsBuffer` = 51 registros completos (51×20=1020) + 4
+bytes finales colgantes (el ya conocido "bloque de cierre" de §5.14) — es
+decir, el equipo entrega **51 de los 53** pendientes en esta llamada,
+limitando el tamaño de respuesta a 1024 bytes de `recordsBuffer` en vez de
+honrar los `53×20=1060` bytes que "debería" pedir la fórmula documentada
+en §5.2/commands.js (`count*RECORD_SIZE`). **1024 no es múltiplo de 20** —
+es un tope de bytes por respuesta (probablemente un buffer fijo del
+firmware), no un tope de cantidad de registros por sí solo. Con esta
+única muestra no se puede confirmar si el tope real es "1024 bytes" o
+"51 registros" (que coincide en dar 1024 = 51×20+4); haría falta un lote
+de tamaño distinto (ej. 52 o 100 pendientes) para separar ambas hipótesis.
+
+**Llamada 2** — trae el resto:
+```
+Comando:  55 AA 63 A4 00 00 00 00  00 00 01 00  24 00  07 00
+                                    ^campo raro   ^byteLen=0x24=36  ^seq=7
+Respuesta: ACK(10) + 55 AA + recordsBuffer(36 bytes, SIN header propio)
+```
+El campo en la posición de "count" (bytes 8-11) ya **no** es `53` ni
+`2` (los pendientes restantes) — trae `00 00 01 00`. Sin poder separarlo
+en dos sub-campos de 16 bits con certeza (`0000`/`0001`), la hipótesis más
+plausible es que sea un indicador de página/continuación (`1` = "segunda
+llamada"), **no** un contador de registros — el contador real de
+registros restantes no viaje explícito en este campo en absoluto. Sin
+confirmar; solo un punto de dato disponible.
+
+**Verificación de que la concatenación es exacta (evidencia fuerte, no
+solo hipótesis):** tomando los 4 bytes colgantes al final de la llamada 1
+(`BA 91 00 00`) como el `header` (legajo) del primer registro de la
+llamada 2, y concatenando `dangling(4) + recordsBuffer2(36) = 40 bytes`,
+se decodifican **exactamente 2 registros completos** (40 = 2×20) más un
+nuevo bloque colgante de 4 bytes al final (`70 06 00 00`, mismo patrón de
+siempre). 51 (llamada 1) + 2 (llamada 2) = **53 — coincide exacto con el
+`declaredPendingCount` de `0xB4`.** Esto confirma con evidencia directa
+(no solo aritmética) que:
+
+- El modelo de encuadre por encadenamiento de legajos (§5.9) sigue siendo
+  correcto a través de una paginación completa.
+- El "bloque de cierre" misterioso de 4 bytes (§5.14) es, al menos en el
+  caso paginado, literalmente el `header` (legajo) de la página
+  siguiente — no un dato sin sentido. Cuando no hay página siguiente
+  (caso de una sola llamada, ya cubierto en §5.14), el equipo igual
+  manda esos 4 bytes colgantes; su valor en ese caso puntual sigue sin
+  explicación (podría ser el legajo de la próxima fichada que llegue *en
+  el futuro*, aún sin confirmar).
+
+**Fórmula hipotética para `byteLen` (bytes 12-13 del comando `0xA4`), sin
+confirmar más allá de esta única calibración:**
+- Primera llamada de una sesión: `byteLen = min(declaredCount, PAGE_SIZE) * RECORD_SIZE + 4`
+  (el `+4` reserva espacio para el legajo colgante/próxima página). Con
+  `PAGE_SIZE≈51` da `51*20+4=1024`, coincide exacto.
+- Llamadas de continuación: `byteLen = remainingCount * RECORD_SIZE - 4`
+  (no hace falta re-pedir el header: ya se tiene del colgante de la
+  llamada anterior). Con `remainingCount=2` da `2*20-4=36`, coincide
+  exacto.
+
+**Impacto en la implementación actual (bug real, no solo hallazgo de
+investigación) — RESUELTO ✅ (2026-07-08):** `src/protocol/client.js`/
+`commands.js` pedían siempre `declaredPendingCount * RECORD_SIZE` en una
+sola llamada a `0xA4` (`buildPendingDetailCommand`), sin paginar. Esto
+coincidía con lo observado el 2026-07-08 contra este mismo equipo (`ID
+DISPOSITIVO=99`, `declaredPendingCount=53`): al pedir los 53 de una sola
+vez (`experiments/probar-0xa4-raw.mjs`), el equipo **no respondió nada y
+cerró el socket** tras varios segundos.
+
+**Paginación implementada** en `src/protocol/commands.js`
+(`MAX_RECORDS_PER_PAGE=51`, `buildPendingDetailContinuationCommand`) y
+`src/protocol/client.js` (`queryPendingFichadas` ahora pagina en un
+`while` cuando `declaredPendingCount > MAX_RECORDS_PER_PAGE`). Validado en
+tres niveles, todos contra este mismo equipo real (`192.168.1.66`, `ID
+DISPOSITIVO=99`, `declaredPendingCount=53`):
+
+1. **Experimento dirigido** (`experiments/probar-paginacion-0xa4.mjs`):
+   probó y descartó dos hipótesis antes de dar con la correcta —
+   (a) pedir `recordsBuffer` con `+4` extra en la 1ra página duplicaba 4
+   bytes reales por error de encuadre propio (corrompía el último
+   registro); (b) reenviar el mismo `count=declaredPendingCount` en la
+   llamada de continuación hacía que el equipo **reiniciara la entrega
+   desde el primer pendiente** (se repetían los primeros registros, no
+   avanzaba el cursor). La hipótesis correcta — replicar el campo "count"
+   de continuación observado en el software oficial como
+   `pageIndex << 16` (§5.18 arriba) — dio 53/53 registros correctos, sin
+   duplicados ni corrupción.
+2. **Suite de contrato/integración** (`npm test`, 62/62 en verde):
+   `tests/contract/fixtures/cincuenta-tres-pendientes-paginado.json`
+   fixture con los bytes reales de esta misma sesión (52 registros de
+   `research/fichada_id_99.pcapng` + normalización de `ID DISPOSITIVO` a
+   `01` para consistencia con el resto de los fixtures), ejercida en
+   `tests/integration/query-pending-fichadas.integration.test.js`.
+   `tests/integration/performance.integration.test.js` (100 fichadas,
+   SC-001) actualizado para paginar dinámicamente en vez de asumir una
+   sola llamada `0xA4`.
+3. **CLI de producción end-to-end** (`node src/cli/consultar-fichadas.js
+   --host 192.168.1.66`): `declaredPendingCount=53` → 53 fichadas
+   exportadas, página 1 (51 registros) + página 2 (2 registros) en ~30ms
+   totales, sin timeouts ni cierres de socket (ver log de sesión).
+
+**Qué sigue sin confirmar:** la fórmula `pageIndex << 16` para el campo de
+continuación solo tiene un punto de calibración (`pageIndex=1`); no hay
+datos para una 3ra página (`declaredPendingCount > 102`). Tampoco está
+confirmado si `MAX_RECORDS_PER_PAGE=51` es el límite real del firmware o
+solo un valor seguro por debajo del límite verdadero (§5.18 arriba,
+sin resolver).
+
+---
+
 ## 6. Ejemplos de capturas reales (hex)
 
 ### 6.1 Un registro pendiente (fichada única — Cesar Villalba)
@@ -939,3 +1180,6 @@ vigente:
 - [x] (§5.16, 2026-07-06) Decodificar `fecha` y `hora` por completo (año/mes/día/hora/minuto/segundo), sin ambigüedad ni criterio de desempate — calibrado probando el reloj con fechas de prueba a propósito (3 años, varios días/meses, y los 3 casos límite de bloque horario: 0, 12, 23).
 - [ ] (§5.16) Probar un año fuera del rango 2015-2026 en los extremos (por ejemplo, año 2000 o 2099) para confirmar que la fórmula de año no tiene un techo/piso distinto fuera de ese rango.
 - [ ] (§5.16) Confirmar el significado real de los flags fijos de `byte8` (bits 0-1) y `byte9` (bits 0-3), y de los 3 bytes constantes de campo[0] (bytes 4-6, `01 00 00`) — hoy solo se usan como chequeo de plausibilidad.
+- [x] (§5.18, 2026-07-08) Implementar paginación de `0xA4` en `src/protocol/client.js`/`commands.js` para lotes grandes — implementado y validado en vivo contra el equipo real (53 pendientes, 2 páginas), ver detalle en §5.18.
+- [ ] (§5.18) Determinar con un segundo lote de tamaño distinto (ej. 52 o 100 pendientes) si el límite real de `0xA4` es "1024 bytes de recordsBuffer" o "51 registros por llamada" (ambas hipótesis dan el mismo resultado con los únicos datos disponibles hoy).
+- [ ] (§5.18) Confirmar si la fórmula `pageIndex << 16` para el campo "count" de continuación generaliza a una 3ra página o más — solo hay un punto de calibración (`pageIndex=1`, dos páginas totales); no hay una captura real con `declaredPendingCount > 102`.

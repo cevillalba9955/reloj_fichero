@@ -12,9 +12,12 @@ import {
   buildHandshakeCommand,
   buildPendingCountCommand,
   buildPendingDetailCommand,
+  buildPendingDetailContinuationCommand,
   buildCloseOperationCommand,
+  MAX_RECORDS_PER_PAGE,
 } from '../../src/protocol/commands.js';
 import { ACK_SIZE } from '../../src/protocol/framing.js';
+import { RECORD_SIZE } from '../../src/protocol/records.js';
 
 function ackFor(seq) {
   const buffer = Buffer.alloc(ACK_SIZE);
@@ -37,6 +40,11 @@ function withTempOutputDir(fn) {
   }
 }
 
+// Reproduce la paginacion real de 0xA4 (research.md §5.18): para
+// declaredPendingCount > MAX_RECORDS_PER_PAGE, produccion divide la
+// descarga en varias llamadas 0xA4 en vez de una sola. Este guion arma esa
+// misma secuencia dinamicamente para que el mock siga sincronizado con
+// src/protocol/client.js sin importar cuantas fichadas se simulen.
 function startReducedSessionServer(declaredPendingCount) {
   return new Promise((resolve) => {
     const server = createServer((socket) => {
@@ -52,17 +60,40 @@ function startReducedSessionServer(declaredPendingCount) {
             return buffer;
           })(),
         },
-        {
-          expect: buildPendingDetailCommand(3, declaredPendingCount),
-          respond: Buffer.concat([
-            ackFor(3),
-            Buffer.from([0x55, 0xaa]),
-            Buffer.from('01000000', 'hex'),
-            ...Array(declaredPendingCount).fill(REGISTRO_REAL),
-          ]),
-        },
-        { expect: buildCloseOperationCommand(4), respond: ackFor(4) },
       ];
+
+      let seq = 3;
+      let remaining = declaredPendingCount;
+      let pageIndex = 0;
+      while (remaining > 0) {
+        const isFirstPage = pageIndex === 0;
+        const pageCount = Math.min(remaining, MAX_RECORDS_PER_PAGE);
+        const hasMorePages = remaining > pageCount;
+        // research.md §5.18 "CORRECCION 2": el equipo no trunca un stream
+        // fijo. La 1ra pagina entrega EXACTO lo pedido; las paginas de
+        // continuacion entregan SIEMPRE 4 bytes MAS de lo pedido (por eso
+        // el comando de continuacion pide 4 menos). Ver src/protocol/client.js.
+        const bytesNecesarios = pageCount * RECORD_SIZE + (hasMorePages ? 4 : 0);
+        const byteLenComando = isFirstPage ? bytesNecesarios : bytesNecesarios - 4;
+        const detailCmd = isFirstPage
+          ? buildPendingDetailCommand(seq, declaredPendingCount, byteLenComando)
+          : buildPendingDetailContinuationCommand(seq, pageIndex, byteLenComando);
+        const respondParts = [ackFor(seq), Buffer.from([0x55, 0xaa])];
+        if (isFirstPage) {
+          respondParts.push(Buffer.from('01000000', 'hex'));
+        }
+        respondParts.push(...Array(pageCount).fill(REGISTRO_REAL));
+        if (hasMorePages) {
+          respondParts.push(Buffer.from('01000000', 'hex'));
+        }
+        steps.push({ expect: detailCmd, respond: Buffer.concat(respondParts) });
+
+        remaining -= pageCount;
+        pageIndex += 1;
+        seq += 1;
+      }
+      steps.push({ expect: buildCloseOperationCommand(seq), respond: ackFor(seq) });
+
       socket.on('data', (chunk) => {
         received = Buffer.concat([received, chunk]);
         const step = steps[stepIndex];
