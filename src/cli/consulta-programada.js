@@ -2,8 +2,15 @@ import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { startService } from '../service/consulta-programada-service.js';
 import { createLocalFileActiveEmployeesProvider } from '../roster/local-file-active-employees-provider.js';
+import { readOracleRosterConfig, ConfiguracionPadronInvalidaError } from '../db/oracle-roster-config.js';
+import { createOracleRosterRepository } from '../db/oracle-roster-repository.js';
+import { createOracleActiveEmployeesProvider } from '../roster/oracle-active-employees-provider.js';
+import { createDailyCachedActiveEmployeesProvider } from '../roster/daily-cached-active-employees-provider.js';
+import { createRosterFetchLogger } from '../logging/roster-fetch-logger.js';
 
 export class InvalidArgsError extends Error {}
+
+const PADRON_MODES = new Set(['archivo', 'oracle']);
 
 // contracts/service-contract.md + contracts/roster-provider-contract.md:
 // --host obligatorio, resto con los defaults de FR-002 (checkpoints
@@ -17,6 +24,7 @@ export function parseCliArgs(argv) {
       options: {
         host: { type: 'string' },
         port: { type: 'string', default: '5005' },
+        padron: { type: 'string', default: 'archivo' },
         'roster-config': { type: 'string', default: './config/active-employees.json' },
         'log-dir': { type: 'string', default: './logs' },
         'timeout-ms': { type: 'string', default: '5000' },
@@ -35,7 +43,8 @@ export function parseCliArgs(argv) {
   if (!values.host) {
     throw new InvalidArgsError(
       'Falta --host (IP del reloj RS596). Uso: --host <ip> [--port 5005] ' +
-      '[--roster-config ./config/active-employees.json] [--log-dir ./logs] [--timeout-ms 5000] ' +
+      '[--padron archivo|oracle] [--roster-config ./config/active-employees.json] ' +
+      '[--log-dir ./logs] [--timeout-ms 5000] ' +
       '[--entrada-hora 07:00] [--entrada-margen 30] [--salida-hora 16:00] [--salida-margen 30]'
     );
   }
@@ -56,10 +65,16 @@ export function parseCliArgs(argv) {
   if (!Number.isInteger(salidaMargen) || salidaMargen < 0) {
     throw new InvalidArgsError(`--salida-margen invalido: "${values['salida-margen']}"`);
   }
+  if (!PADRON_MODES.has(values.padron)) {
+    throw new InvalidArgsError(
+      `--padron invalido: "${values.padron}". Valores validos: archivo | oracle (FR-013).`
+    );
+  }
 
   return {
     host: values.host,
     port,
+    padron: values.padron,
     rosterConfigPath: values['roster-config'],
     logDir: values['log-dir'],
     timeoutMs,
@@ -69,6 +84,25 @@ export function parseCliArgs(argv) {
       salida: { horaEsperada: values['salida-hora'], margenMinutos: salidaMargen },
     },
   };
+}
+
+// FR-013: la selección del origen del padrón (archivo local o RRHH/Oracle) es
+// una decisión de configuración, no de código. Con `oracle`, valida la
+// configuración de entorno de forma fail-fast (FR-004/FR-005) ANTES de armar
+// la cadena repositorio → provider Oracle → decorator diario; una config
+// inválida lanza ConfiguracionPadronInvalidaError (el CLI aborta el arranque).
+export function createRosterProvider(
+  options,
+  { env = process.env, serviceId = 'servicio-fichadas' } = {}
+) {
+  if (options.padron === 'oracle') {
+    const config = readOracleRosterConfig(env); // fail-fast: nombra faltantes, sin exponer valores
+    const rosterLogger = createRosterFetchLogger({ serviceId, logDir: options.logDir });
+    const repository = createOracleRosterRepository({ config });
+    const inner = createOracleActiveEmployeesProvider({ repository, logger: rosterLogger });
+    return createDailyCachedActiveEmployeesProvider({ inner, logger: rosterLogger });
+  }
+  return createLocalFileActiveEmployeesProvider({ filePath: options.rosterConfigPath });
 }
 
 function formatEstadoResumen(state) {
@@ -100,7 +134,9 @@ export function runService(
   options,
   { print = console.log, statusIntervalMs = 60 * 1000, onShutdown } = {}
 ) {
-  const rosterProvider = createLocalFileActiveEmployeesProvider({ filePath: options.rosterConfigPath });
+  // Fail-fast: si `--padron oracle` tiene configuración inválida, esto lanza
+  // ConfiguracionPadronInvalidaError ANTES de programar ningún ciclo (FR-005).
+  const rosterProvider = createRosterProvider(options);
 
   const handle = startService({
     host: options.host,
@@ -112,8 +148,11 @@ export function runService(
     rosterProvider,
   });
 
+  const origenPadron = options.padron === 'oracle'
+    ? 'RRHH/Oracle (variables RRHH_ORACLE_*)'
+    : options.rosterConfigPath;
   print(`Servicio de consulta programada iniciado contra ${options.host}:${options.port}`);
-  print(`Padron de empleados activos: ${options.rosterConfigPath}`);
+  print(`Padron de empleados activos: ${origenPadron}`);
   print(`Log de ciclos: ${options.logDir}`);
   print(formatEstadoResumen(handle.getState()));
 
@@ -146,7 +185,18 @@ function main() {
     process.exitCode = 3;
     return;
   }
-  runService(options, { onShutdown: () => process.exit(0) });
+  try {
+    runService(options, { onShutdown: () => process.exit(0) });
+  } catch (err) {
+    // FR-005: configuración del padrón Oracle inválida → abortar el arranque
+    // con un mensaje accionable, antes de programar ciclos.
+    if (err instanceof ConfiguracionPadronInvalidaError) {
+      console.error(err.message);
+      process.exitCode = 4;
+      return;
+    }
+    throw err;
+  }
 }
 
 const isMainModule = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;

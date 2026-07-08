@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCliArgs, InvalidArgsError } from '../../src/cli/consulta-programada.js';
+import { parseCliArgs, InvalidArgsError, createRosterProvider } from '../../src/cli/consulta-programada.js';
+import { ConfiguracionPadronInvalidaError } from '../../src/db/oracle-roster-config.js';
 
 test('parseCliArgs: exige --host', () => {
   assert.throws(() => parseCliArgs([]), InvalidArgsError);
@@ -43,4 +44,41 @@ test('parseCliArgs: rechaza --entrada-margen no numérico', () => {
 
 test('parseCliArgs: rechaza --port no numérico', () => {
   assert.throws(() => parseCliArgs(['--host', '192.168.1.82', '--port', 'abc']), InvalidArgsError);
+});
+
+// ---- US3 / FR-013: selección del origen del padrón por configuración ----
+
+test('parseCliArgs: --padron por defecto es "archivo" (comportamiento de la feature 002 sin cambios)', () => {
+  const options = parseCliArgs(['--host', '192.168.1.82']);
+  assert.equal(options.padron, 'archivo');
+});
+
+test('parseCliArgs: acepta --padron oracle', () => {
+  const options = parseCliArgs(['--host', '192.168.1.82', '--padron', 'oracle']);
+  assert.equal(options.padron, 'oracle');
+});
+
+test('parseCliArgs: rechaza un --padron desconocido', () => {
+  assert.throws(
+    () => parseCliArgs(['--host', '192.168.1.82', '--padron', 'postgres']),
+    InvalidArgsError
+  );
+});
+
+test('createRosterProvider: modo archivo devuelve el adapter local (FR-013, sin tocar env)', () => {
+  const options = parseCliArgs(['--host', '192.168.1.82', '--padron', 'archivo']);
+  const provider = createRosterProvider(options, { env: {} });
+  assert.equal(typeof provider.getActiveEmployees, 'function');
+});
+
+test('createRosterProvider: modo oracle con env incompleto → fail-fast ConfiguracionPadronInvalidaError, sin exponer la password (FR-005)', () => {
+  const options = parseCliArgs(['--host', '192.168.1.82', '--padron', 'oracle']);
+  try {
+    createRosterProvider(options, { env: { RRHH_ORACLE_PASSWORD: 'S3cr3tPassw0rd' } });
+    assert.fail('debió fallar por configuración incompleta');
+  } catch (err) {
+    assert.ok(err instanceof ConfiguracionPadronInvalidaError);
+    assert.match(err.message, /RRHH_ORACLE_USER/);
+    assert.ok(!/S3cr3tPassw0rd/.test(err.message));
+  }
 });
