@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node src/cli/consultar-fichadas.js",
     "servicio": "node --env-file-if-exists=.env src/cli/consulta-programada.js",
+    "presentismo": "node --env-file-if-exists=.env src/cli/calcular-presentismo.js",
     "test": "node --test",
     "smoke:oracle": "node --env-file-if-exists=.env scripts/smoke-oracle-roster.js"
   },

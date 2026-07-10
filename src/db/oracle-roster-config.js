@@ -45,6 +45,18 @@ export function readOracleRosterConfig(env = process.env) {
     }
   }
 
+  // Opcional (feature 004): columna de categoría del empleado. Sin default —
+  // si no se provee, la lectura de categoría queda deshabilitada (null). Si se
+  // provee, debe ser un identificador SQL válido sin punto.
+  const columnaCategoriaRaw = env.RRHH_ORACLE_COLUMNA_CATEGORIA;
+  let columnaCategoria = null;
+  if (typeof columnaCategoriaRaw === 'string' && columnaCategoriaRaw.trim() !== '') {
+    columnaCategoria = columnaCategoriaRaw.trim();
+    if (!SQL_IDENT_COLUMNA.test(columnaCategoria)) {
+      problemas.push('RRHH_ORACLE_COLUMNA_CATEGORIA (no es un identificador SQL válido)');
+    }
+  }
+
   // Opcional con default; si se provee, debe ser un entero > 0.
   const timeoutRaw = env.RRHH_ORACLE_TIMEOUT_MS;
   let timeoutMs = DEFAULT_TIMEOUT_MS;
@@ -64,5 +76,5 @@ export function readOracleRosterConfig(env = process.env) {
     );
   }
 
-  return { user, password, connectString, vistaPadron, columnaLegajo, timeoutMs };
+  return { user, password, connectString, vistaPadron, columnaLegajo, columnaCategoria, timeoutMs };
 }
