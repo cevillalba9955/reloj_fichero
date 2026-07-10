@@ -12,26 +12,52 @@ export class InvalidArgsError extends Error {}
 
 const PADRON_MODES = new Set(['archivo', 'oracle']);
 
-// contracts/service-contract.md + contracts/roster-provider-contract.md:
-// --host obligatorio, resto con los defaults de FR-002 (checkpoints
-// entrada/salida 07:00/16:00 ± 30min) y del adapter placeholder del padrón
-// de empleados activos.
-export function parseCliArgs(argv) {
+// Precedencia de configuración: argumento CLI explícito > variable de entorno
+// FICHADAS_* > default. Así, quien ya invoca por línea de comandos no cambia
+// nada, y el .env (cargado con `npm run servicio`, que usa
+// --env-file-if-exists) solo aporta lo que no se pase por CLI.
+function pick(cliValue, envValue, def) {
+  if (cliValue !== undefined) return cliValue;
+  if (envValue !== undefined && envValue !== '') return envValue;
+  return def;
+}
+
+function parseEntero(nombre, valor) {
+  const n = Number(valor);
+  if (!Number.isInteger(n)) {
+    throw new InvalidArgsError(`${nombre} invalido: "${valor}" (se espera un entero)`);
+  }
+  return n;
+}
+
+function parseBooleano(envValue) {
+  return envValue === 'true' || envValue === '1';
+}
+
+// contracts/service-contract.md (feature 002) + contracts/roster-provider-contract.md:
+// --host obligatorio (o FICHADAS_HOST). El resto toma los defaults de FR-002
+// (checkpoints entrada/salida 07:00/16:00 ± 30min, sondeo cada 5min) salvo que
+// se sobreescriban por CLI o por variables de entorno FICHADAS_*.
+export function parseCliArgs(argv, env = process.env) {
   let values;
   try {
+    // Sin `default` en parseArgs: un valor no provisto queda `undefined`, para
+    // poder distinguir "no lo pasaron por CLI" y caer al env/default (pick()).
     ({ values } = parseArgs({
       args: argv,
       options: {
         host: { type: 'string' },
-        port: { type: 'string', default: '5005' },
-        padron: { type: 'string', default: 'archivo' },
-        'roster-config': { type: 'string', default: './config/active-employees.json' },
-        'log-dir': { type: 'string', default: './logs' },
-        'timeout-ms': { type: 'string', default: '5000' },
-        'entrada-hora': { type: 'string', default: '07:00' },
-        'entrada-margen': { type: 'string', default: '30' },
-        'salida-hora': { type: 'string', default: '16:00' },
-        'salida-margen': { type: 'string', default: '30' },
+        port: { type: 'string' },
+        padron: { type: 'string' },
+        'roster-config': { type: 'string' },
+        'log-dir': { type: 'string' },
+        'timeout-ms': { type: 'string' },
+        'tick-interval-ms': { type: 'string' },
+        'status-interval-ms': { type: 'string' },
+        'entrada-hora': { type: 'string' },
+        'entrada-margen': { type: 'string' },
+        'salida-hora': { type: 'string' },
+        'salida-margen': { type: 'string' },
         'full-handshake': { type: 'boolean', default: false },
       },
       strict: true,
@@ -40,48 +66,69 @@ export function parseCliArgs(argv) {
     throw new InvalidArgsError(err.message);
   }
 
-  if (!values.host) {
+  const host = pick(values.host, env.FICHADAS_HOST, undefined);
+  if (!host) {
     throw new InvalidArgsError(
-      'Falta --host (IP del reloj RS596). Uso: --host <ip> [--port 5005] ' +
-      '[--padron archivo|oracle] [--roster-config ./config/active-employees.json] ' +
-      '[--log-dir ./logs] [--timeout-ms 5000] ' +
-      '[--entrada-hora 07:00] [--entrada-margen 30] [--salida-hora 16:00] [--salida-margen 30]'
+      'Falta la IP del reloj RS596: pasala por --host <ip> o por la variable de entorno FICHADAS_HOST. ' +
+      'Uso: --host <ip> [--port 5005] [--padron archivo|oracle] ' +
+      '[--roster-config ./config/active-employees.json] [--log-dir ./logs] [--timeout-ms 5000] ' +
+      '[--tick-interval-ms 300000] [--status-interval-ms 60000] ' +
+      '[--entrada-hora 07:00] [--entrada-margen 30] [--salida-hora 16:00] [--salida-margen 30] ' +
+      '[--full-handshake]. Cualquiera de estos tambien se puede fijar por FICHADAS_* en el .env.'
     );
   }
 
-  const port = Number(values.port);
-  const timeoutMs = Number(values['timeout-ms']);
-  const entradaMargen = Number(values['entrada-margen']);
-  const salidaMargen = Number(values['salida-margen']);
-  if (!Number.isInteger(port) || port <= 0) {
-    throw new InvalidArgsError(`--port invalido: "${values.port}"`);
-  }
-  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
-    throw new InvalidArgsError(`--timeout-ms invalido: "${values['timeout-ms']}"`);
-  }
-  if (!Number.isInteger(entradaMargen) || entradaMargen < 0) {
-    throw new InvalidArgsError(`--entrada-margen invalido: "${values['entrada-margen']}"`);
-  }
-  if (!Number.isInteger(salidaMargen) || salidaMargen < 0) {
-    throw new InvalidArgsError(`--salida-margen invalido: "${values['salida-margen']}"`);
-  }
-  if (!PADRON_MODES.has(values.padron)) {
+  const padron = pick(values.padron, env.FICHADAS_PADRON, 'archivo');
+  if (!PADRON_MODES.has(padron)) {
     throw new InvalidArgsError(
-      `--padron invalido: "${values.padron}". Valores validos: archivo | oracle (FR-013).`
+      `padron invalido: "${padron}". Valores validos: archivo | oracle (FR-013). ` +
+      'Se fija por --padron o FICHADAS_PADRON.'
     );
   }
+
+  const port = parseEntero('--port / FICHADAS_PORT', pick(values.port, env.FICHADAS_PORT, '5005'));
+  if (port <= 0) throw new InvalidArgsError(`--port / FICHADAS_PORT invalido: "${port}" (debe ser > 0)`);
+
+  const timeoutMs = parseEntero('--timeout-ms / FICHADAS_TIMEOUT_MS', pick(values['timeout-ms'], env.FICHADAS_TIMEOUT_MS, '5000'));
+  if (timeoutMs <= 0) throw new InvalidArgsError(`--timeout-ms / FICHADAS_TIMEOUT_MS invalido: "${timeoutMs}" (debe ser > 0)`);
+
+  const tickIntervalMs = parseEntero(
+    '--tick-interval-ms / FICHADAS_TICK_INTERVAL_MS',
+    pick(values['tick-interval-ms'], env.FICHADAS_TICK_INTERVAL_MS, String(5 * 60 * 1000))
+  );
+  if (tickIntervalMs <= 0) throw new InvalidArgsError(`--tick-interval-ms / FICHADAS_TICK_INTERVAL_MS invalido: "${tickIntervalMs}" (debe ser > 0)`);
+
+  const statusIntervalMs = parseEntero(
+    '--status-interval-ms / FICHADAS_STATUS_INTERVAL_MS',
+    pick(values['status-interval-ms'], env.FICHADAS_STATUS_INTERVAL_MS, String(60 * 1000))
+  );
+  if (statusIntervalMs <= 0) throw new InvalidArgsError(`--status-interval-ms / FICHADAS_STATUS_INTERVAL_MS invalido: "${statusIntervalMs}" (debe ser > 0)`);
+
+  const entradaMargen = parseEntero('--entrada-margen / FICHADAS_ENTRADA_MARGEN', pick(values['entrada-margen'], env.FICHADAS_ENTRADA_MARGEN, '30'));
+  if (entradaMargen < 0) throw new InvalidArgsError(`--entrada-margen / FICHADAS_ENTRADA_MARGEN invalido: "${entradaMargen}" (debe ser >= 0)`);
+
+  const salidaMargen = parseEntero('--salida-margen / FICHADAS_SALIDA_MARGEN', pick(values['salida-margen'], env.FICHADAS_SALIDA_MARGEN, '30'));
+  if (salidaMargen < 0) throw new InvalidArgsError(`--salida-margen / FICHADAS_SALIDA_MARGEN invalido: "${salidaMargen}" (debe ser >= 0)`);
 
   return {
-    host: values.host,
+    host,
     port,
-    padron: values.padron,
-    rosterConfigPath: values['roster-config'],
-    logDir: values['log-dir'],
+    padron,
+    rosterConfigPath: pick(values['roster-config'], env.FICHADAS_ROSTER_CONFIG, './config/active-employees.json'),
+    logDir: pick(values['log-dir'], env.FICHADAS_LOG_DIR, './logs'),
     timeoutMs,
-    fullHandshake: values['full-handshake'],
+    tickIntervalMs,
+    statusIntervalMs,
+    fullHandshake: values['full-handshake'] || parseBooleano(env.FICHADAS_FULL_HANDSHAKE),
     checkpoints: {
-      entrada: { horaEsperada: values['entrada-hora'], margenMinutos: entradaMargen },
-      salida: { horaEsperada: values['salida-hora'], margenMinutos: salidaMargen },
+      entrada: {
+        horaEsperada: pick(values['entrada-hora'], env.FICHADAS_ENTRADA_HORA, '07:00'),
+        margenMinutos: entradaMargen,
+      },
+      salida: {
+        horaEsperada: pick(values['salida-hora'], env.FICHADAS_SALIDA_HORA, '16:00'),
+        margenMinutos: salidaMargen,
+      },
     },
   };
 }
@@ -132,7 +179,7 @@ function formatEstadoResumen(state) {
 // fuerza el cierre de una sesion en curso).
 export function runService(
   options,
-  { print = console.log, statusIntervalMs = 60 * 1000, onShutdown } = {}
+  { print = console.log, statusIntervalMs = options.statusIntervalMs ?? 60 * 1000, onShutdown } = {}
 ) {
   // Fail-fast: si `--padron oracle` tiene configuración inválida, esto lanza
   // ConfiguracionPadronInvalidaError ANTES de programar ningún ciclo (FR-005).
@@ -143,6 +190,7 @@ export function runService(
     port: options.port,
     logDir: options.logDir,
     timeoutMs: options.timeoutMs,
+    tickIntervalMs: options.tickIntervalMs,
     fullHandshake: options.fullHandshake,
     checkpoints: options.checkpoints,
     rosterProvider,
@@ -153,6 +201,7 @@ export function runService(
     : options.rosterConfigPath;
   print(`Servicio de consulta programada iniciado contra ${options.host}:${options.port}`);
   print(`Padron de empleados activos: ${origenPadron}`);
+  print(`Sondeo cada ${options.tickIntervalMs}ms; timeout por consulta ${options.timeoutMs}ms`);
   print(`Log de ciclos: ${options.logDir}`);
   print(formatEstadoResumen(handle.getState()));
 
