@@ -1,0 +1,112 @@
+import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+// Archivo acumulativo de fichadas por período (trazabilidad, FR — registro de
+// fichadas obtenidas). A DIFERENCIA del presentismo.ndjson (que nunca lleva
+// datos crudos, Principio V), este archivo es el registro técnico y SÍ guarda
+// el rawHex de cada fichada —el frame de 20 bytes del protocolo (legajo, fecha,
+// hora, método), no un template biométrico ni una imagen— igual que ya hace el
+// exportador de sesiones de la feature 001/002. Deduplica por rawHex (identidad
+// cruda, FR-017 de la feature 002).
+//
+// Un archivo por período: <archiveDir>/<periodo>.json
+//   { "periodo": "YYYYMM", "actualizadoEn": "ISO",
+//     "fichadas": [ { "legajo", "fecha", "hora", "metodo", "rawHex" } ] }
+
+function rutaPeriodo(archiveDir, periodo) {
+  return join(archiveDir, `${periodo}.json`);
+}
+
+// Campos que se conservan de cada fichada cruda (los del export de sesión).
+function normalizarFichadaCruda(f) {
+  return {
+    legajo: f.legajo ?? null,
+    fecha: f.fecha ?? null,
+    hora: f.hora ?? null,
+    metodo: f.metodo ?? null,
+    rawHex: f.rawHex ?? null,
+  };
+}
+
+// Lee el archivo acumulativo del período. Si no existe, devuelve [].
+export function cargarFichadasArchivadas({ archiveDir, periodo }) {
+  let contenido;
+  try {
+    contenido = readFileSync(rutaPeriodo(archiveDir, periodo), 'utf8');
+  } catch {
+    return [];
+  }
+  let datos;
+  try {
+    datos = JSON.parse(contenido);
+  } catch {
+    throw new Error(`archivo de fichadas "${rutaPeriodo(archiveDir, periodo)}" no es JSON válido`);
+  }
+  return Array.isArray(datos?.fichadas) ? datos.fichadas : [];
+}
+
+// Registra (upsert) las fichadas obtenidas en el archivo del período,
+// deduplicando por rawHex contra lo ya guardado. Devuelve el conteo.
+export function registrarFichadas({ archiveDir, periodo, fichadas, now = () => new Date() }) {
+  const existentes = cargarFichadasArchivadas({ archiveDir, periodo });
+  const vistos = new Set();
+  const acumulado = [];
+  for (const f of existentes) {
+    const raw = f.rawHex ?? null;
+    if (raw != null) {
+      if (vistos.has(raw)) continue;
+      vistos.add(raw);
+    }
+    acumulado.push(f);
+  }
+
+  let agregadas = 0;
+  let duplicadas = 0;
+  for (const cruda of fichadas) {
+    const f = normalizarFichadaCruda(cruda);
+    if (f.rawHex != null) {
+      if (vistos.has(f.rawHex)) {
+        duplicadas += 1;
+        continue;
+      }
+      vistos.add(f.rawHex);
+    }
+    acumulado.push(f);
+    agregadas += 1;
+  }
+
+  // Orden estable por fecha/hora/legajo para diffs legibles.
+  acumulado.sort((a, b) => {
+    const ka = `${a.fecha ?? ''} ${a.hora ?? ''} ${a.legajo ?? ''}`;
+    const kb = `${b.fecha ?? ''} ${b.hora ?? ''} ${b.legajo ?? ''}`;
+    return ka < kb ? -1 : ka > kb ? 1 : 0;
+  });
+
+  const datos = { periodo, actualizadoEn: now().toISOString(), fichadas: acumulado };
+  mkdirSync(archiveDir, { recursive: true });
+  writeFileSync(rutaPeriodo(archiveDir, periodo), JSON.stringify(datos, null, 2) + '\n', 'utf8');
+  return { agregadas, duplicadas, total: acumulado.length };
+}
+
+// Lee todos los exports de sesión `fichadas-*.json` de un directorio (feature
+// 001/002) y devuelve sus registros crudos aplanados. Ignora archivos ilegibles
+// dejando constancia en `errores` (no aborta: importar es best-effort).
+export function leerExportsDeSesion({ inputDir }) {
+  let nombres;
+  try {
+    nombres = readdirSync(inputDir).filter((n) => /^fichadas-.*\.json$/.test(n));
+  } catch {
+    throw new Error(`no se pudo leer el directorio de fichadas "${inputDir}"`);
+  }
+  const registros = [];
+  const errores = [];
+  for (const nombre of nombres) {
+    try {
+      const doc = JSON.parse(readFileSync(join(inputDir, nombre), 'utf8'));
+      if (Array.isArray(doc?.records)) registros.push(...doc.records);
+    } catch {
+      errores.push(nombre);
+    }
+  }
+  return { registros, archivos: nombres.length, errores };
+}

@@ -37,6 +37,16 @@ Fuente según `--padron` (default `archivo`: snapshot local, sin DB).
 - Salida `json`: array de `{ legajo, nombre, categoria, modalidad, configurada }`.
 - Nunca imprime credenciales ni connect string (Principio V).
 
+### `importar-fichadas --periodo YYYYMM [--fichadas-dir ./output]`
+Lee los exports de sesión (`fichadas-*.json`) del servicio de fichadas y registra las
+del período en el **archivo acumulativo por período** (`<repo-dir>/fichadas/<periodo>.json`),
+deduplicando por `rawHex`. Es la fuente de fichadas de `calcular`.
+- El archivo acumulativo guarda `rawHex` (frame crudo del protocolo, para trazabilidad
+  técnica: no es template biométrico ni imagen). El `presentismo.ndjson` **nunca** lleva
+  `rawHex` (Principio V): solo un evento `fichadas_importadas` con conteos.
+- Fichadas sin fecha: no se imputan a un período; se informan y omiten.
+- Best-effort: archivos de sesión ilegibles se omiten con aviso.
+
 ### `sincronizar-padron [--padron-file PATH]`
 Consulta el padrón Oracle (solo lectura) **una vez** y lo guarda como snapshot JSON
 local (Principio VI), para que los demás comandos operen sin conexión a la DB. Es el
@@ -73,6 +83,8 @@ Reutiliza las variables de la feature 003 para el acceso al padrón/categoría, 
 | `RRHH_ORACLE_COLUMNA_NOMBRE` | Columna del nombre del empleado (opcional, para la IU) | (sin nombre) |
 | `PRESENTISMO_PADRON` | Fuente del padrón: `archivo` \| `oracle` | `archivo` |
 | `PRESENTISMO_PADRON_FILE` | Ruta del snapshot local del padrón | `<repo-dir>/padron.json` |
+| `PRESENTISMO_FICHADAS_DIR` | Directorio del archivo acumulativo de fichadas por período | `<repo-dir>/fichadas` |
+| `FICHADAS_OUTPUT_DIR` | Directorio de los exports de sesión que lee `importar-fichadas` | `./output` |
 
 Las credenciales Oracle viajan solo por entorno (Principio II), nunca por argv.
 

@@ -11,6 +11,7 @@ const TIPOS = new Set([
   'dia_reclasificado',
   'jornada_calculada',
   'periodo_calculado',
+  'fichadas_importadas',
   'correccion_alta',
   'correccion_reversion',
   'pausa_alta',

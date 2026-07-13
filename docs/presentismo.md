@@ -49,6 +49,7 @@ npm run presentismo -- <subcomando> [opciones]
 - `calcular --periodo YYYYMM [--legajo N] [--formato json|tabla] [--detalle]` — sin `--legajo` calcula toda la plantilla activa del padrón Oracle.
 - `listar-padron [--formato tabla|json]` — legajos activos del padrón con su categoría y modalidad (marca las categorías no configuradas en `categorias.json`).
 - `sincronizar-padron [--padron-file PATH]` — consulta Oracle una vez y guarda el padrón como snapshot local; el resto de los comandos operan sobre él sin DB.
+- `importar-fichadas --periodo YYYYMM [--fichadas-dir ./output]` — consulta los exports de sesión (`fichadas-*.json`) del servicio de fichadas y registra las del período —deduplicadas por `rawHex`, con `rawHex`— en un archivo acumulativo por período (`<repo-dir>/fichadas/<periodo>.json`), del que `calcular` toma las fichadas.
 
 Fuente del padrón: `--padron archivo|oracle` (default `archivo`, snapshot local). `archivo` no depende de la conexión a la DB; `oracle` consulta en vivo. Ver `PRESENTISMO_PADRON` / `PRESENTISMO_PADRON_FILE` en `.env.example`.
 - `correccion --periodo YYYYMM --legajo N --fecha YYYY-MM-DD (--horas HH:MM | --revertir) --autor <id> --motivo "<texto>"`
@@ -58,11 +59,12 @@ Precedencia de configuración: argumento CLI > variable de entorno > default.
 
 ## Limitaciones conocidas
 
-- **Fuente de fichadas en el CLI**: el motor consume el store en memoria de la
-  feature 002. El comando `calcular` invocado de forma aislada no tiene acceso a
-  ese store vivo; el cálculo con fichadas reales se obtiene integrando el
-  servicio dentro del proceso de la feature 002 (o inyectando un
-  `FichadasProvider` propio). El dominio y el servicio están cubiertos por tests.
+- **Fuente de fichadas en el CLI**: `calcular` lee las fichadas del archivo
+  acumulativo por período (`<repo-dir>/fichadas/<periodo>.json`), que se puebla con
+  `importar-fichadas` a partir de los exports de sesión del servicio de fichadas.
+  Flujo: correr el servicio (feature 002) → `importar-fichadas --periodo` → `calcular`.
+  Las fichadas sin fecha no se imputan a un período (se informan y omiten en la
+  importación).
 - **Categoría por período**: se asume estable dentro del período (spec,
   Clarifications); un cambio intra-período se resuelve manualmente.
 

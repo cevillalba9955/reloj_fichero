@@ -9,6 +9,8 @@ import {
   createFilePadronCategoryProvider,
   guardarSnapshotPadron,
 } from '../presentismo/adapters/file-padron-category-provider.js';
+import { createArchiveFichadasProvider } from '../presentismo/adapters/archive-fichadas-provider.js';
+import { registrarFichadas, leerExportsDeSesion } from '../presentismo/adapters/file-fichadas-archive.js';
 import { Clasificacion } from '../presentismo/domain/calendario-mes.js';
 import { parseHoraMinuto, formatHoraMinuto } from '../presentismo/domain/tiempo.js';
 
@@ -97,6 +99,13 @@ function construirCategoryProvider(args) {
   return createFilePadronCategoryProvider({ filePath: rutaSnapshotPadron(args) });
 }
 
+// Directorio del archivo acumulativo de fichadas por período (fuente del
+// cálculo). Default <repo-dir>/fichadas.
+function rutaArchivoFichadas(args) {
+  const repoDir = resolver(args['repo-dir'], 'PRESENTISMO_REPO_DIR', './data/presentismo');
+  return resolver(args['fichadas-archive-dir'], 'PRESENTISMO_FICHADAS_DIR', `${repoDir}/fichadas`);
+}
+
 function construirServicio(args, { categoryProvider = null } = {}) {
   const repoDir = resolver(args['repo-dir'], 'PRESENTISMO_REPO_DIR', './data/presentismo');
   const logDir = resolver(args['log-dir'], 'PRESENTISMO_LOG_DIR', './logs');
@@ -104,8 +113,12 @@ function construirServicio(args, { categoryProvider = null } = {}) {
   const categoriasConfig = cargarCategoriasConfig(args);
   const repo = createFilePresentismoRepository({ repoDir });
   const logger = createPresentismoLogger({ logDir });
+  // Las fichadas del cálculo salen del archivo acumulativo por período
+  // (poblado con `importar-fichadas`). Si el período no fue importado, el
+  // provider devuelve lista vacía y el cálculo procede sin fichadas.
+  const fichadasProvider = createArchiveFichadasProvider({ archiveDir: rutaArchivoFichadas(args) });
 
-  return createCalcularPresentismoService({ repo, categoriasConfig, logger, categoryProvider });
+  return createCalcularPresentismoService({ repo, categoriasConfig, logger, categoryProvider, fichadasProvider });
 }
 
 async function cmdGenerarCalendario(args) {
@@ -251,6 +264,41 @@ async function cmdSincronizarPadron(args) {
   console.log(`  generado ${datos.generadoEn}`);
 }
 
+// Importa las fichadas del período desde los exports de sesión de la feature
+// 001/002 (fichadas-*.json en --fichadas-dir, default ./output) y las registra
+// —deduplicadas por rawHex, con rawHex, para trazabilidad— en el archivo
+// acumulativo del período. Es la "consulta de fichadas" cuyo registro pide el
+// requerimiento; `calcular` luego lee de ese acumulado.
+async function cmdImportarFichadas(args) {
+  const periodo = args['periodo'];
+  if (!periodo || !/^\d{6}$/.test(String(periodo))) throw new Error('falta --periodo YYYYMM válido');
+  const inputDir = resolver(args['fichadas-dir'], 'FICHADAS_OUTPUT_DIR', './output');
+  const archiveDir = rutaArchivoFichadas(args);
+
+  const { registros, archivos, errores } = leerExportsDeSesion({ inputDir });
+  const prefijoFecha = `${String(periodo).slice(0, 4)}-${String(periodo).slice(4, 6)}`;
+  const delPeriodo = registros.filter((r) => typeof r.fecha === 'string' && r.fecha.startsWith(prefijoFecha));
+  const sinFecha = registros.filter((r) => r.fecha == null).length;
+
+  const { agregadas, duplicadas, total } = registrarFichadas({ archiveDir, periodo, fichadas: delPeriodo });
+
+  // Registro correlacionable en el log (sin datos crudos, Principio V).
+  const logDir = resolver(args['log-dir'], 'PRESENTISMO_LOG_DIR', './logs');
+  createPresentismoLogger({ logDir }).evento('fichadas_importadas', {
+    periodo,
+    archivos,
+    leidas: delPeriodo.length,
+    agregadas,
+    duplicadas,
+    total,
+  });
+
+  console.log(`Fichadas importadas al período ${periodo}: +${agregadas} nuevas (${duplicadas} duplicadas) → ${total} en total`);
+  console.log(`  origen: ${archivos} archivo(s) de sesión en ${inputDir} → ${archiveDir}/${periodo}.json`);
+  if (sinFecha > 0) console.log(`  ⚠ ${sinFecha} fichada(s) sin fecha no se pudieron imputar a un período (omitidas)`);
+  if (errores.length > 0) console.log(`  ⚠ ${errores.length} archivo(s) ilegibles omitidos: ${errores.join(', ')}`);
+}
+
 // US4: detalle por jornada (entrada/salida real y efectiva, no usadas, motivo).
 function imprimirDetalle(jornadas) {
   for (const j of jornadas) {
@@ -320,6 +368,7 @@ const COMANDOS = {
   calcular: cmdCalcular,
   'listar-padron': cmdListarPadron,
   'sincronizar-padron': cmdSincronizarPadron,
+  'importar-fichadas': cmdImportarFichadas,
   correccion: cmdCorreccion,
   pausa: cmdPausa,
 };
