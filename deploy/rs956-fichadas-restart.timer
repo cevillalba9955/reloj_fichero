@@ -1,0 +1,13 @@
+[Unit]
+# Dispara el reinicio diario del servicio de fichadas antes de la ventana de
+# entrada (por defecto 07:00 ± 30min). 06:00 deja margen holgado.
+Description=RS956 - Timer de reinicio diario del servicio de fichadas
+
+[Timer]
+OnCalendar=*-*-* 06:00:00
+# Si el servidor estuvo apagado a la hora del disparo, lo ejecuta al volver.
+Persistent=true
+Unit=rs956-fichadas-restart.service
+
+[Install]
+WantedBy=timers.target

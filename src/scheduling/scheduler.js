@@ -23,6 +23,10 @@ export function createScheduler({
   timeoutMs = 5000,
   tickIntervalMs = 5 * 60 * 1000,
   fullHandshake = false,
+  // spec 005: sink opcional de persistencia durable. Recibe las fichadas ya
+  // parseadas del ciclo. Se inyecta desde el composition root (el scheduler no
+  // conoce el dominio de presentismo). Sin sink, el servicio no persiste.
+  persistirFichadas = null,
 }) {
   const cycleLogger = createServiceCycleLogger({ serviceId, logDir, now });
 
@@ -88,10 +92,33 @@ export function createScheduler({
       }
 
       let fichadasNuevas = 0;
+      const fichadasDelCiclo = [];
       for (const raw of rawRecords) {
         const fichadaParseada = parseFichadaRecord(raw);
+        fichadasDelCiclo.push(fichadaParseada);
         const { agregada } = store.addFichada(fichadaParseada, { checkpoints, now: inicio });
         if (agregada) fichadasNuevas += 1;
+      }
+
+      // spec 005: persistencia durable. Se persisten TODAS las fichadas
+      // parseadas del ciclo (no solo las nuevas del store): la dedup por rawHex
+      // del archivo hace el reintento idempotente ante un fallo transitorio, de
+      // modo que ninguna fichada se pierda (FR-004/FR-006). Un fallo de
+      // persistencia se registra como ciclo `error` y se reintenta el proximo
+      // ciclo (el reloj sigue reportando las pendientes). Nunca se loguea rawHex.
+      if (persistirFichadas && fichadasDelCiclo.length > 0) {
+        try {
+          await persistirFichadas(fichadasDelCiclo);
+        } catch (errPersist) {
+          const duracionMs = now().getTime() - inicio.getTime();
+          registrar({
+            resultado: 'error',
+            fichadasNuevas,
+            duracionMs,
+            detail: `persistencia de fichadas fallida: ${errPersist.message}`,
+          });
+          return;
+        }
       }
 
       // Una fichada recien agregada puede completar un checkpoint dentro

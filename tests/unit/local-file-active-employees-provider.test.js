@@ -55,3 +55,61 @@ test('LocalFileActiveEmployeesProvider: rechaza con RosterNoDisponibleError si f
     await assert.rejects(() => provider.getActiveEmployees(), RosterNoDisponibleError);
   });
 });
+
+// --- spec 005: soporte del snapshot 004 { empleados: [{ legajo }] } ---
+
+test('LocalFileActiveEmployeesProvider: lee el snapshot 004 ({ empleados }) y expone los legajos activos', async () => {
+  await withTempDir(async (dir) => {
+    const filePath = join(dir, 'padron.json');
+    writeFileSync(
+      filePath,
+      JSON.stringify({
+        generadoEn: '2026-07-13T00:00:00Z',
+        vista: 'RRHH.V_PADRON',
+        empleados: [
+          { legajo: 9, categoria: 'PROD', nombre: 'Ada' },
+          { legajo: 74, categoria: 'PROD', nombre: 'Grace' },
+        ],
+      }),
+      'utf8'
+    );
+    const provider = createLocalFileActiveEmployeesProvider({ filePath });
+    assert.deepEqual(await provider.getActiveEmployees(), [
+      { legajo: 9, activo: true },
+      { legajo: 74, activo: true },
+    ]);
+  });
+});
+
+test('LocalFileActiveEmployeesProvider: normaliza (dedup + descarta invalidos) en ambos esquemas', async () => {
+  await withTempDir(async (dir) => {
+    const filePath = join(dir, 'padron.json');
+    writeFileSync(
+      filePath,
+      JSON.stringify({
+        empleados: [
+          { legajo: 9 },
+          { legajo: 9 }, // duplicado
+          { legajo: 0 }, // invalido (< 1)
+          { legajo: 'x' }, // invalido (no numerico)
+          { legajo: 10 },
+        ],
+      }),
+      'utf8'
+    );
+    const provider = createLocalFileActiveEmployeesProvider({ filePath });
+    assert.deepEqual(await provider.getActiveEmployees(), [
+      { legajo: 9, activo: true },
+      { legajo: 10, activo: true },
+    ]);
+  });
+});
+
+test('LocalFileActiveEmployeesProvider: rechaza si tras normalizar no queda ningun legajo valido', async () => {
+  await withTempDir(async (dir) => {
+    const filePath = join(dir, 'padron.json');
+    writeFileSync(filePath, JSON.stringify({ empleados: [{ legajo: 0 }, { legajo: -1 }] }), 'utf8');
+    const provider = createLocalFileActiveEmployeesProvider({ filePath });
+    await assert.rejects(() => provider.getActiveEmployees(), RosterNoDisponibleError);
+  });
+});

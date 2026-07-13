@@ -1,4 +1,5 @@
 import { assertActiveEmployeesProvider } from './active-employees-provider.js';
+import { interpretarLegajo } from './legajo.js';
 
 // contracts/oracle-roster-repository-contract.md + data-model.md §2 (FR-012):
 // adapter que transforma las filas crudas del repositorio Oracle en la forma
@@ -9,20 +10,6 @@ import { assertActiveEmployeesProvider } from './active-employees-provider.js';
 //
 // NO captura los errores del repositorio (RosterNoDisponibleError): los deja
 // propagar para que el decorator diario aplique la política de respaldo/error.
-
-// Interpreta un valor crudo como legajo válido; devuelve el entero o null.
-function interpretarLegajo(raw) {
-  if (typeof raw === 'number') {
-    return Number.isInteger(raw) && raw >= 1 ? raw : null;
-  }
-  if (typeof raw === 'string') {
-    const trimmed = raw.trim();
-    if (!/^\d+$/.test(trimmed)) return null;
-    const n = Number(trimmed);
-    return Number.isInteger(n) && n >= 1 ? n : null;
-  }
-  return null;
-}
 
 export function createOracleActiveEmployeesProvider({ repository, logger = null }) {
   async function getActiveEmployees() {

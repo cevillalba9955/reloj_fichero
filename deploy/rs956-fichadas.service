@@ -1,0 +1,38 @@
+[Unit]
+# Servicio de consulta programada de fichadas del reloj RS596 (feature 002 + 005).
+# Sondea el reloj en las ventanas de checkpoint y persiste las fichadas obtenidas
+# en el archivo por período que consume el cálculo de presentismo.
+Description=RS956 - Servicio de fichadas programado
+Documentation=file:/opt/rs956/docs/despliegue-linux.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rs956
+Group=rs956
+
+# Los paths por defecto son relativos (./logs, ./config, ./data): el directorio
+# de trabajo DEBE ser la raíz de la instalación.
+WorkingDirectory=/opt/rs956
+
+# Mismo cargador de .env que `npm run servicio` (Node >= 20.12).
+# Ajustar la ruta de node si no es /usr/bin/node (ver `which node`).
+ExecStart=/usr/bin/node --env-file-if-exists=.env src/cli/consulta-programada.js
+
+# Reinicio ante caída inesperada (FR-008). El apagado limpio ante SIGTERM lo
+# maneja el propio servicio (deja terminar una consulta TCP en curso, exit 0).
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+
+# Endurecimiento básico. El servicio solo necesita escribir logs y el archivo
+# de fichadas bajo la instalación.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/rs956/logs /opt/rs956/data
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

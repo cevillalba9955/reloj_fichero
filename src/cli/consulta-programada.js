@@ -7,6 +7,7 @@ import { createOracleRosterRepository } from '../db/oracle-roster-repository.js'
 import { createOracleActiveEmployeesProvider } from '../roster/oracle-active-employees-provider.js';
 import { createDailyCachedActiveEmployeesProvider } from '../roster/daily-cached-active-employees-provider.js';
 import { createRosterFetchLogger } from '../logging/roster-fetch-logger.js';
+import { registrarFichadas } from '../presentismo/adapters/file-fichadas-archive.js';
 
 export class InvalidArgsError extends Error {}
 
@@ -58,6 +59,7 @@ export function parseCliArgs(argv, env = process.env) {
         'entrada-margen': { type: 'string' },
         'salida-hora': { type: 'string' },
         'salida-margen': { type: 'string' },
+        'fichadas-archive-dir': { type: 'string' },
         'full-handshake': { type: 'boolean', default: false },
       },
       strict: true,
@@ -116,6 +118,9 @@ export function parseCliArgs(argv, env = process.env) {
     padron,
     rosterConfigPath: pick(values['roster-config'], env.FICHADAS_ROSTER_CONFIG, './config/active-employees.json'),
     logDir: pick(values['log-dir'], env.FICHADAS_LOG_DIR, './logs'),
+    // spec 005: destino de la persistencia durable de fichadas; la MISMA ruta
+    // que consume `calcular` (PRESENTISMO_FICHADAS_DIR).
+    fichadasArchiveDir: pick(values['fichadas-archive-dir'], env.PRESENTISMO_FICHADAS_DIR, './data/presentismo/fichadas'),
     timeoutMs,
     tickIntervalMs,
     statusIntervalMs,
@@ -152,6 +157,34 @@ export function createRosterProvider(
   return createLocalFileActiveEmployeesProvider({ filePath: options.rosterConfigPath });
 }
 
+// spec 005 (composition root): arma el sink de persistencia durable. Es el
+// ÚNICO punto que acopla el servicio (feature 002) con el archivo de fichadas
+// de presentismo (feature 004). Agrupa las fichadas parseadas por período
+// (`fecha`→`YYYYMM`; sin fecha → período de la fecha de recolección, igual que
+// el store en memoria) y hace upsert deduplicado por rawHex en el archivo del
+// período. El rawHex se guarda en el archivo (trazabilidad), nunca en logs.
+function periodoDeFichada(fichada, now) {
+  if (typeof fichada.fecha === 'string' && /^\d{4}-\d{2}-\d{2}/.test(fichada.fecha)) {
+    return fichada.fecha.slice(0, 4) + fichada.fecha.slice(5, 7);
+  }
+  const d = now();
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+export function createFichadasSink({ archiveDir, now = () => new Date() }) {
+  return function persistirFichadas(fichadas) {
+    const porPeriodo = new Map();
+    for (const f of fichadas) {
+      const periodo = periodoDeFichada(f, now);
+      if (!porPeriodo.has(periodo)) porPeriodo.set(periodo, []);
+      porPeriodo.get(periodo).push(f);
+    }
+    for (const [periodo, grupo] of porPeriodo) {
+      registrarFichadas({ archiveDir, periodo, fichadas: grupo, now });
+    }
+  };
+}
+
 function formatEstadoResumen(state) {
   const lineas = [`Fecha del servicio: ${state.fechaServicio}`];
   for (const cp of state.checkpoints) {
@@ -179,11 +212,15 @@ function formatEstadoResumen(state) {
 // fuerza el cierre de una sesion en curso).
 export function runService(
   options,
-  { print = console.log, statusIntervalMs = options.statusIntervalMs ?? 60 * 1000, onShutdown } = {}
+  { print = console.log, statusIntervalMs = options.statusIntervalMs ?? 60 * 1000, onShutdown, persistirFichadas } = {}
 ) {
   // Fail-fast: si `--padron oracle` tiene configuración inválida, esto lanza
   // ConfiguracionPadronInvalidaError ANTES de programar ningún ciclo (FR-005).
   const rosterProvider = createRosterProvider(options);
+
+  // spec 005: por defecto el servicio persiste las fichadas en el archivo por
+  // período (fuente de `calcular`). Inyectable para tests.
+  const sink = persistirFichadas ?? createFichadasSink({ archiveDir: options.fichadasArchiveDir });
 
   const handle = startService({
     host: options.host,
@@ -194,6 +231,7 @@ export function runService(
     fullHandshake: options.fullHandshake,
     checkpoints: options.checkpoints,
     rosterProvider,
+    persistirFichadas: sink,
   });
 
   const origenPadron = options.padron === 'oracle'
@@ -203,6 +241,7 @@ export function runService(
   print(`Padron de empleados activos: ${origenPadron}`);
   print(`Sondeo cada ${options.tickIntervalMs}ms; timeout por consulta ${options.timeoutMs}ms`);
   print(`Log de ciclos: ${options.logDir}`);
+  print(`Fichadas persistidas en: ${options.fichadasArchiveDir}`);
   print(formatEstadoResumen(handle.getState()));
 
   const statusTimer = setInterval(() => {

@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 
 // Archivo acumulativo de fichadas por período (trazabilidad, FR — registro de
@@ -75,6 +75,12 @@ export function registrarFichadas({ archiveDir, periodo, fichadas, now = () => n
     agregadas += 1;
   }
 
+  // Sin altas: el contenido no cambia. No se reescribe (evita churn en los ciclos
+  // del servicio que solo ven fichadas ya vistas — el reloj re-reporta pendientes).
+  if (agregadas === 0) {
+    return { agregadas: 0, duplicadas, total: acumulado.length };
+  }
+
   // Orden estable por fecha/hora/legajo para diffs legibles.
   acumulado.sort((a, b) => {
     const ka = `${a.fecha ?? ''} ${a.hora ?? ''} ${a.legajo ?? ''}`;
@@ -84,7 +90,12 @@ export function registrarFichadas({ archiveDir, periodo, fichadas, now = () => n
 
   const datos = { periodo, actualizadoEn: now().toISOString(), fichadas: acumulado };
   mkdirSync(archiveDir, { recursive: true });
-  writeFileSync(rutaPeriodo(archiveDir, periodo), JSON.stringify(datos, null, 2) + '\n', 'utf8');
+  // Escritura atómica (temp + rename): un lector concurrente (`calcular`) nunca ve
+  // un archivo truncado ni a medio escribir. El rename es atómico en el mismo FS.
+  const final = rutaPeriodo(archiveDir, periodo);
+  const tmp = `${final}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(datos, null, 2) + '\n', 'utf8');
+  renameSync(tmp, final);
   return { agregadas, duplicadas, total: acumulado.length };
 }
 

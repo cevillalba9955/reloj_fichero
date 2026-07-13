@@ -30,6 +30,9 @@ export function startService(options) {
     // `empleados[]` (US1). Con el, se integra el padron de empleados
     // activos como predicado de completitud real (US2).
     rosterProvider = null,
+    // spec 005: sink opcional de persistencia durable de fichadas; se pasa tal
+    // cual al scheduler. Sin el, el servicio no persiste (comportamiento previo).
+    persistirFichadas = null,
   } = options;
 
   if (rosterProvider) {
@@ -69,6 +72,7 @@ export function startService(options) {
     timeoutMs,
     tickIntervalMs,
     fullHandshake,
+    persistirFichadas,
   });
 
   scheduler.start();

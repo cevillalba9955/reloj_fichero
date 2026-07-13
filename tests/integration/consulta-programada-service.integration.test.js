@@ -8,6 +8,9 @@ import { createScheduler } from '../../src/scheduling/scheduler.js';
 import { createFichadasMemoryStore } from '../../src/store/fichadas-memory-store.js';
 import { Checkpoint } from '../../src/scheduling/checkpoint.js';
 import { startService } from '../../src/service/consulta-programada-service.js';
+import { createFichadasSink } from '../../src/cli/consulta-programada.js';
+import { cargarFichadasArchivadas } from '../../src/presentismo/adapters/file-fichadas-archive.js';
+import { createArchiveFichadasProvider } from '../../src/presentismo/adapters/archive-fichadas-provider.js';
 import {
   buildHandshakeCommand,
   buildPendingCountCommand,
@@ -245,6 +248,101 @@ test('scheduler: consulta al reloj mientras el checkpoint esta abierto, acumula 
     assert.equal(conexiones, 2);
 
     server.close();
+  });
+});
+
+test('scheduler: persiste las fichadas del ciclo en el archivo por período, legible por el consumidor (spec 005/US1)', async () => {
+  await withTempLogDir(async (logDir) => {
+    const archiveDir = mkdtempSync(join(tmpdir(), 'rs596-fichadas-'));
+    const registros = [
+      construirFichadaBuffer({ legajo: 1, year: 2026, month: 7, day: 7, hour: 7, minute: 0 }),
+      construirFichadaBuffer({ legajo: 2, year: 2026, month: 7, day: 7, hour: 7, minute: 1 }),
+    ];
+    const server = await startSchedulerMockServerConRegistros(() => registros);
+    const { port } = server.address();
+    const now = () => new Date(2026, 6, 7, 7, 0, 0, 0);
+    const store = createFichadasMemoryStore();
+    const checkpoint = new Checkpoint({ id: 'entrada', horaEsperada: '07:00', margenMinutos: 30 });
+
+    const scheduler = createScheduler({
+      host: '127.0.0.1',
+      port,
+      checkpoints: [checkpoint],
+      store,
+      logDir,
+      now,
+      timeoutMs: 2000,
+      persistirFichadas: createFichadasSink({ archiveDir, now }),
+    });
+
+    try {
+      await scheduler.tick();
+      assert.equal(scheduler.getUltimoCiclo().resultado, 'success');
+
+      // El consumidor (archive-fichadas-provider) lee lo que el servicio escribió,
+      // en forma de dominio y sin rawHex.
+      const provider = createArchiveFichadasProvider({ archiveDir });
+      const f1 = await provider.obtenerFichadasDelMes(1, '202607');
+      const f2 = await provider.obtenerFichadasDelMes(2, '202607');
+      assert.equal(f1.length, 1);
+      assert.equal(f2.length, 1);
+      assert.ok([...f1, ...f2].every((f) => f.rawHex === undefined), 'el dominio no ve rawHex');
+
+      // El archivo durable SÍ guarda rawHex (trazabilidad técnica).
+      const guardadas = cargarFichadasArchivadas({ archiveDir, periodo: '202607' });
+      assert.equal(guardadas.length, 2);
+      assert.ok(guardadas.every((f) => typeof f.rawHex === 'string'));
+    } finally {
+      rmSync(archiveDir, { recursive: true, force: true });
+      server.close();
+    }
+  });
+});
+
+test('scheduler: un fallo de persistencia registra el ciclo como error y se reintenta sin perder fichadas (spec 005/FR-004)', async () => {
+  await withTempLogDir(async (logDir) => {
+    const archiveDir = mkdtempSync(join(tmpdir(), 'rs596-fichadas-'));
+    const registros = [construirFichadaBuffer({ legajo: 1, year: 2026, month: 7, day: 7, hour: 7, minute: 0 })];
+    const server = await startSchedulerMockServerConRegistros(() => registros);
+    const { port } = server.address();
+    const now = () => new Date(2026, 6, 7, 7, 0, 0, 0);
+    const store = createFichadasMemoryStore();
+    const checkpoint = new Checkpoint({ id: 'entrada', horaEsperada: '07:00', margenMinutos: 30 });
+
+    const realSink = createFichadasSink({ archiveDir, now });
+    let fallar = true;
+    const persistirFichadas = (fichadas) => {
+      if (fallar) {
+        fallar = false;
+        throw new Error('disco no disponible (simulado)');
+      }
+      return realSink(fichadas);
+    };
+    const scheduler = createScheduler({
+      host: '127.0.0.1',
+      port,
+      checkpoints: [checkpoint],
+      store,
+      logDir,
+      now,
+      timeoutMs: 2000,
+      persistirFichadas,
+    });
+
+    try {
+      // Tick 1: la persistencia falla → ciclo error, nada persistido.
+      await scheduler.tick();
+      assert.equal(scheduler.getUltimoCiclo().resultado, 'error');
+      assert.equal(cargarFichadasArchivadas({ archiveDir, periodo: '202607' }).length, 0);
+
+      // Tick 2: el reloj re-reporta la misma fichada; se persiste (dedup por rawHex).
+      await scheduler.tick();
+      assert.equal(scheduler.getUltimoCiclo().resultado, 'success');
+      assert.equal(cargarFichadasArchivadas({ archiveDir, periodo: '202607' }).length, 1);
+    } finally {
+      rmSync(archiveDir, { recursive: true, force: true });
+      server.close();
+    }
   });
 });
 
