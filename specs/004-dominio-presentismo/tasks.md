@@ -30,7 +30,7 @@ Single project: `src/`, `tests/`, `config/` en la raíz del repositorio (ver pla
 
 - [X] T001 Crear el subárbol `src/presentismo/` con carpetas `domain/`, `config/`, `ports/`, `adapters/`, `logging/`, `service/` (archivos placeholder o `index` vacíos) según plan.md §Project Structure
 - [X] T002 [P] Crear `config/categorias.example.json` conforme a [contracts/categorias-config.schema.md](./contracts/categorias-config.schema.md) (modalidades `Mensual`/`Quincenal`, categorías de ejemplo, `esquemaSemanal` L–V)
-- [X] T003 [P] Ampliar `.env.example` con `PRESENTISMO_CATEGORIAS_CONFIG`, `PRESENTISMO_REPO_DIR`, `PRESENTISMO_LOG_DIR` y `RRHH_ORACLE_COLUMNA_CATEGORIA`, documentando defaults (ver [contracts/cli-presentismo.md](./contracts/cli-presentismo.md))
+- [X] T003 [P] Ampliar `.env.example` con `PRESENTISMO_CATEGORIAS_CONFIG`, `PRESENTISMO_REPO_DIR`, `PRESENTISMO_LOG_DIR` y `RRHH_ORACLE_COLUMNA_CATEGORIA`, documentando defaults (ver [contracts/cli-presentismo.md](./contracts/cli-presentismo.md)). **Ampliado en la entrega** con `PRESENTISMO_PADRON`, `PRESENTISMO_PADRON_FILE`, `PRESENTISMO_FICHADAS_DIR`, `FICHADAS_OUTPUT_DIR` y `RRHH_ORACLE_COLUMNA_NOMBRE` (ver Fase 8)
 
 ---
 
@@ -181,6 +181,25 @@ el valor calculado junto al corregido (US4-1..4).
 
 ---
 
+## Phase 8: Operación entregada (padrón local, nombres, fichadas) — reconciliación post-implementación
+
+**Purpose**: capturar el scope agregado en la entrega (PR #4) sobre el dominio de las
+Fases 1–7, para que tasks/plan/spec reflejen el sistema efectivamente mergeado. Todas las
+tareas están **hechas**; se documentan retroactivamente. Referencias: FR-042…FR-046 y
+[contracts/cli-presentismo.md](./contracts/cli-presentismo.md).
+
+- [X] T052 Cargar el `.env` en el arranque del CLI (`process.loadEnvFile`) para operar con `node` directo además de `npm run presentismo`
+- [X] T053 [P] [US2] Extender el repositorio y provider de categoría con la lista del padrón (`listar()`) y la **columna de nombre** opcional `RRHH_ORACLE_COLUMNA_NOMBRE` (solo lectura, Principio II), con tests (`tests/unit/oracle-employee-category-provider.test.js`, `oracle-roster-config.test.js` — FR-045)
+- [X] T054 Implementar `src/presentismo/adapters/file-padron-category-provider.js` (**snapshot local** del padrón) y los subcomandos `sincronizar-padron` y `listar-padron`; fuente configurable `--padron archivo|oracle` (`PRESENTISMO_PADRON`/`PRESENTISMO_PADRON_FILE`), con tests (`tests/unit/presentismo-file-padron-provider.test.js` — FR-042/043, Principio VI)
+- [X] T055 Habilitar `calcular` de **plantilla completa** (sin `--legajo`) tomando la lista de activos del padrón (FR-034)
+- [X] T056 Implementar `src/presentismo/adapters/file-fichadas-archive.js` (archivo acumulativo por período, dedup por `rawHex`) y `src/presentismo/adapters/archive-fichadas-provider.js` (fuente de fichadas del cálculo, sin propagar `rawHex` al dominio), con tests (`tests/unit/presentismo-fichadas-archive.test.js` — FR-044/046)
+- [X] T057 Agregar el subcomando `importar-fichadas` (lee `output/fichadas-*.json`, registra el período, evento `fichadas_importadas` sin `rawHex`) y cablear el `archive-fichadas-provider` en el servicio (FR-044/025)
+- [X] T058 [P] Ampliar `.env.example`/`.gitignore` (variables de Fase 8; `/data/` y `config/categorias.json` fuera del repo) y actualizar `docs/presentismo.md` y el contrato del CLI
+
+**Checkpoint**: el CLI opera sin conexión permanente a la DB; las fichadas obtenidas quedan registradas por período; suite completa en verde (255 tests).
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -192,6 +211,7 @@ el valor calculado junto al corregido (US4-1..4).
 - **US3 (Phase 5)**: depende de US2 (corrige/descuenta sobre la jornada calculada).
 - **US4 (Phase 6)**: depende de US2 (expone el detalle del cálculo).
 - **Polish (Phase 7)**: depende de las historias que se quieran cerrar.
+- **Operación entregada (Phase 8)**: depende de US2 (cálculo) — agrega padrón local, nombres e importación/archivo de fichadas sobre el motor ya funcionando.
 
 ### User Story Dependencies
 
@@ -265,7 +285,8 @@ paralelo sobre el motor de US2.
 
 ## Task Summary
 
-- **Total**: 51 tareas (T001–T051).
-- **Por historia**: Setup 3 · Foundational 9 · US1 6 · US2 14 · US3 9 · US4 4 · Polish 6.
-- **Tests incluidos**: unitarios (dominio + config + Oracle fake), contrato (puertos) e integración (por historia) — exigidos por Principio IV.
+- **Total**: 58 tareas (T001–T058).
+- **Por historia**: Setup 3 · Foundational 9 · US1 6 · US2 14 · US3 9 · US4 4 · Polish 6 · Operación entregada (Fase 8) 7.
+- **Tests incluidos**: unitarios (dominio + config + Oracle fake + padrón local + archivo de fichadas), contrato (puertos) e integración (por historia) — exigidos por Principio IV.
 - **MVP**: US1 (Fases 1–3), calendario del mes editable y persistente.
+- **Fase 8**: reconciliación post-implementación del scope entregado (padrón local, nombres, importación/archivo de fichadas — FR-042…FR-046).

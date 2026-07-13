@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-10
 
-**Status**: Draft
+**Status**: Implemented (entregado y mergeado a `main`, PR #4)
 
 **Input**: User description: "preparar dominio de presentismo, para calculo de horas trabajadas por periodo. Periodo [YYYYMM] contiene lista de dias habiles [DD], inicialmente se carga con los dias de mes en cuestion de Lunes a Viernes (configurable), luego cada dia se modificar como [Laborable, No Laborable, Feriado]. un dia contiene lista de fichadas. para el calculo de horas trabajadas, se toma primer fichada del dia (dentro de la ventana de apertura) y ultima fichada (dentro de ventana de cierre) si estan dentro del margen se utliza hora de apertura y cierre (7:00 a 16:00) completando 9 hs trabajadas. si esta fuera de margen se calcula horario parcial"
 
@@ -519,6 +519,37 @@ Una Jornada es la combinación de un Día del mes y un empleado.
   si el horario efectivo cambia y altera la porción descontada, el sistema DEBE
   señalar la jornada para revisión (consistente con FR-029).
 
+#### Operación: padrón local, nombres e importación de fichadas *(entregado)*
+
+Estos requisitos documentan las capas de operación agregadas en la entrega (PR #4) para
+que el dominio sea usable end-to-end sin conexión permanente a la DB, dentro de los
+mismos principios (II lectura aislada de Oracle, V minimización, VI persistencia por
+niveles). Ver [contracts/cli-presentismo.md](./contracts/cli-presentismo.md).
+
+- **FR-042**: El sistema DEBE poder listar el padrón de empleados activos con su
+  categoría, cruzándola con la configuración local para indicar la modalidad resuelta o
+  marcar la categoría como no configurada (FR-035), sin exponer credenciales ni la cadena
+  de conexión (Principio V).
+- **FR-043**: El sistema DEBE poder tomar un **snapshot local** del padrón (legajo,
+  categoría y, si está configurado, nombre) de solo lectura desde Oracle (Principio II) y
+  persistirlo como archivo JSON, de modo que el resto de las operaciones (`listar-padron`,
+  cálculo de plantilla) puedan ejecutarse **sin conexión a la base** (Principio VI). La
+  fuente del padrón (snapshot local u Oracle en vivo) DEBE ser configurable.
+- **FR-044**: El sistema DEBE registrar las **fichadas obtenidas** al importarlas —
+  deduplicadas por su identidad cruda (`rawHex`)— en un **archivo acumulativo por período**
+  (Principio VI). Ese archivo es la fuente de fichadas del cálculo (FR-007). La
+  importación DEBE informar cuántas fichadas se agregaron, cuántas eran duplicadas y
+  cuántas quedaron sin fecha (no imputables, FR-008).
+- **FR-045**: El sistema PUEDE leer del padrón una columna de **nombre** del empleado,
+  opcional, destinada exclusivamente a la interfaz de usuario. El nombre es dato personal
+  y se trata bajo minimización (Principio V): se persiste solo en el snapshot local y en
+  la salida de listado; NO se escribe en los logs.
+- **FR-046**: El archivo acumulativo de fichadas PUEDE conservar el `rawHex` de cada
+  fichada (el frame crudo de 20 bytes del protocolo: legajo, fecha, hora y método — NO un
+  template biométrico ni una imagen) como registro técnico de trazabilidad, igual que el
+  exportador de sesiones de las features 001/002. El `rawHex` NUNCA DEBE aparecer en los
+  logs correlacionables (Principio V/FR-025) ni propagarse al dominio de cálculo.
+
 #### Calidad y trazabilidad
 
 - **FR-023**: El cálculo automático DEBE ser determinista: para el mismo período, el
@@ -581,6 +612,13 @@ Una Jornada es la combinación de un Día del mes y un empleado.
   esperadas, horas trabajadas (discriminando calculadas y corregidas), saldo, conteos
   de días por estado, fichadas en días no laborables, la modalidad aplicada y los
   parámetros usados.
+- **Snapshot del padrón** *(entregado)*: copia local en archivo JSON del padrón de
+  empleados activos (legajo, categoría y nombre opcional), tomada de solo lectura desde
+  Oracle. Permite operar sin conexión a la base (Principio VI). No contiene credenciales.
+- **Archivo acumulativo de fichadas** *(entregado)*: registro por período de las fichadas
+  obtenidas, deduplicadas por `rawHex`, que conserva el frame crudo del protocolo para
+  trazabilidad técnica. Es la fuente de fichadas del cálculo. Distinto del log NDJSON, que
+  nunca lleva `rawHex` (Principio V).
 
 ## Success Criteria *(mandatory)*
 
@@ -680,7 +718,9 @@ Una Jornada es la combinación de un Día del mes y un empleado.
   local del establecimiento, tal como las reporta el reloj.
 - **Origen de las fichadas**: esta feature consume las fichadas ya decodificadas y
   deduplicadas que el sistema recolecta del reloj (features 001 y 002); no las lee del
-  dispositivo ni redefine su formato.
+  dispositivo ni redefine su formato. En la entrega, el cálculo las toma de un archivo
+  acumulativo por período poblado desde los exports de sesión (`importar-fichadas`,
+  FR-044), no del store en memoria vivo (inaccesible entre procesos).
 - **Origen de los legajos**: el universo de empleados con el que se cruza el
   presentismo es el padrón de empleados activos ya existente (feature 003).
 - **Dominio puro**: esta feature define el modelo y las reglas de cálculo. La interfaz
