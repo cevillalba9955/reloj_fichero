@@ -75,6 +75,29 @@ function extraerFilas(result, columnaLegajo) {
   });
 }
 
+// Extrae filas {legajo, categoria[, nombre]} respetando OBJECT (mayúsculas) o
+// array. `columnaNombre` es opcional; si es null, no se proyecta ni se lee.
+function extraerFilasConCategoria(result, columnaLegajo, columnaCategoria, columnaNombre) {
+  const rows = result?.rows ?? [];
+  const val = (row, col, idx) => {
+    if (Array.isArray(row)) return row[idx];
+    if (row && typeof row === 'object') {
+      if (col in row) return row[col];
+      const upper = col.toUpperCase();
+      if (upper in row) return row[upper];
+    }
+    return undefined;
+  };
+  return rows.map((row) => {
+    const fila = {
+      legajo: val(row, columnaLegajo, 0),
+      categoria: val(row, columnaCategoria, 1),
+    };
+    if (columnaNombre) fila.nombre = val(row, columnaNombre, 2);
+    return fila;
+  });
+}
+
 export function createOracleRosterRepository({ config, connectionFactory = defaultConnectionFactory }) {
   async function fetchLegajosActivos() {
     // Defensa en profundidad: re-validar identificadores ANTES de construir el
@@ -111,5 +134,57 @@ export function createOracleRosterRepository({ config, connectionFactory = defau
     }
   }
 
-  return { fetchLegajosActivos };
+  // Feature 004: proyecta legajo + categoría (solo lectura). Requiere
+  // config.columnaCategoria configurada. Misma disciplina de conexión efímera,
+  // deadline y errores sin datos sensibles que fetchLegajosActivos.
+  async function fetchLegajosConCategoria() {
+    if (!config.columnaCategoria) {
+      throw new Error(
+        'oracle-roster-repository: columnaCategoria no configurada ' +
+        '(definí RRHH_ORACLE_COLUMNA_CATEGORIA para leer la categoría del padrón)'
+      );
+    }
+    if (!SQL_IDENT_VISTA.test(config.vistaPadron)) {
+      throw new Error('oracle-roster-repository: vistaPadron no es un identificador SQL válido');
+    }
+    if (!SQL_IDENT_COLUMNA.test(config.columnaLegajo)) {
+      throw new Error('oracle-roster-repository: columnaLegajo no es un identificador SQL válido');
+    }
+    if (!SQL_IDENT_COLUMNA.test(config.columnaCategoria)) {
+      throw new Error('oracle-roster-repository: columnaCategoria no es un identificador SQL válido');
+    }
+    // Columna de nombre opcional (IU). Se valida solo si está configurada.
+    if (config.columnaNombre && !SQL_IDENT_COLUMNA.test(config.columnaNombre)) {
+      throw new Error('oracle-roster-repository: columnaNombre no es un identificador SQL válido');
+    }
+
+    const proyeccion = config.columnaNombre
+      ? `${config.columnaLegajo}, ${config.columnaCategoria}, ${config.columnaNombre}`
+      : `${config.columnaLegajo}, ${config.columnaCategoria}`;
+    const sql = `SELECT ${proyeccion} FROM ${config.vistaPadron}`;
+    const timeoutMs = config.timeoutMs;
+
+    let connection = null;
+    let fase = 'conexion';
+    try {
+      connection = await conDeadline(Promise.resolve().then(() => connectionFactory(config)), timeoutMs);
+      fase = 'consulta';
+      const result = await conDeadline(connection.execute(sql, [], {}), timeoutMs);
+      return extraerFilasConCategoria(result, config.columnaLegajo, config.columnaCategoria, config.columnaNombre);
+    } catch (err) {
+      if (err instanceof TimeoutSentinel) throw rosterError('timeout');
+      if (fase === 'conexion') throw rosterError(categorizarErrorConexion(err));
+      throw rosterError('consulta');
+    } finally {
+      if (connection) {
+        try {
+          await connection.close();
+        } catch {
+          // best-effort
+        }
+      }
+    }
+  }
+
+  return { fetchLegajosActivos, fetchLegajosConCategoria };
 }
