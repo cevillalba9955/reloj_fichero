@@ -28,8 +28,8 @@ Proyecto único: `src/`, `tests/`, `deploy/`, `docs/` en la raíz del repo (ver 
 
 **Purpose**: prerequisitos de plataforma y configuración compartida.
 
-- [ ] T001 Subir `engines.node` de `>=20` a `>=20.12` en `package.json` (research §7: los scripts usan `--env-file-if-exists`, Node ≥ 20.12)
-- [ ] T002 [P] Documentar en `.env.example` la variable `PRESENTISMO_FICHADAS_DIR` para el servicio y aclarar que `FICHADAS_ROSTER_CONFIG` puede apuntar a `./data/presentismo/padron.json` (snapshot 004)
+- [X] T001 Subir `engines.node` de `>=20` a `>=20.12` en `package.json` (research §7: los scripts usan `--env-file-if-exists`, Node ≥ 20.12)
+- [X] T002 [P] Documentar en `.env.example` la variable `PRESENTISMO_FICHADAS_DIR` para el servicio y aclarar que `FICHADAS_ROSTER_CONFIG` puede apuntar a `./data/presentismo/padron.json` (snapshot 004)
 
 ---
 
@@ -41,8 +41,8 @@ del servicio usa como destino y `calcular` como lector concurrente. Bloquea US1.
 **⚠️ CRITICAL**: la persistencia (US1) escribe sobre este archivo; hacerlo atómico primero
 de-riesga el resto.
 
-- [ ] T003 [P] Test unitario de escritura atómica y salto-sin-altas de `registrarFichadas` (un lector nunca ve archivo truncado; un ciclo sin altas no reescribe; dedup por `rawHex` intacta) en `tests/unit/presentismo-fichadas-archive.test.js`
-- [ ] T004 Implementar en `src/presentismo/adapters/file-fichadas-archive.js` la escritura atómica (temp + `renameSync`) y el salto de escritura cuando no hay altas, hasta que T003 pase y los tests existentes sigan verdes
+- [X] T003 [P] Test unitario de escritura atómica y salto-sin-altas de `registrarFichadas` (un lector nunca ve archivo truncado; un ciclo sin altas no reescribe; dedup por `rawHex` intacta) en `tests/unit/presentismo-fichadas-archive.test.js`
+- [X] T004 Implementar en `src/presentismo/adapters/file-fichadas-archive.js` la escritura atómica (temp + `renameSync`) y el salto de escritura cuando no hay altas, hasta que T003 pase y los tests existentes sigan verdes
 
 **Checkpoint**: el archivo de fichadas es seguro para un escritor de larga duración + lector concurrente.
 
@@ -60,14 +60,14 @@ verificar que el archivo del período se crea/actualiza con `rawHex`, que `archi
 
 ### Tests for User Story 1 ⚠️ (escribir primero, deben fallar)
 
-- [ ] T005 [P] [US1] Test unitario del sink de persistencia (`createFichadasSink`): agrupa por período (`fecha`→`YYYYMM`; sin fecha → período de recolección), hace upsert por `registrarFichadas`, dedup entre ciclos, y round-trip con `archive-fichadas-provider`, en `tests/unit/consulta-programada-fichadas-sink.test.js`
-- [ ] T006 [P] [US1] Test de integración: un ciclo `success` del scheduler (mock TCP) escribe el archivo del período y `archive-fichadas-provider` lee lo escrito; un fallo de persistencia registra el ciclo como `error` y reintenta el próximo ciclo sin perder fichadas, en `tests/integration/consulta-programada-service.integration.test.js`
+- [X] T005 [P] [US1] Test unitario del sink de persistencia (`createFichadasSink`): agrupa por período (`fecha`→`YYYYMM`; sin fecha → período de recolección), hace upsert por `registrarFichadas`, dedup entre ciclos, y round-trip con `archive-fichadas-provider`, en `tests/unit/consulta-programada-fichadas-sink.test.js`
+- [X] T006 [P] [US1] Test de integración: un ciclo `success` del scheduler (mock TCP) escribe el archivo del período y `archive-fichadas-provider` lee lo escrito; un fallo de persistencia registra el ciclo como `error` y reintenta el próximo ciclo sin perder fichadas, en `tests/integration/consulta-programada-service.integration.test.js`
 
 ### Implementation for User Story 1
 
-- [ ] T007 [US1] Agregar el sink opcional `persistirFichadas(fichadas)` a `createScheduler` en `src/scheduling/scheduler.js`: tras un ciclo `success`, si hay sink y hubo registros, persistir TODAS las fichadas parseadas del ciclo (dedup en disco hace el reintento idempotente); un fallo se registra como ciclo `error` sin `rawHex` en `detail` (Principio V)
-- [ ] T008 [US1] Propagar `persistirFichadas` desde `startService` al scheduler en `src/service/consulta-programada-service.js` (opcional; sin sink el servicio no persiste, comportamiento legacy)
-- [ ] T009 [US1] En `src/cli/consulta-programada.js` (composition root): implementar `createFichadasSink({ archiveDir })` que agrupa por período y llama a `registrarFichadas`; agregar `fichadasArchiveDir` a `parseCliArgs` (`--fichadas-archive-dir` / `PRESENTISMO_FICHADAS_DIR`, default `./data/presentismo/fichadas`); construir el sink y pasarlo a `startService` en `runService`
+- [X] T007 [US1] Agregar el sink opcional `persistirFichadas(fichadas)` a `createScheduler` en `src/scheduling/scheduler.js`: tras un ciclo `success`, si hay sink y hubo registros, persistir TODAS las fichadas parseadas del ciclo (dedup en disco hace el reintento idempotente); un fallo se registra como ciclo `error` sin `rawHex` en `detail` (Principio V)
+- [X] T008 [US1] Propagar `persistirFichadas` desde `startService` al scheduler en `src/service/consulta-programada-service.js` (opcional; sin sink el servicio no persiste, comportamiento legacy)
+- [X] T009 [US1] En `src/cli/consulta-programada.js` (composition root): implementar `createFichadasSink({ archiveDir })` que agrupa por período y llama a `registrarFichadas`; agregar `fichadasArchiveDir` a `parseCliArgs` (`--fichadas-archive-dir` / `PRESENTISMO_FICHADAS_DIR`, default `./data/presentismo/fichadas`); construir el sink y pasarlo a `startService` en `runService`
 
 **Checkpoint**: US1 funcional — el servicio es productor en vivo del archivo que consume `calcular`.
 
@@ -84,8 +84,8 @@ cortar una consulta en curso.
 
 ### Implementation for User Story 2
 
-- [ ] T010 [P] [US2] Crear `deploy/rs956-fichadas.service` (Type=simple; User/Group `rs956`; `WorkingDirectory=/opt/rs956`; `ExecStart=/usr/bin/node --env-file-if-exists=.env src/cli/consulta-programada.js`; `Restart=on-failure`, `RestartSec=10`, `TimeoutStopSec=30`; endurecimiento `NoNewPrivileges`/`ProtectSystem=strict`/`ProtectHome`/`ReadWritePaths=/opt/rs956/logs /opt/rs956/data`; `WantedBy=multi-user.target`) conforme a [contracts/systemd-deployment.md](./contracts/systemd-deployment.md)
-- [ ] T011 [US2] Crear la guía `docs/despliegue-linux.md` (prerrequisitos Node ≥ 20.12 y red al reloj; instalación usuario/dir + `npm ci`; provisión de `.env` y `config`/snapshot; activación de units; verificación con `systemctl`/`journalctl`; rollback) conforme al contrato
+- [X] T010 [P] [US2] Crear `deploy/rs956-fichadas.service` (Type=simple; User/Group `rs956`; `WorkingDirectory=/opt/rs956`; `ExecStart=/usr/bin/node --env-file-if-exists=.env src/cli/consulta-programada.js`; `Restart=on-failure`, `RestartSec=10`, `TimeoutStopSec=30`; endurecimiento `NoNewPrivileges`/`ProtectSystem=strict`/`ProtectHome`/`ReadWritePaths=/opt/rs956/logs /opt/rs956/data`; `WantedBy=multi-user.target`) conforme a [contracts/systemd-deployment.md](./contracts/systemd-deployment.md)
+- [X] T011 [US2] Crear la guía `docs/despliegue-linux.md` (prerrequisitos Node ≥ 20.12 y red al reloj; instalación usuario/dir + `npm ci`; provisión de `.env` y `config`/snapshot; activación de units; verificación con `systemctl`/`journalctl`; rollback) conforme al contrato
 
 **Checkpoint**: el servicio corre como daemon de systemd, con arranque al boot y apagado limpio.
 
@@ -102,9 +102,9 @@ vuelve a consultar en las ventanas del día y que el archivo del período conser
 
 ### Implementation for User Story 3
 
-- [ ] T012 [P] [US3] Crear `deploy/rs956-fichadas-restart.service` (Type=oneshot; `ExecStart=/bin/systemctl restart rs956-fichadas.service`) conforme al contrato
-- [ ] T013 [P] [US3] Crear `deploy/rs956-fichadas-restart.timer` (`OnCalendar=*-*-* 06:00:00`, `Persistent=true`, `WantedBy=timers.target`) conforme al contrato
-- [ ] T014 [US3] Documentar en `docs/despliegue-linux.md` el rollover diario: instalación/habilitación del timer, verificación (`list-timers`) y por qué el reinicio no pierde fichadas (ya persistidas — depende de US1)
+- [X] T012 [P] [US3] Crear `deploy/rs956-fichadas-restart.service` (Type=oneshot; `ExecStart=/bin/systemctl restart rs956-fichadas.service`) conforme al contrato
+- [X] T013 [P] [US3] Crear `deploy/rs956-fichadas-restart.timer` (`OnCalendar=*-*-* 06:00:00`, `Persistent=true`, `WantedBy=timers.target`) conforme al contrato
+- [X] T014 [US3] Documentar en `docs/despliegue-linux.md` el rollover diario: instalación/habilitación del timer, verificación (`list-timers`) y por qué el reinicio no pierde fichadas (ya persistidas — depende de US1)
 
 **Checkpoint**: el servicio opera de forma continua multi-día sin intervención.
 
@@ -121,13 +121,13 @@ y que un snapshot ausente/ilegible/sin legajos se reporta como padrón no dispon
 
 ### Tests for User Story 4 ⚠️ (escribir primero, deben fallar)
 
-- [ ] T015 [P] [US4] Ampliar `tests/unit/local-file-active-employees-provider.test.js`: esquema snapshot 004 (`empleados[].legajo`), dedup y descarte de inválidos, lista vacía tras normalizar → `RosterNoDisponibleError`, y que el esquema legacy sigue devolviendo lo esperado
+- [X] T015 [P] [US4] Ampliar `tests/unit/local-file-active-employees-provider.test.js`: esquema snapshot 004 (`empleados[].legajo`), dedup y descarte de inválidos, lista vacía tras normalizar → `RosterNoDisponibleError`, y que el esquema legacy sigue devolviendo lo esperado
 
 ### Implementation for User Story 4
 
-- [ ] T016 [P] [US4] Crear `src/roster/legajo.js` con `interpretarLegajo` (entero ≥ 1; string solo-dígitos; null si inválido), regla única compartida
-- [ ] T017 [US4] Refactorizar `src/roster/oracle-active-employees-provider.js` para importar `interpretarLegajo` de `legajo.js` (sin duplicar la regla; sus tests deben seguir verdes)
-- [ ] T018 [US4] Ampliar `src/roster/local-file-active-employees-provider.js`: aceptar `{ empleados: [...] }` (snapshot 004) además de `{ legajosActivos: [...] }`, normalizar con `interpretarLegajo` (dedup/descarte), y rechazar con `RosterNoDisponibleError` si no hay ningún esquema o queda vacío, hasta que T015 pase
+- [X] T016 [P] [US4] Crear `src/roster/legajo.js` con `interpretarLegajo` (entero ≥ 1; string solo-dígitos; null si inválido), regla única compartida
+- [X] T017 [US4] Refactorizar `src/roster/oracle-active-employees-provider.js` para importar `interpretarLegajo` de `legajo.js` (sin duplicar la regla; sus tests deben seguir verdes)
+- [X] T018 [US4] Ampliar `src/roster/local-file-active-employees-provider.js`: aceptar `{ empleados: [...] }` (snapshot 004) además de `{ legajosActivos: [...] }`, normalizar con `interpretarLegajo` (dedup/descarte), y rechazar con `RosterNoDisponibleError` si no hay ningún esquema o queda vacío, hasta que T015 pase
 
 **Checkpoint**: el servicio opera con el snapshot local como padrón, sin Oracle en runtime.
 
@@ -137,9 +137,9 @@ y que un snapshot ausente/ilegible/sin legajos se reporta como padrón no dispon
 
 **Purpose**: validación end-to-end, auditoría de privacidad y cierre.
 
-- [ ] T019 [P] Ejecutar la validación de [quickstart.md](./quickstart.md) (round-trip local servicio → `calcular`) y corregir desvíos
-- [ ] T020 [P] Auditar que ningún log NDJSON del servicio (`logs/service-*.ndjson`, `logs/session-*.ndjson`) ni stdout contienen `rawHex` ni credenciales (Principio V / SC-008)
-- [ ] T021 Ejecutar la suite completa `node --test` y confirmar verde sin regresiones en las features 001–004
+- [X] T019 [P] Ejecutar la validación de [quickstart.md](./quickstart.md) (round-trip local servicio → `calcular`) y corregir desvíos
+- [X] T020 [P] Auditar que ningún log NDJSON del servicio (`logs/service-*.ndjson`, `logs/session-*.ndjson`) ni stdout contienen `rawHex` ni credenciales (Principio V / SC-008)
+- [X] T021 Ejecutar la suite completa `node --test` y confirmar verde sin regresiones en las features 001–004
 
 ---
 

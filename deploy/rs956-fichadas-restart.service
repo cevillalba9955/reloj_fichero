@@ -1,0 +1,12 @@
+[Unit]
+# Reinicia el servicio de fichadas una vez por día (rollover diario, feature 005).
+# El scheduler no reinicia los checkpoints al cambiar de fecha; un reinicio antes
+# de la ventana de entrada arranca el nuevo día con los checkpoints en `pendiente`.
+# Las fichadas del día previo ya están persistidas: el reinicio no las pierde.
+Description=RS956 - Reinicio diario del servicio de fichadas (rollover)
+# No falla si el servicio aún no está activo.
+Requisite=rs956-fichadas.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/systemctl restart rs956-fichadas.service

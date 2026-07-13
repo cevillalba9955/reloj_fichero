@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -73,4 +73,23 @@ test('el archivo acumulativo persiste rawHex pero el presentismo.ndjson nunca (P
   registrarFichadas({ archiveDir, periodo: '202607', fichadas: [F('AA11')] });
   const raw = readFileSync(join(archiveDir, '202607.json'), 'utf8');
   assert.match(raw, /AA11/, 'el archivo de trazabilidad SÍ guarda rawHex');
+});
+
+test('registrarFichadas no reescribe el archivo cuando el ciclo no aporta altas (spec 005)', () => {
+  const archiveDir = tmpDir();
+  registrarFichadas({ archiveDir, periodo: '202607', fichadas: [F('AA11')], now: () => new Date('2026-07-01T00:00:00Z') });
+  const antes = readFileSync(join(archiveDir, '202607.json'), 'utf8');
+  // Segunda corrida, todas duplicadas, con un `now` distinto: debe saltar la escritura.
+  const r = registrarFichadas({ archiveDir, periodo: '202607', fichadas: [F('AA11')], now: () => new Date('2026-07-02T00:00:00Z') });
+  const despues = readFileSync(join(archiveDir, '202607.json'), 'utf8');
+  assert.equal(r.agregadas, 0);
+  assert.equal(despues, antes, 'sin altas → archivo intacto (mismo actualizadoEn, no se reescribe)');
+});
+
+test('registrarFichadas escribe de forma atómica: no deja archivos temporales (spec 005)', () => {
+  const archiveDir = tmpDir();
+  registrarFichadas({ archiveDir, periodo: '202607', fichadas: [F('AA11'), F('BB22')] });
+  assert.deepEqual(readdirSync(archiveDir).filter((n) => n.endsWith('.tmp')), [], 'no quedan .tmp tras el rename');
+  const datos = JSON.parse(readFileSync(join(archiveDir, '202607.json'), 'utf8'));
+  assert.equal(datos.fichadas.length, 2, 'el archivo final es JSON válido y completo');
 });
