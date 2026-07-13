@@ -12,7 +12,15 @@ Node en `/usr/bin/node`. Referencias: [spec 005](../specs/005-servicio-despliegu
 
 - **Linux con systemd** (Ubuntu/Debian/RHEL).
 - **Node ≥ 20.12** (`node --version`). Los scripts usan `--env-file-if-exists`, que requiere
-  esa versión. Instalar por NodeSource o el paquete de la distro (evitar `nvm` para un servicio).
+  esa versión. Instalarlo **system-wide** por NodeSource o el paquete de la distro, de modo que
+  queden `/usr/bin/node` y `/usr/bin/npm` (evitar `nvm` y homes de usuario: el servicio corre
+  como `rs956` —cuenta `nologin`— y `sudo` reinicia el entorno al `secure_path` de sudoers, que
+  no incluye `/usr/local/bin` ni homes ajenos). El `ExecStart` del unit fija `/usr/bin/node`.
+  Verificar que el usuario del servicio alcanza Node:
+  ```bash
+  sudo -u rs956 env "PATH=$PATH" node --version   # debe imprimir >= v20.12
+  ```
+  Si da `command not found`, Node no está donde `rs956`/`sudo` lo ven → instalarlo en `/usr/bin`.
 - **Red**: el servidor debe alcanzar el reloj RS596 en `FICHADAS_HOST:5005` (TCP).
 - **Oracle**: sólo se necesita alcance/credenciales para el paso puntual de generar el snapshot
   del padrón (`sincronizar-padron`), **no** en runtime. `oracledb` corre en modo *thin* (sin
@@ -27,11 +35,15 @@ sudo install -d -o rs956 -g rs956 /opt/rs956
 
 # Copiar el código a /opt/rs956 (git clone o rsync). Luego, como usuario rs956:
 cd /opt/rs956
-sudo -u rs956 npm ci --omit=dev
+sudo -u rs956 env "PATH=$PATH" npm ci --omit=dev
 ```
 
 `npm ci` baja `oracledb` (binario prebuilt; no requiere toolchain de C/C++). `node_modules/`
 está gitignored, por eso se instala en el servidor.
+
+> `env "PATH=$PATH"` preserva el PATH del invocador: `sudo -u rs956` reinicia el entorno al
+> `secure_path` de sudoers, así que sin esto obtenés `sudo: npm: command not found` cuando Node
+> no está en `/usr/bin` (ej. instalado en `/usr/local/bin` o `nvm`).
 
 ## 3. Provisionar configuración (archivos gitignored — no vienen en el clone)
 
@@ -54,7 +66,7 @@ Generar el **snapshot del padrón** (una vez; requiere Oracle — completar `RRH
 `.env` para este paso):
 
 ```bash
-sudo -u rs956 npm run presentismo -- sincronizar-padron    # crea data/presentismo/padron.json
+sudo -u rs956 env "PATH=$PATH" npm run presentismo -- sincronizar-padron   # crea data/presentismo/padron.json
 ```
 
 > Alternativa sin Oracle en el servidor: generar el snapshot en otra máquina y copiar
@@ -93,7 +105,7 @@ journalctl -u rs956-fichadas -f                 # ciclo inicial + resumen de est
   `fichadasNuevas`, y aparece `data/presentismo/fichadas/<periodo>.json` con las fichadas.
 - Confirmar el consumo por el cálculo:
   ```bash
-  sudo -u rs956 npm run presentismo -- calcular --periodo <YYYYMM> --legajo <N> --formato tabla
+  sudo -u rs956 env "PATH=$PATH" npm run presentismo -- calcular --periodo <YYYYMM> --legajo <N> --formato tabla
   ```
 
 **Reinicio del servidor**: reiniciar la máquina y confirmar `systemctl status rs956-fichadas`
@@ -118,7 +130,7 @@ del día previo siguen en su archivo por período (ya persistidas — no se pier
 ```bash
 # Actualizar código y dependencias:
 sudo -u rs956 git -C /opt/rs956 pull
-sudo -u rs956 npm --prefix /opt/rs956 ci --omit=dev
+sudo -u rs956 env "PATH=$PATH" npm --prefix /opt/rs956 ci --omit=dev
 sudo systemctl restart rs956-fichadas.service
 
 # Rollback (detener y deshabilitar):
