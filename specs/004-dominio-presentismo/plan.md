@@ -47,9 +47,17 @@ terceros (research.md §2).
 reclasificaciones, correcciones manuales, pausas intermedias) detrás de un puerto
 `PresentismoRepository`; adaptador inicial en archivo JSON versionable por instalación
 (research.md §3), reemplazable por un adaptador de base sin tocar el dominio. La
-categoría del empleado se **lee** del padrón Oracle de RRHH (solo lectura, mínimo
-privilegio — Principio II). Las fichadas se consumen del store en memoria existente
-(feature 002), no se persisten aquí.
+categoría (y opcionalmente el nombre) del empleado se **lee** del padrón Oracle de RRHH
+(solo lectura, mínimo privilegio — Principio II) y se guarda en un **snapshot local**
+(`data/presentismo/padron.json`) para operar sin conexión a la DB (Principio VI).
+
+**Fichadas (entregado)**: el cálculo NO consume el store en memoria de la feature 002
+(inaccesible entre procesos), sino un **archivo acumulativo por período**
+(`data/presentismo/fichadas/<periodo>.json`) que se puebla con el subcomando
+`importar-fichadas` a partir de los exports de sesión (`output/fichadas-*.json`),
+deduplicando por `rawHex`. Ese archivo es la única fuente de fichadas de `calcular`
+(adaptador `archive-fichadas-provider`); el dominio nunca recibe el `rawHex`. Es también
+el **registro de las fichadas obtenidas** (trazabilidad técnica, Principio VI).
 
 **Testing**: `node:test` + `node:assert` (igual que 001/002/003). Test-first en las dos
 capas críticas (Principio IV): (1) el **motor de cálculo** puro, con fixtures de
@@ -81,7 +89,7 @@ volúmenes chicos, el eje es corrección y trazabilidad, no throughput.
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-Constitución vigente: **RS956 Fichaje Constitution v1.1.0**.
+Constitución vigente: **RS956 Fichaje Constitution v1.2.0**.
 
 - **I — Arquitectura Frontend basada en Componentes**: esta feature es dominio puro sin
   UI (spec, Assumptions "Dominio puro"). No introduce componentes de UI; **respeta** la
@@ -103,7 +111,18 @@ Constitución vigente: **RS956 Fichaje Constitution v1.1.0**.
 - **V — Observabilidad y Protección de Datos Sensibles**: toda generación de calendario,
   reclasificación, cálculo, corrección y pausa se loguea en NDJSON estructurado,
   correlacionable por período/legajo/día (FR-025), sin datos biométricos ni credenciales.
-  **Cumple**.
+  El snapshot local del padrón guarda solo `{legajo, categoria, nombre}` (nombre = dato
+  personal para la IU, bajo minimización) y el archivo acumulativo de fichadas guarda el
+  `rawHex` (frame crudo del protocolo, NO template biométrico ni imagen) para trazabilidad
+  técnica, igual que el exportador de sesiones de la feature 001/002; ninguno va a los
+  logs correlacionables. **Cumple**.
+- **VI — Persistencia por Niveles (Estado Operativo en Archivo, Liquidación en Oracle)**:
+  todo el estado operativo de este sistema —calendarios y reclasificaciones, correcciones,
+  pausas, snapshot del padrón y archivo acumulativo de fichadas por período— se persiste en
+  **archivos JSON locales**, detrás de la capa de repositorio/puerto, sin base de datos. La
+  escritura del **registro de liquidación** en un esquema Oracle propio al cierre del período
+  queda fuera del alcance de esta feature (dominio de cálculo). El acceso a Oracle se limita
+  a la **lectura** del padrón (Principio II). **Cumple**.
 - **Flujo de Git**: desarrollo en la rama `004-dominio-presentismo` (creada desde `main`
   para esta feature). **Cumple**.
 
@@ -112,9 +131,18 @@ Constitución vigente: **RS956 Fichaje Constitution v1.1.0**.
 **Reevaluación post-Fase 1 (diseño)**: PASA sin cambios. El diseño mantiene el acceso a
 Oracle confinado a `src/db/` y de solo lectura (II), no toca el protocolo RS956 (III),
 concentra las capas críticas (motor de cálculo + repositorio de categoría) bajo
-test-first con fixtures trazables al spec (IV), y loguea en NDJSON sin datos sensibles
-(V). La persistencia del estado propio en archivo JSON tras un puerto no introduce
-dependencias nuevas ni complejidad que requiera justificación.
+test-first con fixtures trazables al spec (IV), loguea en NDJSON sin datos sensibles (V) y
+persiste todo el estado operativo en archivos JSON locales sin base de datos (VI). La
+persistencia del estado propio en archivo JSON tras un puerto no introduce dependencias
+nuevas ni complejidad que requiera justificación.
+
+**Nota de reconciliación (post-implementación)**: la entrega incorporó capas de operación
+sobre el dominio, todas dentro de estos mismos principios: un **snapshot local del padrón**
+(`sincronizar-padron`/`listar-padron`) para operar sin conexión a Oracle (VI), la lectura
+de una **columna de nombre** opcional del padrón para la IU (II/V), y un **archivo
+acumulativo de fichadas por período** (`importar-fichadas`) como fuente del cálculo, que
+reemplaza el puente directo al store en memoria de la feature 002 (ver §Storage). Ver
+FR-042…FR-046 en el spec.
 
 ## Project Structure
 
@@ -155,7 +183,10 @@ src/
 │   │                               # PresentismoRepository
 │   ├── adapters/
 │   │   ├── memory-store-fichadas-provider.js   # puente al store en memoria (feature 002)
-│   │   ├── oracle-employee-category-provider.js# categoría desde padrón (usa src/db/)
+│   │   ├── archive-fichadas-provider.js        # fichadas desde el archivo acumulativo por período
+│   │   ├── file-fichadas-archive.js            # registro/upsert de fichadas por período (dedup rawHex)
+│   │   ├── oracle-employee-category-provider.js# categoría/nombre desde padrón (usa src/db/)
+│   │   ├── file-padron-category-provider.js    # snapshot local del padrón (operar sin DB)
 │   │   ├── file-presentismo-repository.js      # persistencia JSON del estado propio
 │   │   └── in-memory-presentismo-repository.js # repo en memoria para tests
 │   ├── logging/
@@ -165,7 +196,9 @@ src/
 ├── db/                              # (existente) capa de repositorio Oracle — se AMPLÍA
 │   └── oracle-roster-repository.js  # + lectura de columna categoría (solo lectura)
 └── cli/
-    └── calcular-presentismo.js      # comando CLI (contracts/cli-presentismo.md)
+    └── calcular-presentismo.js      # CLI: generar-calendario, reclasificar, calcular,
+                                     # listar-padron, sincronizar-padron, importar-fichadas,
+                                     # correccion, pausa (contracts/cli-presentismo.md)
 
 tests/
 ├── unit/
