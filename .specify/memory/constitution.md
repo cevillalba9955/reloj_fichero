@@ -1,16 +1,18 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.0.0 → 1.1.0
+Version change: 1.1.0 → 1.2.0
 Modified principles: none
 Added sections:
-  - Flujo de Git (main / feat / worktree)
+  - VI. Persistencia por Niveles: Estado Operativo en Archivo, Liquidación en Oracle
+Modified sections:
+  - Stack Tecnológico y Restricciones (bullet "Persistencia": reescrito al modelo de dos niveles)
 Removed sections: none
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ no change needed (Constitution Check gate is derived dynamically from this file)
-  - .specify/templates/spec-template.md ✅ no change needed (no branching-specific references)
-  - .specify/templates/tasks-template.md ✅ no change needed (no branching-specific references)
-  - .specify/templates/checklist-template.md ✅ no change needed (no branching-specific references)
+  - .specify/templates/spec-template.md ✅ no change needed (no persistence-specific references)
+  - .specify/templates/tasks-template.md ✅ no change needed (no persistence-specific references)
+  - .specify/templates/checklist-template.md ✅ no change needed (no persistence-specific references)
 Follow-up TODOs: none
 -->
 
@@ -92,6 +94,39 @@ seguro.
 legal/regulatorio; a la vez, el protocolo no documentado exige trazabilidad
 suficiente para depurar fallos sin comprometer la privacidad de las personas.
 
+### VI. Persistencia por Niveles: Estado Operativo en Archivo, Liquidación en Oracle
+
+El sistema separa dos niveles de persistencia según el ciclo de vida del dato:
+
+- **Estado operativo (primera instancia)**: el estado de trabajo del servicio de
+  presentismo —calendarios del mes y reclasificaciones, correcciones manuales, pausas y
+  todo dato en curso mientras el período está abierto— se persiste en **archivos JSON
+  locales por período**, detrás de la capa de repositorio (puerto). Es la persistencia que
+  sostiene el funcionamiento del servicio; no requiere base de datos.
+- **Registro de liquidación (al cierre del período)**: al **cerrar un período de
+  liquidación** se persiste en un **esquema Oracle propio y nuevo** —creado y administrado
+  por este sistema, distinto del usuario/vista de solo lectura del padrón de RRHH—
+  **únicamente la información requerida para la liquidación de salarios** (por ejemplo,
+  horas trabajadas por período por empleado). Ese registro es la fuente autoritativa para
+  nómina.
+
+Reglas:
+- La escritura en Oracle ocurre **solo al cierre** y **solo** con los datos de liquidación;
+  nunca se vuelca el detalle operativo completo (minimización, Principio V). Es la única
+  escritura en Oracle prevista y constituye la excepción de "escritura explícita" del
+  Principio II, con credenciales y esquema propios de escritura, jamás sobre el
+  usuario/vista de RRHH.
+- Todo SQL contra ese esquema vive en la capa de repositorio (`src/db/`), igual que el
+  acceso de solo lectura al padrón (Principio II).
+- Cambiar el almacenamiento operativo (p. ej. archivo → otra base) se hace a través del
+  puerto, sin tocar el dominio.
+
+**Rationale**: separar el estado de trabajo (volátil, editable, de alto detalle) del
+registro de liquidación (autoritativo, mínimo y duradero) mantiene el servicio simple y sin
+dependencias mientras opera, y reserva la base corporativa Oracle para el dato que
+efectivamente alimenta la nómina. Minimiza la superficie de datos sensibles en la base
+central y preserva el aislamiento del repositorio.
+
 ## Stack Tecnológico y Restricciones
 
 - **Frontend**: JavaScript con React.
@@ -99,9 +134,10 @@ suficiente para depurar fallos sin comprometer la privacidad de las personas.
   de hablar el protocolo propietario del RS956 y exponer una API estable
   hacia el frontend; el frontend nunca abre la conexión al reloj
   directamente.
-- **Persistencia**: Oracle DB existente de la empresa como repositorio de
-  fichajes de personal, accedida exclusivamente a través de la capa de
-  repositorio (Principio II).
+- **Persistencia** (dos niveles, Principio VI): estado operativo del servicio en
+  **archivos JSON locales por período**; y un **esquema Oracle propio** donde, al cierre de
+  cada período, se almacena solo la información de liquidación (p. ej. horas trabajadas por
+  período por empleado). El padrón de RRHH se accede por separado, solo lectura (Principio II).
 - **Versionado del protocolo**: el adaptador del RS956 y sus fixtures de
   tráfico se versionan junto con el código; cualquier cambio de
   interpretación del protocolo se documenta en un changelog propio del
@@ -166,4 +202,4 @@ explícitamente (ver `Complexity Tracking` en el plan) o rechazarse. La guía
 operativa de desarrollo en tiempo de ejecución (si existe un `README.md` o
 `CLAUDE.md` en el repositorio) debe mantenerse alineada con estos principios.
 
-**Version**: 1.1.0 | **Ratified**: 2026-07-02 | **Last Amended**: 2026-07-07
+**Version**: 1.2.0 | **Ratified**: 2026-07-02 | **Last Amended**: 2026-07-12
