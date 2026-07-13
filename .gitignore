@@ -11,3 +11,7 @@ research/*.pcapng
 .claude/worktrees/
 research/control_fichada.csv
 config/active-employees.json
+config/categorias.json
+# Estado operativo local del presentismo (calendarios, correcciones, pausas) y
+# snapshot del padrón (Principio VI): datos por período, no van al repositorio.
+/data/

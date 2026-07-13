@@ -46,7 +46,11 @@ npm run presentismo -- <subcomando> [opciones]
 
 - `generar-calendario --periodo YYYYMM`
 - `reclasificar --periodo YYYYMM --fecha YYYY-MM-DD --clasificacion <Laborable|NoLaborable|Feriado> --autor <id>`
-- `calcular --periodo YYYYMM --legajo N [--formato json|tabla] [--detalle]`
+- `calcular --periodo YYYYMM [--legajo N] [--formato json|tabla] [--detalle]` — sin `--legajo` calcula toda la plantilla activa del padrón Oracle.
+- `listar-padron [--formato tabla|json]` — legajos activos del padrón con su categoría y modalidad (marca las categorías no configuradas en `categorias.json`).
+- `sincronizar-padron [--padron-file PATH]` — consulta Oracle una vez y guarda el padrón como snapshot local; el resto de los comandos operan sobre él sin DB.
+
+Fuente del padrón: `--padron archivo|oracle` (default `archivo`, snapshot local). `archivo` no depende de la conexión a la DB; `oracle` consulta en vivo. Ver `PRESENTISMO_PADRON` / `PRESENTISMO_PADRON_FILE` en `.env.example`.
 - `correccion --periodo YYYYMM --legajo N --fecha YYYY-MM-DD (--horas HH:MM | --revertir) --autor <id> --motivo "<texto>"`
 - `pausa --periodo YYYYMM --legajo N --fecha YYYY-MM-DD (--desde HH:MM --hasta HH:MM | --revertir <id>) --autor <id> --motivo "<texto>"`
 
@@ -59,9 +63,6 @@ Precedencia de configuración: argumento CLI > variable de entorno > default.
   ese store vivo; el cálculo con fichadas reales se obtiene integrando el
   servicio dentro del proceso de la feature 002 (o inyectando un
   `FichadasProvider` propio). El dominio y el servicio están cubiertos por tests.
-- **Plantilla completa**: `calcular` sin `--legajo` requiere la lista de legajos
-  activos; por ahora el CLI opera por `--legajo`. `calcularPlantilla` está
-  disponible en la API del servicio.
 - **Categoría por período**: se asume estable dentro del período (spec,
   Clarifications); un cambio intra-período se resuelve manualmente.
 

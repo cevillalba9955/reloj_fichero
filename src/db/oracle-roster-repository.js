@@ -75,8 +75,9 @@ function extraerFilas(result, columnaLegajo) {
   });
 }
 
-// Extrae filas {legajo, categoria} respetando OBJECT (mayúsculas) o array.
-function extraerFilasConCategoria(result, columnaLegajo, columnaCategoria) {
+// Extrae filas {legajo, categoria[, nombre]} respetando OBJECT (mayúsculas) o
+// array. `columnaNombre` es opcional; si es null, no se proyecta ni se lee.
+function extraerFilasConCategoria(result, columnaLegajo, columnaCategoria, columnaNombre) {
   const rows = result?.rows ?? [];
   const val = (row, col, idx) => {
     if (Array.isArray(row)) return row[idx];
@@ -87,10 +88,14 @@ function extraerFilasConCategoria(result, columnaLegajo, columnaCategoria) {
     }
     return undefined;
   };
-  return rows.map((row) => ({
-    legajo: val(row, columnaLegajo, 0),
-    categoria: val(row, columnaCategoria, 1),
-  }));
+  return rows.map((row) => {
+    const fila = {
+      legajo: val(row, columnaLegajo, 0),
+      categoria: val(row, columnaCategoria, 1),
+    };
+    if (columnaNombre) fila.nombre = val(row, columnaNombre, 2);
+    return fila;
+  });
 }
 
 export function createOracleRosterRepository({ config, connectionFactory = defaultConnectionFactory }) {
@@ -148,8 +153,15 @@ export function createOracleRosterRepository({ config, connectionFactory = defau
     if (!SQL_IDENT_COLUMNA.test(config.columnaCategoria)) {
       throw new Error('oracle-roster-repository: columnaCategoria no es un identificador SQL válido');
     }
+    // Columna de nombre opcional (IU). Se valida solo si está configurada.
+    if (config.columnaNombre && !SQL_IDENT_COLUMNA.test(config.columnaNombre)) {
+      throw new Error('oracle-roster-repository: columnaNombre no es un identificador SQL válido');
+    }
 
-    const sql = `SELECT ${config.columnaLegajo}, ${config.columnaCategoria} FROM ${config.vistaPadron}`;
+    const proyeccion = config.columnaNombre
+      ? `${config.columnaLegajo}, ${config.columnaCategoria}, ${config.columnaNombre}`
+      : `${config.columnaLegajo}, ${config.columnaCategoria}`;
+    const sql = `SELECT ${proyeccion} FROM ${config.vistaPadron}`;
     const timeoutMs = config.timeoutMs;
 
     let connection = null;
@@ -158,7 +170,7 @@ export function createOracleRosterRepository({ config, connectionFactory = defau
       connection = await conDeadline(Promise.resolve().then(() => connectionFactory(config)), timeoutMs);
       fase = 'consulta';
       const result = await conDeadline(connection.execute(sql, [], {}), timeoutMs);
-      return extraerFilasConCategoria(result, config.columnaLegajo, config.columnaCategoria);
+      return extraerFilasConCategoria(result, config.columnaLegajo, config.columnaCategoria, config.columnaNombre);
     } catch (err) {
       if (err instanceof TimeoutSentinel) throw rosterError('timeout');
       if (fase === 'conexion') throw rosterError(categorizarErrorConexion(err));

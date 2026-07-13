@@ -57,6 +57,19 @@ export function readOracleRosterConfig(env = process.env) {
     }
   }
 
+  // Opcional (feature 004, IU): columna del nombre del empleado. Sin default —
+  // si no se provee, el nombre queda deshabilitado (null). Si se provee, debe
+  // ser un identificador SQL válido sin punto. Es dato personal (Principio V):
+  // se usa solo para la IU, nunca en logs.
+  const columnaNombreRaw = env.RRHH_ORACLE_COLUMNA_NOMBRE;
+  let columnaNombre = null;
+  if (typeof columnaNombreRaw === 'string' && columnaNombreRaw.trim() !== '') {
+    columnaNombre = columnaNombreRaw.trim();
+    if (!SQL_IDENT_COLUMNA.test(columnaNombre)) {
+      problemas.push('RRHH_ORACLE_COLUMNA_NOMBRE (no es un identificador SQL válido)');
+    }
+  }
+
   // Opcional con default; si se provee, debe ser un entero > 0.
   const timeoutRaw = env.RRHH_ORACLE_TIMEOUT_MS;
   let timeoutMs = DEFAULT_TIMEOUT_MS;
@@ -76,5 +89,5 @@ export function readOracleRosterConfig(env = process.env) {
     );
   }
 
-  return { user, password, connectString, vistaPadron, columnaLegajo, columnaCategoria, timeoutMs };
+  return { user, password, connectString, vistaPadron, columnaLegajo, columnaCategoria, columnaNombre, timeoutMs };
 }

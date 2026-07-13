@@ -17,6 +17,19 @@ test('readOracleRosterConfig: config completa → objeto con defaults aplicados'
   assert.equal(config.vistaPadron, 'RRHH.V_PADRON_ACTIVOS');
   assert.equal(config.columnaLegajo, 'LEGAJO', 'default columnaLegajo');
   assert.equal(config.timeoutMs, 10000, 'default timeoutMs');
+  assert.equal(config.columnaNombre, null, 'columnaNombre deshabilitada sin variable');
+});
+
+test('readOracleRosterConfig: columnaNombre opcional se acepta cuando es un identificador válido', () => {
+  const config = readOracleRosterConfig({ ...ENV_COMPLETO, RRHH_ORACLE_COLUMNA_NOMBRE: 'NOMBRE_COMPLETO' });
+  assert.equal(config.columnaNombre, 'NOMBRE_COMPLETO');
+});
+
+test('readOracleRosterConfig: columnaNombre inválida (con punto) → error', () => {
+  assert.throws(
+    () => readOracleRosterConfig({ ...ENV_COMPLETO, RRHH_ORACLE_COLUMNA_NOMBRE: 'EMP.NOMBRE' }),
+    (err) => err instanceof ConfiguracionPadronInvalidaError && /RRHH_ORACLE_COLUMNA_NOMBRE/.test(err.message)
+  );
 });
 
 test('readOracleRosterConfig: respeta columnaLegajo y timeoutMs cuando se proveen', () => {

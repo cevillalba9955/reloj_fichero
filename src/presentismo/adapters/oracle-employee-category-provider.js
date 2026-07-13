@@ -8,11 +8,15 @@ export function createOracleEmployeeCategoryProvider({ repository }) {
     if (cache) return cache;
     const filas = await repository.fetchLegajosConCategoria();
     cache = new Map();
-    for (const { legajo, categoria } of filas) {
+    for (const { legajo, categoria, nombre } of filas) {
       const n = Number(legajo);
       if (!Number.isInteger(n)) continue; // legajo inválido: se descarta
       const codigo = categoria == null ? null : String(categoria).trim();
-      cache.set(n, codigo && codigo.length > 0 ? codigo : null);
+      const nom = nombre == null ? null : String(nombre).trim();
+      cache.set(n, {
+        codigoCategoria: codigo && codigo.length > 0 ? codigo : null,
+        nombre: nom && nom.length > 0 ? nom : null,
+      });
     }
     return cache;
   }
@@ -20,7 +24,17 @@ export function createOracleEmployeeCategoryProvider({ repository }) {
   return {
     async obtenerCategoria(legajo) {
       const mapa = await asegurarCache();
-      return { legajo, codigoCategoria: mapa.get(Number(legajo)) ?? null };
+      return { legajo, codigoCategoria: mapa.get(Number(legajo))?.codigoCategoria ?? null };
+    },
+
+    // Lista el padrón activo normalizado (mismo dedup/descarte que el cache),
+    // ordenado por legajo. Incluye el nombre para la IU (null si no se
+    // configuró la columna). Reusa la única obtención diaria (research §4).
+    async listar() {
+      const mapa = await asegurarCache();
+      return [...mapa.entries()]
+        .map(([legajo, { codigoCategoria, nombre }]) => ({ legajo, codigoCategoria, nombre }))
+        .sort((a, b) => a.legajo - b.legajo);
     },
   };
 }

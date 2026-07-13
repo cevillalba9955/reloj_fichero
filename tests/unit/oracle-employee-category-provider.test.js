@@ -73,6 +73,59 @@ test('lee el padrón una sola vez (cache)', async () => {
   assert.equal(ejecuciones, 1, 'una sola consulta al padrón');
 });
 
+test('listar() devuelve el padrón normalizado y ordenado por legajo', async () => {
+  const { factory } = fakeConnectionFactory([
+    { LEGAJO: 5678, CATEGORIA: 'PROD' },
+    { LEGAJO: 1234, CATEGORIA: 'ADMIN' },
+    { LEGAJO: 9, CATEGORIA: '  ' }, // categoría vacía → null
+  ]);
+  const repository = createOracleRosterRepository({ config, connectionFactory: factory });
+  const provider = createOracleEmployeeCategoryProvider({ repository });
+
+  // Sin columnaNombre configurada, nombre es null.
+  assert.deepEqual(await provider.listar(), [
+    { legajo: 9, codigoCategoria: null, nombre: null },
+    { legajo: 1234, codigoCategoria: 'ADMIN', nombre: null },
+    { legajo: 5678, codigoCategoria: 'PROD', nombre: null },
+  ]);
+});
+
+test('con columnaNombre, listar() incluye el nombre y el SQL lo proyecta', async () => {
+  const { factory, calls } = fakeConnectionFactory([
+    { LEGAJO: 1234, CATEGORIA: 'ADMIN', NOMBRE: 'Ada Lovelace' },
+    { LEGAJO: 5678, CATEGORIA: 'PROD', NOMBRE: '  ' }, // nombre vacío → null
+  ]);
+  const repository = createOracleRosterRepository({
+    config: { ...config, columnaNombre: 'NOMBRE' },
+    connectionFactory: factory,
+  });
+  const provider = createOracleEmployeeCategoryProvider({ repository });
+
+  assert.deepEqual(await provider.listar(), [
+    { legajo: 1234, codigoCategoria: 'ADMIN', nombre: 'Ada Lovelace' },
+    { legajo: 5678, codigoCategoria: 'PROD', nombre: null },
+  ]);
+  assert.match(calls.sql, /SELECT LEGAJO, CATEGORIA, NOMBRE FROM RRHH\.V_PADRON/);
+  // obtenerCategoria sigue devolviendo solo la categoría (no cambia el puerto).
+  assert.deepEqual(await provider.obtenerCategoria(1234), { legajo: 1234, codigoCategoria: 'ADMIN' });
+});
+
+test('listar() y obtenerCategoria() comparten una sola consulta al padrón', async () => {
+  let ejecuciones = 0;
+  const factory = async () => ({
+    async execute() {
+      ejecuciones++;
+      return { rows: [{ LEGAJO: 1, CATEGORIA: 'ADMIN' }] };
+    },
+    async close() {},
+  });
+  const repository = createOracleRosterRepository({ config, connectionFactory: factory });
+  const provider = createOracleEmployeeCategoryProvider({ repository });
+  await provider.listar();
+  await provider.obtenerCategoria(1);
+  assert.equal(ejecuciones, 1, 'una sola consulta al padrón (cache compartido)');
+});
+
 test('sin columnaCategoria configurada, el repositorio lo informa claro', async () => {
   const { factory } = fakeConnectionFactory([]);
   const repository = createOracleRosterRepository({

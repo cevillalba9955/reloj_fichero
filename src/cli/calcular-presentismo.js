@@ -5,11 +5,28 @@ import { createCalcularPresentismoService } from '../presentismo/service/calcula
 import { createOracleRosterRepository } from '../db/oracle-roster-repository.js';
 import { readOracleRosterConfig } from '../db/oracle-roster-config.js';
 import { createOracleEmployeeCategoryProvider } from '../presentismo/adapters/oracle-employee-category-provider.js';
+import {
+  createFilePadronCategoryProvider,
+  guardarSnapshotPadron,
+} from '../presentismo/adapters/file-padron-category-provider.js';
 import { Clasificacion } from '../presentismo/domain/calendario-mes.js';
 import { parseHoraMinuto, formatHoraMinuto } from '../presentismo/domain/tiempo.js';
 
 // CLI del dominio de presentismo (contracts/cli-presentismo.md).
 // Precedencia de configuración: argumento CLI > variable de entorno > default.
+
+// Cargamos el .env en el propio arranque para que las variables de entorno
+// (RRHH_ORACLE_* y PRESENTISMO_*) estén disponibles aunque el CLI se invoque
+// con `node src/cli/calcular-presentismo.js` directo y no vía
+// `npm run presentismo` (que ya aporta --env-file-if-exists=.env). Best-effort:
+// si no hay .env, se sigue con variables de entorno reales y defaults.
+if (typeof process.loadEnvFile === 'function') {
+  try {
+    process.loadEnvFile();
+  } catch {
+    // No hay .env en el CWD: se usan las variables de entorno del proceso.
+  }
+}
 
 function parseArgs(argv) {
   const args = {};
@@ -41,28 +58,52 @@ function normalizarClasificacion(valor) {
   throw new Error(`clasificación inválida "${valor}" (Laborable | NoLaborable | Feriado)`);
 }
 
-function construirServicio(args, { intentarOracle = false } = {}) {
+function cargarCategoriasConfig(args) {
   const configPath = resolver(args['config'], 'PRESENTISMO_CATEGORIAS_CONFIG', './config/categorias.json');
+  return loadCategoriasConfig(configPath);
+}
+
+// Construye el proveedor de categoría/padrón Oracle (solo lectura, Principio II).
+// Lanza si el entorno RRHH no está configurado; el llamador decide si eso es un
+// error duro (listar-padron, plantilla) o best-effort (calcular por legajo).
+function construirCategoryProviderOracle() {
+  const oracleConfig = readOracleRosterConfig(process.env);
+  const repository = createOracleRosterRepository({ config: oracleConfig });
+  return createOracleEmployeeCategoryProvider({ repository });
+}
+
+function rutaSnapshotPadron(args) {
+  const repoDir = resolver(args['repo-dir'], 'PRESENTISMO_REPO_DIR', './data/presentismo');
+  return resolver(args['padron-file'], 'PRESENTISMO_PADRON_FILE', `${repoDir}/padron.json`);
+}
+
+// Fuente del padrón: 'archivo' (snapshot local, sin DB) u 'oracle' (consulta viva).
+// Precedencia: --padron > PRESENTISMO_PADRON > default 'archivo' (Principio VI: se
+// opera sobre el snapshot; Oracle se toca solo al sincronizar).
+function resolverFuentePadron(args) {
+  const fuente = String(resolver(args['padron'], 'PRESENTISMO_PADRON', 'archivo')).toLowerCase();
+  if (fuente !== 'archivo' && fuente !== 'oracle') {
+    throw new Error(`--padron inválido "${fuente}" (archivo | oracle)`);
+  }
+  return fuente;
+}
+
+// Devuelve el EmployeeCategoryProvider según la fuente elegida. Para 'archivo'
+// lee el snapshot local (no depende de la conexión a la DB).
+function construirCategoryProvider(args) {
+  if (resolverFuentePadron(args) === 'oracle') {
+    return construirCategoryProviderOracle();
+  }
+  return createFilePadronCategoryProvider({ filePath: rutaSnapshotPadron(args) });
+}
+
+function construirServicio(args, { categoryProvider = null } = {}) {
   const repoDir = resolver(args['repo-dir'], 'PRESENTISMO_REPO_DIR', './data/presentismo');
   const logDir = resolver(args['log-dir'], 'PRESENTISMO_LOG_DIR', './logs');
 
-  const categoriasConfig = loadCategoriasConfig(configPath);
+  const categoriasConfig = cargarCategoriasConfig(args);
   const repo = createFilePresentismoRepository({ repoDir });
   const logger = createPresentismoLogger({ logDir });
-
-  // La categoría del empleado se lee del padrón Oracle (solo lectura). Se
-  // intenta solo cuando hace falta (calcular) y de forma best-effort: si el
-  // entorno RRHH no está configurado, se avisa y se calcula sin categoría.
-  let categoryProvider = null;
-  if (intentarOracle) {
-    try {
-      const oracleConfig = readOracleRosterConfig(process.env);
-      const repository = createOracleRosterRepository({ config: oracleConfig });
-      categoryProvider = createOracleEmployeeCategoryProvider({ repository });
-    } catch (err) {
-      console.error(`Aviso: categoría desde Oracle no disponible (${err.message}).`);
-    }
-  }
 
   return createCalcularPresentismoService({ repo, categoriasConfig, logger, categoryProvider });
 }
@@ -115,15 +156,34 @@ async function cmdCalcular(args) {
   const periodo = args['periodo'];
   if (!periodo) throw new Error('falta --periodo YYYYMM');
   const formato = resolver(args['formato'], null, 'json');
-  const svc = construirServicio(args, { intentarOracle: true });
 
-  if (!args['legajo']) {
-    throw new Error(
-      'calcular sin --legajo (plantilla completa) requiere la lista de legajos activos del padrón; ' +
-        'por ahora indicá --legajo N. El cálculo de plantilla está disponible vía la API del servicio.'
-    );
+  // La categoría del empleado sale del padrón (snapshot local por defecto, u
+  // Oracle con --padron oracle). Para un legajo puntual es best-effort (si el
+  // padrón no está disponible, se calcula sin categoría → anomalía). Para la
+  // plantilla completa el padrón es obligatorio: es de donde sale la lista.
+  let categoryProvider = null;
+  try {
+    categoryProvider = construirCategoryProvider(args);
+  } catch (err) {
+    console.error(`Aviso: padrón no disponible (${err.message}).`);
   }
-  const resultados = await svc.calcularEmpleado(Number(args['legajo']), periodo);
+  const svc = construirServicio(args, { categoryProvider });
+
+  let resultados;
+  if (args['legajo']) {
+    resultados = await svc.calcularEmpleado(Number(args['legajo']), periodo);
+  } else {
+    if (!categoryProvider) {
+      throw new Error(
+        'calcular sin --legajo (plantilla completa) requiere el padrón disponible. ' +
+          'Sincronizalo con `sincronizar-padron`, usá --padron oracle, o indicá --legajo N.'
+      );
+    }
+    const activos = await categoryProvider.listar();
+    if (activos.length === 0) throw new Error('el padrón no devolvió legajos activos.');
+    resultados = await svc.calcularPlantilla(periodo, activos.map((e) => e.legajo));
+  }
+
   if (formato === 'tabla') {
     for (const r of resultados) {
       imprimirResumenTabla(r);
@@ -132,6 +192,63 @@ async function cmdCalcular(args) {
   } else {
     console.log(JSON.stringify(resultados, null, 2));
   }
+}
+
+// Lista el padrón de empleados activos con su categoría (solo lectura). Cruza
+// con categorias.json para marcar si cada categoría está configurada y con qué
+// modalidad, así se detectan categorías del padrón sin mapear (FR-035).
+async function cmdListarPadron(args) {
+  const formato = resolver(args['formato'], null, 'tabla');
+  const categoriasConfig = cargarCategoriasConfig(args);
+
+  const categoryProvider = construirCategoryProvider(args);
+  const activos = await categoryProvider.listar();
+  const filas = activos.map(({ legajo, codigoCategoria, nombre }) => {
+    const modalidad = codigoCategoria
+      ? categoriasConfig.resolverModalidadPorCategoria(codigoCategoria)
+      : null;
+    return {
+      legajo,
+      nombre: nombre ?? null,
+      categoria: codigoCategoria,
+      modalidad: modalidad ? modalidad.tipo : null,
+      configurada: Boolean(modalidad),
+    };
+  });
+
+  if (formato === 'json') {
+    console.log(JSON.stringify(filas, null, 2));
+    return;
+  }
+
+  console.log(`Padrón activo: ${filas.length} legajo(s)`);
+  for (const f of filas) {
+    const nom = (f.nombre ?? '—').padEnd(24);
+    const cat = f.categoria ?? '(sin categoría)';
+    const estado = f.configurada ? `${f.modalidad}` : 'SIN CONFIGURAR';
+    console.log(`  ${String(f.legajo).padStart(8)}  ${nom} ${cat.padEnd(16)} ${estado}`);
+  }
+  const sinConfigurar = filas.filter((f) => !f.configurada).length;
+  if (sinConfigurar > 0) {
+    console.log(`  ⚠ ${sinConfigurar} legajo(s) con categoría ausente o no configurada en categorias.json`);
+  }
+}
+
+// Consulta el padrón Oracle (solo lectura) UNA vez y lo guarda como snapshot
+// local, para que el resto de los comandos operen sin conexión a la DB
+// (Principio VI). Es el único comando que exige Oracle configurado.
+async function cmdSincronizarPadron(args) {
+  const oracleConfig = readOracleRosterConfig(process.env);
+  const repository = createOracleRosterRepository({ config: oracleConfig });
+  const provider = createOracleEmployeeCategoryProvider({ repository });
+
+  const activos = await provider.listar();
+  if (activos.length === 0) throw new Error('el padrón Oracle no devolvió legajos activos; no se sobrescribe el snapshot.');
+
+  const filePath = rutaSnapshotPadron(args);
+  const datos = guardarSnapshotPadron({ filePath, empleados: activos, vista: oracleConfig.vistaPadron });
+  console.log(`Padrón sincronizado: ${datos.empleados.length} legajo(s) → ${filePath}`);
+  console.log(`  generado ${datos.generadoEn}`);
 }
 
 // US4: detalle por jornada (entrada/salida real y efectiva, no usadas, motivo).
@@ -156,7 +273,7 @@ async function cmdCorreccion(args) {
   if (!periodo || !fecha || !Number.isInteger(legajo)) {
     throw new Error('uso: correccion --periodo YYYYMM --legajo N --fecha YYYY-MM-DD (--horas HH:MM | --revertir) --autor <id> --motivo "<texto>"');
   }
-  const svc = construirServicio(args, { intentarOracle: false });
+  const svc = construirServicio(args);
   if (args['revertir']) {
     await svc.revertirCorreccion({ periodo, legajo, fecha, autor: args['autor'] ?? null });
     console.log(`Corrección revertida: legajo ${legajo} ${fecha}`);
@@ -175,7 +292,7 @@ async function cmdPausa(args) {
   if (!periodo || !Number.isInteger(legajo)) {
     throw new Error('uso: pausa --periodo YYYYMM --legajo N --fecha YYYY-MM-DD (--desde HH:MM --hasta HH:MM | --revertir <id>) --autor <id> --motivo "<texto>"');
   }
-  const svc = construirServicio(args, { intentarOracle: false });
+  const svc = construirServicio(args);
   if (args['revertir']) {
     const id = typeof args['revertir'] === 'string' ? args['revertir'] : null;
     if (!id) throw new Error('--revertir requiere el id de la pausa');
@@ -201,6 +318,8 @@ const COMANDOS = {
   'generar-calendario': cmdGenerarCalendario,
   reclasificar: cmdReclasificar,
   calcular: cmdCalcular,
+  'listar-padron': cmdListarPadron,
+  'sincronizar-padron': cmdSincronizarPadron,
   correccion: cmdCorreccion,
   pausa: cmdPausa,
 };
