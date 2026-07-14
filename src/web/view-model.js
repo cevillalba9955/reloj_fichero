@@ -1,0 +1,92 @@
+import { parsePeriodo } from '../presentismo/domain/calendario-mes.js';
+import { recortar, Tramo } from '../presentismo/domain/periodo-liquidacion.js';
+
+// feature 007 — Armado de las proyecciones de presentación (view-models) que la
+// API entrega al frontend. Deriva todo del dominio de presentismo (feature 004);
+// NO expone datos personales, legajos ni fichadas (FR-014). Ver data-model.md.
+
+const MESES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+];
+
+const RESALTADO = {
+  Laborable: 'habil',
+  'No Laborable': 'no-laborable',
+  Feriado: 'feriado',
+};
+
+// domingo=0 .. sabado=6 (UTC), consistente con calendario-mes/categorias-config.
+function diaSemanaDe(fechaISO) {
+  const [y, m, d] = fechaISO.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+// Fecha "hoy" del servidor en hora local del establecimiento (YYYY-MM-DD).
+export function hoyLocal(now = new Date()) {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+// La leyenda: una clave por distinción visual (FR-006). Texto legible garantiza
+// que cada clave tenga significado sin depender del color (FR-004).
+function construirLeyenda() {
+  return [
+    { clave: 'habil', etiqueta: 'Hábil', descripcion: 'Día laborable' },
+    { clave: 'no-laborable', etiqueta: 'No laborable', descripcion: 'No aporta jornada' },
+    { clave: 'feriado', etiqueta: 'Feriado', descripcion: 'Pago, no se trabaja' },
+    { clave: 'hoy', etiqueta: 'Hoy', descripcion: 'Fecha actual' },
+    { clave: 'periodo-activo', etiqueta: 'Período activo', descripcion: 'Días del período en curso' },
+  ];
+}
+
+// Deriva el período de liquidación activo del mes: por defecto el mes completo
+// (Tramo.MES), institucional (research §4). Devuelve la proyección + el set de
+// fechas que lo componen para marcar `enPeriodoActivo` en cada día.
+function periodoActivoDe(calendario, anio, mes) {
+  const recorte = recortar(calendario, Tramo.MES);
+  const fechas = recorte.dias.map((d) => d.fecha);
+  if (fechas.length === 0) {
+    return { periodoActivo: null, fechasActivas: new Set() };
+  }
+  const periodoActivo = {
+    etiqueta: `${MESES[mes - 1]} ${anio}`,
+    tramo: Tramo.MES,
+    desde: fechas[0],
+    hasta: fechas[fechas.length - 1],
+  };
+  return { periodoActivo, fechasActivas: new Set(fechas) };
+}
+
+// Construye la VistaCalendarioMes. `periodos` es la lista de YYYYMM generados
+// (para `esUltimoGenerado`); `hoy` es la fecha del servidor (YYYY-MM-DD).
+export function construirVistaCalendario({ calendario, periodos = [], hoy = hoyLocal() }) {
+  const { anio, mes } = parsePeriodo(calendario.periodo);
+  const ultimo = periodos.length > 0 ? [...periodos].sort().at(-1) : null;
+  const { periodoActivo, fechasActivas } = periodoActivoDe(calendario, anio, mes);
+  const hoyEnMes = typeof hoy === 'string' && hoy.startsWith(`${String(anio).padStart(4, '0')}-${String(mes).padStart(2, '0')}`);
+
+  const dias = calendario.dias.map((d) => ({
+    fecha: d.fecha,
+    dd: d.dd,
+    diaSemana: diaSemanaDe(d.fecha),
+    clasificacion: d.clasificacion,
+    reclasificadoManual: Boolean(d.reclasificadoManual),
+    esHoy: hoyEnMes && d.fecha === hoy,
+    enPeriodoActivo: fechasActivas.has(d.fecha),
+    resaltado: RESALTADO[d.clasificacion] ?? 'no-laborable',
+  }));
+
+  return {
+    periodo: calendario.periodo,
+    anio,
+    mes,
+    esUltimoGenerado: calendario.periodo === ultimo,
+    hoy: hoyEnMes ? hoy : null,
+    periodoActivo,
+    leyenda: construirLeyenda(),
+    dias,
+  };
+}

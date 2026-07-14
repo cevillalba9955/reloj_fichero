@@ -17,6 +17,12 @@ export function createInMemoryPresentismoRepository() {
     async guardarCalendario(cal) {
       ops.setCalendario(estadoDe(cal.periodo), cal);
     },
+    async listarPeriodos() {
+      return [...porPeriodo.entries()]
+        .filter(([, estado]) => estado.calendario != null)
+        .map(([periodo]) => periodo)
+        .sort();
+    },
     async listarCorrecciones(periodo, legajo) {
       return ops.listCorrecciones(estadoDe(periodo), legajo);
     },
