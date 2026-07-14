@@ -33,9 +33,9 @@ Aplicación **web (frontend + backend)** sobre el repo Node ESM existente:
 
 **Purpose**: inicialización del workspace de frontend y del esqueleto del backend web.
 
-- [ ] T001 Agregar scripts npm y esqueleto de backend web: en `package.json` (raíz) añadir `"web": "node --env-file-if-exists=.env src/web/server.js"`, y crear la estructura de directorios `src/web/` y `src/web/api/`.
-- [ ] T002 [P] Scaffold del workspace frontend: crear `frontend/package.json` (deps `react`, `react-dom`; devDeps `vite`, `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`), `frontend/index.html` y `frontend/vite.config.js` (proxy dev de `/api` al backend + bloque `test` con entorno `jsdom`).
-- [ ] T003 [P] Configurar el arranque y los tests del frontend: `frontend/vitest.setup.js` (matchers de jest-dom) y `frontend/src/main.jsx` (monta `<App/>` en `#root`).
+- [X] T001 Agregar scripts npm y esqueleto de backend web: en `package.json` (raíz) añadir `"web": "node --env-file-if-exists=.env src/web/server.js"`, y crear la estructura de directorios `src/web/` y `src/web/api/`.
+- [X] T002 [P] Scaffold del workspace frontend: crear `frontend/package.json` (deps `react`, `react-dom`; devDeps `vite`, `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`), `frontend/index.html` y `frontend/vite.config.js` (proxy dev de `/api` al backend + bloque `test` con entorno `jsdom`).
+- [X] T003 [P] Configurar el arranque y los tests del frontend: `frontend/vitest.setup.js` (matchers de jest-dom) y `frontend/src/main.jsx` (monta `<App/>` en `#root`).
 
 ---
 
@@ -45,16 +45,16 @@ Aplicación **web (frontend + backend)** sobre el repo Node ESM existente:
 
 **⚠️ CRITICAL**: ninguna historia puede completarse hasta terminar esta fase.
 
-- [ ] T004 [P] Documentar el puerto `listarPeriodos(): Promise<string[]>` en `src/presentismo/ports/index.js` (agregar a `METODOS.PresentismoRepository` y su JSDoc).
-- [ ] T005 [P] Test unitario (primero, debe FALLAR) de `listarPeriodos` en `tests/unit/file-presentismo-repository-listar.test.js`: devuelve `YYYYMM` con calendario no nulo, ordenados; ignora archivos no `^\d{6}\.json$`; `[]` si el directorio está vacío.
-- [ ] T006 Implementar `listarPeriodos()` en `src/presentismo/adapters/file-presentismo-repository.js` (escanea `repoDir`, filtra `^\d{6}\.json$` con `calendario` no nulo, devuelve `YYYYMM` ordenados). Hace pasar T005. (dep: T004, T005)
-- [ ] T007 [P] Crear la factory de cableado `src/web/wiring.js` que resuelve `repoDir`/config/logger (reutilizando la lógica de `src/cli/calcular-presentismo.js`) y construye repositorio + servicio de presentismo. (dep: T006)
-- [ ] T008 [P] Crear el armador de view-model `src/web/view-model.js`: construye `VistaCalendarioMes` (días con `diaSemana`/`esHoy`/`enPeriodoActivo`/`resaltado`, `hoy` null si la fecha no cae en el mes, `periodoActivo` con `Tramo=Mes` vía `periodo-liquidacion.recortar`, `leyenda`, `esUltimoGenerado`), según [data-model.md](./data-model.md). Sin datos personales (FR-014).
-- [ ] T009 [P] Crear el router HTTP mínimo `src/web/api/router.js` (ruteo por método+path para `/api/*`, parseo de body JSON, forma de error `{error:{codigo,mensaje}}`).
-- [ ] T010 Implementar los handlers GET en `src/web/api/calendario-handlers.js`: `GET /api/calendarios` (usa `listarPeriodos` → `{periodos, ultimo}`) y `GET /api/calendarios/:periodo` (usa `wiring`+`view-model` → `VistaCalendarioMes`; 404 `CALENDARIO_NO_GENERADO`; 400 período inválido), según [contracts/web-api.md](./contracts/web-api.md). (dep: T007, T008)
-- [ ] T011 Implementar `src/web/server.js` (`node:http`): monta el router en `/api`, sirve los estáticos del build de `frontend/`, puerto configurable por entorno. (dep: T009, T010)
-- [ ] T012 [P] Test de contrato de los GET en `tests/contract/web-api-calendario.test.js`: forma de `{periodos, ultimo}`, forma de `VistaCalendarioMes`, `hoy` null fuera de mes, ausencia de nombres/legajos/fichadas (FR-014), 404 en mes no generado. (dep: T010, T011)
-- [ ] T013 [P] Crear el cliente de datos del frontend `frontend/src/api/calendario-client.js` con los métodos GET (`listarCalendarios()`, `obtenerCalendario(periodo)`). Es el ÚNICO acceso a datos de la UI (Principio I).
+- [X] T004 [P] Documentar el puerto `listarPeriodos(): Promise<string[]>` en `src/presentismo/ports/index.js` (agregar a `METODOS.PresentismoRepository` y su JSDoc).
+- [X] T005 [P] Test unitario (primero, debe FALLAR) de `listarPeriodos` en `tests/unit/file-presentismo-repository-listar.test.js`: devuelve `YYYYMM` con calendario no nulo, ordenados; ignora archivos no `^\d{6}\.json$`; `[]` si el directorio está vacío.
+- [X] T006 Implementar `listarPeriodos()` en `src/presentismo/adapters/file-presentismo-repository.js` (escanea `repoDir`, filtra `^\d{6}\.json$` con `calendario` no nulo, devuelve `YYYYMM` ordenados). Hace pasar T005. (dep: T004, T005)
+- [X] T007 [P] Crear la factory de cableado `src/web/wiring.js` que resuelve `repoDir`/config/logger (reutilizando la lógica de `src/cli/calcular-presentismo.js`) y construye repositorio + servicio de presentismo. (dep: T006)
+- [X] T008 [P] Crear el armador de view-model `src/web/view-model.js`: construye `VistaCalendarioMes` (días con `diaSemana`/`esHoy`/`enPeriodoActivo`/`resaltado`, `hoy` null si la fecha no cae en el mes, `periodoActivo` con `Tramo=Mes` vía `periodo-liquidacion.recortar`, `leyenda`, `esUltimoGenerado`), según [data-model.md](./data-model.md). Sin datos personales (FR-014).
+- [X] T009 [P] Crear el router HTTP mínimo `src/web/api/router.js` (ruteo por método+path para `/api/*`, parseo de body JSON, forma de error `{error:{codigo,mensaje}}`).
+- [X] T010 Implementar los handlers GET en `src/web/api/calendario-handlers.js`: `GET /api/calendarios` (usa `listarPeriodos` → `{periodos, ultimo}`) y `GET /api/calendarios/:periodo` (usa `wiring`+`view-model` → `VistaCalendarioMes`; 404 `CALENDARIO_NO_GENERADO`; 400 período inválido), según [contracts/web-api.md](./contracts/web-api.md). (dep: T007, T008)
+- [X] T011 Implementar `src/web/server.js` (`node:http`): monta el router en `/api`, sirve los estáticos del build de `frontend/`, puerto configurable por entorno. (dep: T009, T010)
+- [X] T012 [P] Test de contrato de los GET en `tests/contract/web-api-calendario.test.js`: forma de `{periodos, ultimo}`, forma de `VistaCalendarioMes`, `hoy` null fuera de mes, ausencia de nombres/legajos/fichadas (FR-014), 404 en mes no generado. (dep: T010, T011)
+- [X] T013 [P] Crear el cliente de datos del frontend `frontend/src/api/calendario-client.js` con los métodos GET (`listarCalendarios()`, `obtenerCalendario(periodo)`). Es el ÚNICO acceso a datos de la UI (Principio I).
 
 **Checkpoint**: la API sirve la lista de meses y la vista de un mes; el frontend puede
 obtenerlas. Aún no hay pantalla renderizada.
@@ -72,19 +72,19 @@ sin ningún calendario → estado vacío claro sin error.
 
 ### Tests for User Story 1 (escribir primero)
 
-- [ ] T014 [P] [US1] Test de componente de `App` (carga/vacío-global/error) en `frontend/src/App.test.jsx`: pide lista → carga el último; con `ultimo===null` muestra estado vacío global; error de red → mensaje con reintento.
-- [ ] T015 [P] [US1] Test de componente de `GrillaMes` en `frontend/src/components/GrillaMes.test.jsx`: cantidad exacta de días (28/29/30/31) y ubicación por `diaSemana`, huecos iniciales/finales sin días de meses vecinos (SC-007).
-- [ ] T016 [P] [US1] Test de componente de `CeldaDia` en `frontend/src/components/CeldaDia.test.jsx`: cada clasificación expone color + 2º recurso (texto/`aria-label`) (FR-004); `esHoy` marca por forma; sin `hoy` no marca (FR-007).
-- [ ] T017 [P] [US1] Test de componente de `Leyenda` en `frontend/src/components/Leyenda.test.jsx`: un ítem por clave recibida (hábil/no-laborable/feriado/hoy/período activo) (FR-006).
+- [X] T014 [P] [US1] Test de componente de `App` (carga/vacío-global/error) en `frontend/src/App.test.jsx`: pide lista → carga el último; con `ultimo===null` muestra estado vacío global; error de red → mensaje con reintento.
+- [X] T015 [P] [US1] Test de componente de `GrillaMes` en `frontend/src/components/GrillaMes.test.jsx`: cantidad exacta de días (28/29/30/31) y ubicación por `diaSemana`, huecos iniciales/finales sin días de meses vecinos (SC-007).
+- [X] T016 [P] [US1] Test de componente de `CeldaDia` en `frontend/src/components/CeldaDia.test.jsx`: cada clasificación expone color + 2º recurso (texto/`aria-label`) (FR-004); `esHoy` marca por forma; sin `hoy` no marca (FR-007).
+- [X] T017 [P] [US1] Test de componente de `Leyenda` en `frontend/src/components/Leyenda.test.jsx`: un ítem por clave recibida (hábil/no-laborable/feriado/hoy/período activo) (FR-006).
 
 ### Implementation for User Story 1
 
-- [ ] T018 [P] [US1] Componente `frontend/src/components/CeldaDia.jsx`: número de día, clasificación por color + etiqueta/ícono + `aria-label`, marca de `esHoy` por forma (FR-003/004/005/007).
-- [ ] T019 [P] [US1] Componente `frontend/src/components/Leyenda.jsx` que renderiza los `LeyendaItem` (FR-006).
-- [ ] T020 [P] [US1] Componente `frontend/src/components/EstadoVacio.jsx` (mes/estado sin calendario generado, sin acción de reclasificar) (FR-011/018).
-- [ ] T021 [US1] Componente `frontend/src/components/GrillaMes.jsx`: grilla de 7 columnas que ubica cada `CeldaDia` por `diaSemana` con huecos correctos (FR-002). (dep: T018)
-- [ ] T022 [US1] Orquestación en `frontend/src/App.jsx`: carga el último mes vía cliente, renderiza `GrillaMes`+`Leyenda`, maneja estados cargando/error/vacío-global (US1). (dep: T013, T019, T020, T021)
-- [ ] T023 [P] [US1] Estilos de grilla/celda/leyenda en `frontend/src/styles/` (resaltado de hábiles y feriados vs. no laborables, FR-005; marca de hoy por forma).
+- [X] T018 [P] [US1] Componente `frontend/src/components/CeldaDia.jsx`: número de día, clasificación por color + etiqueta/ícono + `aria-label`, marca de `esHoy` por forma (FR-003/004/005/007).
+- [X] T019 [P] [US1] Componente `frontend/src/components/Leyenda.jsx` que renderiza los `LeyendaItem` (FR-006).
+- [X] T020 [P] [US1] Componente `frontend/src/components/EstadoVacio.jsx` (mes/estado sin calendario generado, sin acción de reclasificar) (FR-011/018).
+- [X] T021 [US1] Componente `frontend/src/components/GrillaMes.jsx`: grilla de 7 columnas que ubica cada `CeldaDia` por `diaSemana` con huecos correctos (FR-002). (dep: T018)
+- [X] T022 [US1] Orquestación en `frontend/src/App.jsx`: carga el último mes vía cliente, renderiza `GrillaMes`+`Leyenda`, maneja estados cargando/error/vacío-global (US1). (dep: T013, T019, T020, T021)
+- [X] T023 [P] [US1] Estilos de grilla/celda/leyenda en `frontend/src/styles/` (resaltado de hábiles y feriados vs. no laborables, FR-005; marca de hoy por forma).
 
 **Checkpoint**: MVP funcional — se ve el calendario del último mes generado y el estado vacío.
 
@@ -101,14 +101,14 @@ grilla igual.
 
 ### Tests for User Story 2 (escribir primero)
 
-- [ ] T024 [P] [US2] Test de componente de `EncabezadoPeriodo` en `frontend/src/components/EncabezadoPeriodo.test.jsx`: con período muestra etiqueta+rango (FR-008); con `periodoActivo===null` indica "sin período activo" (FR-010).
-- [ ] T025 [P] [US2] Test de `CeldaDia` (pertenencia) en `frontend/src/components/CeldaDia.periodo.test.jsx`: `enPeriodoActivo` produce una distinción diferenciable de la clasificación (FR-009).
+- [X] T024 [P] [US2] Test de componente de `EncabezadoPeriodo` en `frontend/src/components/EncabezadoPeriodo.test.jsx`: con período muestra etiqueta+rango (FR-008); con `periodoActivo===null` indica "sin período activo" (FR-010).
+- [X] T025 [P] [US2] Test de `CeldaDia` (pertenencia) en `frontend/src/components/CeldaDia.periodo.test.jsx`: `enPeriodoActivo` produce una distinción diferenciable de la clasificación (FR-009).
 
 ### Implementation for User Story 2
 
-- [ ] T026 [P] [US2] Componente `frontend/src/components/EncabezadoPeriodo.jsx` (etiqueta + rango `desde–hasta`, o aviso sin período) (FR-008/010).
-- [ ] T027 [US2] Agregar el tratamiento visual de `enPeriodoActivo` en `frontend/src/components/CeldaDia.jsx` (banda/fondo del rango, distinto de la clasificación) (FR-009). (dep: T018)
-- [ ] T028 [US2] Integrar `EncabezadoPeriodo` en `frontend/src/App.jsx` (mostrarlo sobre la grilla) (FR-008/010). (dep: T022, T026)
+- [X] T026 [P] [US2] Componente `frontend/src/components/EncabezadoPeriodo.jsx` (etiqueta + rango `desde–hasta`, o aviso sin período) (FR-008/010).
+- [X] T027 [US2] Agregar el tratamiento visual de `enPeriodoActivo` en `frontend/src/components/CeldaDia.jsx` (banda/fondo del rango, distinto de la clasificación) (FR-009). (dep: T018)
+- [X] T028 [US2] Integrar `EncabezadoPeriodo` en `frontend/src/App.jsx` (mostrarlo sobre la grilla) (FR-008/010). (dep: T022, T026)
 
 **Checkpoint**: US1 + US2 funcionan; el usuario ubica el período activo.
 
@@ -125,15 +125,15 @@ vacío no se ofrece reclasificar.
 
 ### Tests for User Story 3 (escribir primero)
 
-- [ ] T029 [P] [US3] Test de contrato/integración del POST en `tests/integration/reclasificar-desde-api.test.js`: `POST /api/calendarios/:periodo/reclasificar` persiste y el GET siguiente refleja el cambio; período inexistente → 404 (FR-018); clasificación inválida/fecha fuera de mes → 400.
-- [ ] T030 [P] [US3] Test de componente de `DialogoConfirmarReclasificar` en `frontend/src/components/DialogoConfirmarReclasificar.test.jsx`: cancelar NO dispara POST (día intacto, FR-016); confirmar dispara POST y refresca con la vista devuelta (FR-017).
+- [X] T029 [P] [US3] Test de contrato/integración del POST en `tests/integration/reclasificar-desde-api.test.js`: `POST /api/calendarios/:periodo/reclasificar` persiste y el GET siguiente refleja el cambio; período inexistente → 404 (FR-018); clasificación inválida/fecha fuera de mes → 400.
+- [X] T030 [P] [US3] Test de componente de `DialogoConfirmarReclasificar` en `frontend/src/components/DialogoConfirmarReclasificar.test.jsx`: cancelar NO dispara POST (día intacto, FR-016); confirmar dispara POST y refresca con la vista devuelta (FR-017).
 
 ### Implementation for User Story 3
 
-- [ ] T031 [US3] Agregar el handler `POST /api/calendarios/:periodo/reclasificar` en `src/web/api/calendario-handlers.js` (valida body, llama `service.reclasificarDia`, devuelve `VistaCalendarioMes` actualizada; 400/404 según [contracts/web-api.md](./contracts/web-api.md)). (dep: T010)
-- [ ] T032 [P] [US3] Agregar el método `reclasificar(periodo, {fecha, clasificacion, autor})` a `frontend/src/api/calendario-client.js`. (dep: T013)
-- [ ] T033 [P] [US3] Componente `frontend/src/components/DialogoConfirmarReclasificar.jsx` (muestra día y cambio propuesto; botones confirmar/cancelar) (FR-016).
-- [ ] T034 [US3] Cablear la acción de reclasificar en `frontend/src/components/CeldaDia.jsx` y `frontend/src/App.jsx`: elegir clasificación → abrir diálogo → confirmar → POST → refrescar grilla; deshabilitada en estado vacío (FR-016/017/018). (dep: T031, T032, T033)
+- [X] T031 [US3] Agregar el handler `POST /api/calendarios/:periodo/reclasificar` en `src/web/api/calendario-handlers.js` (valida body, llama `service.reclasificarDia`, devuelve `VistaCalendarioMes` actualizada; 400/404 según [contracts/web-api.md](./contracts/web-api.md)). (dep: T010)
+- [X] T032 [P] [US3] Agregar el método `reclasificar(periodo, {fecha, clasificacion, autor})` a `frontend/src/api/calendario-client.js`. (dep: T013)
+- [X] T033 [P] [US3] Componente `frontend/src/components/DialogoConfirmarReclasificar.jsx` (muestra día y cambio propuesto; botones confirmar/cancelar) (FR-016).
+- [X] T034 [US3] Cablear la acción de reclasificar en `frontend/src/components/CeldaDia.jsx` y `frontend/src/App.jsx`: elegir clasificación → abrir diálogo → confirmar → POST → refrescar grilla; deshabilitada en estado vacío (FR-016/017/018). (dep: T031, T032, T033)
 
 **Checkpoint**: US1–US3 funcionan; el calendario es editable con confirmación.
 
@@ -150,12 +150,12 @@ vacío sin error.
 
 ### Tests for User Story 4 (escribir primero)
 
-- [ ] T035 [P] [US4] Test de componente de `NavegacionMes` en `frontend/src/components/NavegacionMes.test.jsx`: anterior/siguiente calculan el `YYYYMM` adyacente; "volver" apunta al último; navegar a mes 404 muestra `EstadoVacio` (FR-011/012).
+- [X] T035 [P] [US4] Test de componente de `NavegacionMes` en `frontend/src/components/NavegacionMes.test.jsx`: anterior/siguiente calculan el `YYYYMM` adyacente; "volver" apunta al último; navegar a mes 404 muestra `EstadoVacio` (FR-011/012).
 
 ### Implementation for User Story 4
 
-- [ ] T036 [US4] Componente `frontend/src/components/NavegacionMes.jsx` (controles anterior/siguiente/volver con aritmética de `YYYYMM`) (FR-012).
-- [ ] T037 [US4] Integrar la navegación y el estado vacío por mes (respuesta 404) en `frontend/src/App.jsx` (FR-011/012). (dep: T022, T036)
+- [X] T036 [US4] Componente `frontend/src/components/NavegacionMes.jsx` (controles anterior/siguiente/volver con aritmética de `YYYYMM`) (FR-012).
+- [X] T037 [US4] Integrar la navegación y el estado vacío por mes (respuesta 404) en `frontend/src/App.jsx` (FR-011/012). (dep: T022, T036)
 
 **Checkpoint**: las cuatro historias funcionan de forma independiente.
 
@@ -165,10 +165,10 @@ vacío sin error.
 
 **Purpose**: accesibilidad, documentación y validación end-to-end.
 
-- [ ] T038 [P] Auditoría de accesibilidad sin color (SC-004/FR-004): verificar en escala de grises que clasificación, hoy y período activo siguen distinguibles; ajustar `frontend/src/styles/`.
-- [ ] T039 [P] Documentar cómo levantar/compilar la UI (build de `frontend/` + servir con `npm run web`) en la doc del repo (`README.md` y/o `docs/`).
-- [ ] T040 Verificar el servido de estáticos en producción: el build de `frontend/` se sirve desde `src/web/server.js` (build → carpeta servida). (dep: T011)
-- [ ] T041 Ejecutar la validación de [quickstart.md](./quickstart.md) (los 7 escenarios) y `npm test` + `cd frontend && npm run test` en verde.
+- [X] T038 [P] Auditoría de accesibilidad sin color (SC-004/FR-004): verificar en escala de grises que clasificación, hoy y período activo siguen distinguibles; ajustar `frontend/src/styles/`.
+- [X] T039 [P] Documentar cómo levantar/compilar la UI (build de `frontend/` + servir con `npm run web`) en la doc del repo (`README.md` y/o `docs/`).
+- [X] T040 Verificar el servido de estáticos en producción: el build de `frontend/` se sirve desde `src/web/server.js` (build → carpeta servida). (dep: T011)
+- [X] T041 Ejecutar la validación de [quickstart.md](./quickstart.md) (los 7 escenarios) y `npm test` + `cd frontend && npm run test` en verde.
 
 ---
 

@@ -12,7 +12,12 @@ import DialogoConfirmarReclasificar from './components/DialogoConfirmarReclasifi
 // la navegación entre meses (US4) y la reclasificación con confirmación (US3).
 // El único acceso a datos es el cliente `/api` (Principio I).
 
-export default function App({ cliente = crearClienteCalendario() }) {
+// Instancia única a nivel de módulo: un default de parámetro se reevalúa en
+// cada render, y una referencia nueva de `cliente` en cada render invalida
+// useCallback/useEffect en cascada y dispara un loop infinito de fetch.
+const clientePorDefecto = crearClienteCalendario();
+
+export default function App({ cliente = clientePorDefecto }) {
   const [estado, setEstado] = useState({ tipo: 'cargando' });
   const [ultimo, setUltimo] = useState(null);
   const [aviso, setAviso] = useState(null);

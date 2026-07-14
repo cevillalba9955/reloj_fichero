@@ -39,6 +39,30 @@ function clienteMock(over = {}) {
   };
 }
 
+test('sin prop "cliente" (uso real, como main.jsx) no entra en loop infinito de fetch', async () => {
+  // Regresión: `cliente = crearClienteCalendario()` como default de parámetro
+  // se reevaluaba en cada render, invalidando useCallback/useEffect en cascada
+  // y disparando fetch sin fin. Acá se ejercita el default real (sin mock de
+  // cliente), solo interceptando `fetch` global.
+  const fetchMock = vi.fn(async (url) => {
+    const body = String(url).endsWith('/calendarios')
+      ? { periodos: ['202607'], ultimo: '202607' }
+      : vista();
+    return { ok: true, status: 200, json: async () => body };
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  render(<App />);
+  await screen.findByRole('grid');
+
+  // Deja pasar un ciclo de microtasks/efectos extra: si hubiera loop, la
+  // cantidad de llamadas seguiría creciendo.
+  await new Promise((r) => setTimeout(r, 50));
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+
+  vi.unstubAllGlobals();
+});
+
 test('sin ningún calendario muestra el estado vacío global', async () => {
   const cliente = clienteMock({
     listarCalendarios: vi.fn().mockResolvedValue({ periodos: [], ultimo: null }),

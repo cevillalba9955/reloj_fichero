@@ -73,3 +73,37 @@ Precedencia de configuración: argumento CLI > variable de entorno > default.
 `npm test` corre la suite completa (unitarios de dominio con fixtures de
 calibración, contrato de puertos, integración por historia y rendimiento).
 Guía end-to-end: [quickstart](../specs/004-dominio-presentismo/quickstart.md).
+
+## Interfaz web (feature 007)
+
+Pantalla principal (React) que muestra el calendario del último mes generado,
+el período de liquidación activo y permite reclasificar días con confirmación
+explícita. Ver [spec](../specs/007-ui-calendario-mensual/spec.md) y
+[quickstart](../specs/007-ui-calendario-mensual/quickstart.md) para el detalle
+funcional y los 7 escenarios de validación manual.
+
+**Desarrollo** (recarga en caliente, dos procesos):
+
+```bash
+node src/web/server.js          # backend: sirve /api en :4173
+cd frontend && npm install && npm run dev   # frontend: Vite proxya /api al backend
+```
+
+**Producción** (un solo proceso Node sirve API + estáticos):
+
+```bash
+cd frontend && npm install && npm run build   # genera frontend/dist
+cd .. && npm run web                          # sirve /api y frontend/dist en :4173
+```
+
+Variable de entorno adicional: `PRESENTISMO_WEB_PORT` (puerto del servidor
+web, default `4173`). Reutiliza `PRESENTISMO_REPO_DIR`, `PRESENTISMO_LOG_DIR`
+y `PRESENTISMO_CATEGORIAS_CONFIG` de la tabla anterior. Requiere al menos un
+calendario generado (`npm run presentismo -- generar-calendario --periodo
+YYYYMM`) para mostrar la grilla; sin ninguno, la pantalla muestra el estado
+vacío global.
+
+Tests: `node --test tests/contract/web-api-calendario.test.js
+tests/integration/reclasificar-desde-api.test.js
+tests/unit/file-presentismo-repository-listar.test.js` (backend) y
+`cd frontend && npm run test` (componentes).
