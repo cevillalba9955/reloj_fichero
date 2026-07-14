@@ -18,7 +18,7 @@ import {
   buildPendingDetailContinuationCommand,
   MAX_RECORDS_PER_PAGE,
 } from './commands.js';
-import { RECORD_SIZE } from './records.js';
+import { RECORD_SIZE, frameRecords } from './records.js';
 
 export class ConexionRechazadaError extends Error {}
 export class RespuestaInesperadaError extends Error {}
@@ -169,9 +169,11 @@ export async function queryPendingFichadas(socket, reader, logger, { timeoutMs, 
     return { declaredPendingCount, rawRecords: [], nextSeq: seq + 1 };
   }
 
-  const rawRecords = [];
+  // Se acumula el "stream de registros" de cada pagina (su payload SIN el bloque
+  // de cierre). Concatenados, forman el stream continuo de declaredPendingCount
+  // fichadas, sin solapamientos ni arrastres que reconstruir a mano.
+  const pageStreams = [];
   let remaining = declaredPendingCount;
-  let carriedHeader = null;
   let pageIndex = 0;
   let detailSeq = seq;
 
@@ -181,36 +183,28 @@ export async function queryPendingFichadas(socket, reader, logger, { timeoutMs, 
     const pageCount = Math.min(remaining, MAX_RECORDS_PER_PAGE);
     const hasMorePages = remaining > pageCount;
 
-    // CORRECCION (2026-07-08, ver research.md §5.18 "bug real"): el equipo
-    // NO trunca un stream fijo segun el byteLen pedido — el contenido de
-    // los ultimos bytes CAMBIA segun cuanto se pida, no es un simple
-    // prefijo mas corto. Se necesitan `bytesNecesarios` bytes reales de
-    // recordsBuffer (pageCount registros, +4 extra si hay mas paginas para
-    // capturar el header real de la proxima — confirmado en vivo: sin ese
-    // "+4" el "proximo header" calculado da legajo 37305/37306 en vez del
-    // legajo real 1, verificado contra el software oficial).
-    //
-    // El campo `byteLen` que va DENTRO del comando (bytes 12-13) no es
-    // igual a `bytesNecesarios` en los dos casos:
-    // - 1ra pagina: el equipo entrega EXACTO lo pedido, sin sobrante.
-    // - paginas de continuacion: el equipo entrega SIEMPRE 4 bytes MAS de
-    //   lo pedido (confirmado en vivo con dos pedidos distintos, 36->40 y
-    //   40->44 recibidos) — hay que pedir 4 MENOS de `bytesNecesarios` para
-    //   que lo recibido coincida exactamente y no queden bytes sin leer
-    //   (FR-014). No hay captura real con una pagina de continuacion que a
-    //   su vez tenga otra pagina despues; esta formula esta confirmada solo
-    //   para el caso "ultima pagina de una continuacion".
-    const bytesNecesarios = pageCount * RECORD_SIZE + (hasMorePages ? 4 : 0);
-    const byteLenComando = isFirstPage ? bytesNecesarios : bytesNecesarios - 4;
+    // Fórmula de `byteLen` (feature 006, research.md §D1, verificada byte a byte
+    // contra el software oficial en research/fichada.pcapng, lote de 123 = 3
+    // páginas, y contra el listado oficial de fichadas de los días 13-14):
+    // - Si hay más páginas por venir: `pageCount*20 + 4` (páginas 1 y 2 = 1024).
+    // - En la última página: `pageCount*20 - carrySize`. `carrySize` es cuántos
+    //   bytes del primer registro de esta página quedaron en el payload de la
+    //   página previa (y por eso el equipo los omite acá): 0 si la única página
+    //   es la inicial; 4 si la previa fue la inicial (2 páginas → -4); 8 si la
+    //   previa fue una continuación (3+ páginas → -8; página 3 = 412).
+    const carrySize = isFirstPage ? 0 : pageIndex === 1 ? 4 : 8;
+    const byteLen = hasMorePages
+      ? pageCount * RECORD_SIZE + 4
+      : pageCount * RECORD_SIZE - carrySize;
 
     const detailCmd = isFirstPage
-      ? buildPendingDetailCommand(detailSeq, declaredPendingCount, byteLenComando)
-      : buildPendingDetailContinuationCommand(detailSeq, pageIndex, byteLenComando);
+      ? buildPendingDetailCommand(detailSeq, declaredPendingCount, byteLen)
+      : buildPendingDetailContinuationCommand(detailSeq, pageIndex, byteLen);
     socket.write(detailCmd);
     logger.log('command_sent', {
       commandCode: '0xA4',
       byteLength: detailCmd.length,
-      detail: `pagina=${pageIndex + 1} pageCount=${pageCount}`,
+      detail: `pagina=${pageIndex + 1} pageCount=${pageCount} byteLen=${byteLen}`,
     });
 
     const ackDetail = await reader.readExact(ACK_SIZE, { timeoutMs });
@@ -223,65 +217,49 @@ export async function queryPendingFichadas(socket, reader, logger, { timeoutMs, 
       );
     }
 
-    // Correccion de encuadre (research.md §5.9, 2026-07-03): este bloque de 4
-    // bytes NO carece de significado - es el campo[4] (legajo) del primer
-    // registro de la pagina. En la 1ra pagina se lee del socket; en
-    // continuaciones ya se tiene (es la cola de la pagina anterior, §5.18).
-    const header = isFirstPage ? await reader.readExact(4, { timeoutMs }) : carriedHeader;
-
-    // No existe un campo de longitud en el protocolo: la unica forma de saber
-    // cuantos bytes leer es asumir que coinciden con lo declarado por 0xB4
-    // (acotado a esta pagina, mas el "+4" de arriba cuando corresponde). Se
-    // lee `bytesNecesarios`, no `byteLenComando` — el equipo entrega ese
-    // extra "+4" por su cuenta en continuaciones (ver comentario arriba).
-    const recordsBuffer = await reader.readExact(bytesNecesarios, { timeoutMs });
-
-    // research.md §5.14/§5.18: siempre sobran 4 bytes AL FINAL DEL BUFFER
-    // COMPLETO (fullBuffer, no de recordsBuffer solo), sin importar
-    // declaredPendingCount, cuyo significado sigue sin resolver (§5.14) —
-    // se descartan sin usarlos. Cuando hay mas paginas, el header real de
-    // la proxima esta 4 bytes ANTES de ese bloque final (ver carriedHeader
-    // mas abajo), no en el mismo lugar.
-    const closingBlockHex = recordsBuffer
-      .subarray(recordsBuffer.length - 4)
-      .toString('hex')
-      .toUpperCase();
+    // El equipo responde SIEMPRE `byteLen + 4` bytes de payload tras el marcador
+    // (research.md §D2; confirmado en las 3 páginas de la captura). Los últimos 4
+    // son el bloque de cierre: se descartan. Lo que queda (`byteLen` bytes) es la
+    // porción del stream continuo de registros que aporta esta página; el primer
+    // registro de la próxima queda "a caballo" entre esta página y la siguiente,
+    // y se re-arma solo al concatenar (research.md §D3).
+    const payload = await reader.readExact(byteLen + 4, { timeoutMs });
+    const closingBlockHex = payload.subarray(payload.length - 4).toString('hex').toUpperCase();
     logger.log('response_received', {
       commandCode: '0xA4',
-      byteLength: ACK_SIZE + 2 + (isFirstPage ? 4 : 0) + recordsBuffer.length,
+      byteLength: ACK_SIZE + 2 + payload.length,
       detail: `bloqueCierre=${closingBlockHex}`,
     });
-
-    // research.md §5.9: el stream real de campos es [header/legajo1][fichada1
-    // sin su legajo][legajo2][fichada2 sin su legajo]... Concatenando header +
-    // recordsBuffer y volviendo a trocear en bloques de RECORD_SIZE se obtiene
-    // exactamente pageCount fichadas bien encuadradas de esta pagina.
-    const fullBuffer = Buffer.concat([header, recordsBuffer]);
-    for (let i = 0; i < pageCount; i += 1) {
-      const offset = i * RECORD_SIZE;
-      rawRecords.push(fullBuffer.subarray(offset, offset + RECORD_SIZE));
-    }
-
-    if (hasMorePages) {
-      // El header de la proxima pagina son los 4 bytes que siguen
-      // inmediatamente a los pageCount registros ya extraidos — NO los 4
-      // bytes finales de fullBuffer (esos son el bloque misterioso de
-      // arriba, un bloque DISTINTO, confirmado en vivo el 2026-07-08).
-      carriedHeader = fullBuffer.subarray(pageCount * RECORD_SIZE, pageCount * RECORD_SIZE + 4);
-    }
+    pageStreams.push(payload.subarray(0, payload.length - 4));
 
     remaining -= pageCount;
     pageIndex += 1;
   }
 
-  // FR-014 (comportamiento interino, research.md §5): si ya llegaron mas
-  // bytes de los que se leyeron para los registros declarados, es senal de
-  // que el reloj mando mas fichadas de las declaradas por 0xB4. Se trata
-  // como el mismo error de payload inesperado de FR-010, sin reconciliar.
   if (reader.length > 0) {
     throw new RespuestaInesperadaError(
-      `Discrepancia entre fichadas declaradas por 0xB4 (${declaredPendingCount}) y datos recibidos en 0xA4 ` +
-      `(sobraron ${reader.length} bytes sin consumir). Comportamiento interino sin resolver (spec FR-014, research.md §5).`
+      `Sobraron ${reader.length} bytes sin consumir tras leer el detalle 0xA4 declarado por 0xB4 ` +
+      `(${declaredPendingCount}). Payload inesperado (FR-010).`
+    );
+  }
+
+  // Stream continuo de fichadas: la concatenación de los payloads (sin cierre)
+  // mide exactamente `declaredPendingCount * RECORD_SIZE` (research.md §D3). Se
+  // encuadra por invariante estructural (FR-006) y debe dar todas las fichadas
+  // declaradas, sin deduplicar (FR-013: se exporta todo lo reportado). Cualquier
+  // desajuste de tamaño o de encuadre es un payload inesperado (FR-010).
+  const stream = Buffer.concat(pageStreams);
+  if (stream.length !== declaredPendingCount * RECORD_SIZE) {
+    throw new RespuestaInesperadaError(
+      `El stream de fichadas mide ${stream.length} bytes; se esperaban ` +
+      `${declaredPendingCount * RECORD_SIZE} (${declaredPendingCount} x ${RECORD_SIZE}). Payload inesperado (FR-010).`
+    );
+  }
+  const rawRecords = frameRecords(stream);
+  if (rawRecords.length !== declaredPendingCount) {
+    throw new RespuestaInesperadaError(
+      `El encuadre por invariante detectó ${rawRecords.length} fichadas y el equipo declaró ` +
+      `${declaredPendingCount} (research.md §D4, FR-010).`
     );
   }
 

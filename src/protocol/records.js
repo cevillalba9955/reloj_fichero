@@ -118,6 +118,40 @@ function decodeFechaHora(buffer) {
 // `null` significa que todavia no se pudo resolver, o que se sabe que no
 // es confiable para ese caso puntual (spec FR-005/FR-015) — nunca se
 // combina un valor sin evidencia con uno confirmado.
+// Invariante estructural de una fichada (feature 006, research.md §D4): un
+// tramo de 20 bytes es una fichada valida sii su constante de tipo (bytes
+// 12-15) es 00000001 Y su fecha/hora pasa la validacion de plausibilidad. Se
+// usa para encuadrar por forma en vez de por posicion fija, de modo que el
+// encuadre se re-sincroniza ante los reenvios/solapes de la paginacion 0xA4.
+export function looksLikeRecordStart(buffer, offset) {
+  if (offset + RECORD_SIZE > buffer.length) {
+    return false;
+  }
+  if (hexField(buffer, offset + 12, offset + 16) !== CONFIRMED_RECORD_TYPE) {
+    return false;
+  }
+  return decodeFechaHora(buffer.subarray(offset, offset + RECORD_SIZE)).fecha !== null;
+}
+
+// Encuadra un buffer continuo en fichadas de 20 bytes reconociendo el
+// invariante estructural (looksLikeRecordStart), no por posicion fija: avanza
+// de a un registro cuando el molde calza y se re-sincroniza byte a byte cuando
+// no (saltando bloques de cierre, bytes de arrastre y cualquier relleno de
+// frontera de pagina). Devuelve una lista de sub-buffers de 20 bytes.
+export function frameRecords(buffer) {
+  const records = [];
+  let offset = 0;
+  while (offset + RECORD_SIZE <= buffer.length) {
+    if (looksLikeRecordStart(buffer, offset)) {
+      records.push(buffer.subarray(offset, offset + RECORD_SIZE));
+      offset += RECORD_SIZE;
+    } else {
+      offset += 1;
+    }
+  }
+  return records;
+}
+
 export function parseFichadaRecord(buffer) {
   if (buffer.length !== RECORD_SIZE) {
     throw new RangeError(

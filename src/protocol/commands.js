@@ -86,12 +86,17 @@ export function buildPendingDetailCommand(seq, count, byteLength = count * RECOR
 // declaredPendingCount total), reenviar el mismo count ahi hace que el
 // equipo reinicie la entrega desde el primer registro pendiente (probado
 // en vivo: se repetian los primeros registros). El software oficial usa en
-// cambio, en esa misma posicion, un valor que coincide con
-// "indice de pagina de continuacion (1-based) desplazado 16 bits"
-// (`pageIndex << 16`; confirmado un unico punto de calibracion,
-// pageIndex=1 -> 0x00010000). No se sabe si esta formula generaliza a mas
-// de dos paginas — no hay una captura real con >102 pendientes para
-// confirmarlo.
+// cambio, en esa misma posicion, "indice de pagina de continuacion (1-based)
+// desplazado 16 bits" (`pageIndex << 16`).
+//
+// feature 006 (research/fichada.pcapng, lote real de 123 = 3 paginas): la
+// formula `pageIndex << 16` quedo confirmada tambien para la 3ra pagina
+// (pageIndex=2 -> 0x00020000), no solo para pageIndex=1. El valor de
+// `byteLength` NO se calcula aca: lo determina el caller (client.js) segun la
+// formula verificada contra esa captura (pageCount*20+4 si hay mas paginas;
+// pageCount*20 - bytesArrastrados en la ultima). Para 4+ paginas (>153
+// pendientes) todavia no hay captura; el encuadre por invariante + dedup del
+// caller cubre esa extrapolacion.
 export function buildPendingDetailContinuationCommand(seq, pageIndex, byteLength) {
   return buildPendingDetailCommand(seq, pageIndex << 16, byteLength);
 }

@@ -187,7 +187,7 @@ function startSchedulerMockServerConRegistros(obtenerRegistros) {
   });
 }
 
-test('scheduler: consulta al reloj mientras el checkpoint esta abierto, acumula fichadas nuevas (sin duplicar), y deja de consultar tras el margen agotado', async () => {
+test('scheduler: consulta al reloj mientras el checkpoint esta abierto, acumula fichadas nuevas (sin duplicar), y deja de consultar tras vencer la ventana', async () => {
   await withTempLogDir(async (logDir) => {
     let conexiones = 0;
     const server = await startSchedulerMockServer(() => {
@@ -197,10 +197,11 @@ test('scheduler: consulta al reloj mientras el checkpoint esta abierto, acumula 
     const { port } = server.address();
 
     const store = createFichadasMemoryStore();
-    const checkpoint = new Checkpoint({ id: 'entrada', horaEsperada: '07:00', margenMinutos: 10 });
+    const checkpoint = new Checkpoint({ id: 'entrada', horaEsperada: '07:00', duracionMinutos: 10 });
 
-    // horaEsperada=07:00 (420 min), margen=10 -> ventana [410,430] = 06:50-07:10.
-    let minutosSimulados = -15; // 06:45, fuera de ventana
+    // horaEsperada=07:00 (420 min), duracion=10 -> ventana de un solo lado
+    // [420,430] = 07:00-07:10.
+    let minutosSimulados = -15; // 06:45, fuera de ventana (antes de 07:00)
     const now = () => {
       const d = new Date(2026, 6, 7, 7, 0, 0, 0);
       d.setMinutes(d.getMinutes() + minutosSimulados);
@@ -232,7 +233,7 @@ test('scheduler: consulta al reloj mientras el checkpoint esta abierto, acumula 
       1
     );
 
-    // Tick 3: 07:05, todavia dentro del margen -> vuelve a consultar, pero el
+    // Tick 3: 07:05, todavia dentro de la ventana -> vuelve a consultar, pero el
     // reloj repite la misma fichada (no la borra): 0 nuevas (FR-017).
     minutosSimulados = 5;
     await scheduler.tick();
@@ -240,10 +241,10 @@ test('scheduler: consulta al reloj mientras el checkpoint esta abierto, acumula 
     assert.equal(scheduler.getUltimoCiclo().fichadasNuevas, 0);
     assert.equal(conexiones, 2);
 
-    // Tick 4: 07:11, margen agotado -> el checkpoint cierra, no debe consultar mas.
+    // Tick 4: 07:11, ventana vencida -> el checkpoint cierra, no debe consultar mas.
     minutosSimulados = 11;
     await scheduler.tick();
-    assert.equal(checkpoint.estado, 'cerrado_margen_agotado');
+    assert.equal(checkpoint.estado, 'cerrado_ventana_vencida');
     assert.equal(scheduler.getUltimoCiclo().resultado, 'omitido');
     assert.equal(conexiones, 2);
 
@@ -262,7 +263,7 @@ test('scheduler: persiste las fichadas del ciclo en el archivo por período, leg
     const { port } = server.address();
     const now = () => new Date(2026, 6, 7, 7, 0, 0, 0);
     const store = createFichadasMemoryStore();
-    const checkpoint = new Checkpoint({ id: 'entrada', horaEsperada: '07:00', margenMinutos: 30 });
+    const checkpoint = new Checkpoint({ id: 'entrada', horaEsperada: '07:00', duracionMinutos: 30 });
 
     const scheduler = createScheduler({
       host: '127.0.0.1',
@@ -307,7 +308,7 @@ test('scheduler: un fallo de persistencia registra el ciclo como error y se rein
     const { port } = server.address();
     const now = () => new Date(2026, 6, 7, 7, 0, 0, 0);
     const store = createFichadasMemoryStore();
-    const checkpoint = new Checkpoint({ id: 'entrada', horaEsperada: '07:00', margenMinutos: 30 });
+    const checkpoint = new Checkpoint({ id: 'entrada', horaEsperada: '07:00', duracionMinutos: 30 });
 
     const realSink = createFichadasSink({ archiveDir, now });
     let fallar = true;
@@ -366,7 +367,7 @@ test('scheduler: si una consulta todavia esta en curso, un tick concurrente no d
     const { port } = server.address();
 
     const store = createFichadasMemoryStore();
-    const checkpoint = new Checkpoint({ id: 'entrada', horaEsperada: '07:00', margenMinutos: 30 });
+    const checkpoint = new Checkpoint({ id: 'entrada', horaEsperada: '07:00', duracionMinutos: 30 });
     const now = () => new Date(2026, 6, 7, 7, 0, 0, 0);
 
     const scheduler = createScheduler({
@@ -405,7 +406,7 @@ test('startService/stop: orquesta scheduler + store + cliente existente, y getSt
       now,
       timeoutMs: 2000,
       tickIntervalMs: 60 * 60 * 1000, // no queremos un segundo tick real durante el test
-      checkpoints: { entrada: { horaEsperada: '07:00', margenMinutos: 30 } },
+      checkpoints: { entrada: { horaEsperada: '07:00', duracionMinutos: 30 } },
     });
 
     try {
@@ -435,7 +436,7 @@ test('startService/stop: orquesta scheduler + store + cliente existente, y getSt
   });
 });
 
-test('startService: un checkpoint se cierra por completitud (cerrado_completo) antes de agotar su margen cuando todos los empleados activos ya ficharon ese momento (US2)', async () => {
+test('startService: el checkpoint "entrada" se cierra por completitud (cerrado_completo) antes de vencer su ventana cuando todos los empleados activos ya ficharon (US2)', async () => {
   await withTempLogDir(async (logDir) => {
     const registros = [
       construirFichadaBuffer({ legajo: 1, year: 2026, month: 7, day: 7, hour: 7, minute: 0 }),
@@ -458,7 +459,7 @@ test('startService: un checkpoint se cierra por completitud (cerrado_completo) a
       now,
       timeoutMs: 2000,
       tickIntervalMs: 60 * 60 * 1000,
-      checkpoints: { entrada: { horaEsperada: '07:00', margenMinutos: 30 } },
+      checkpoints: { entrada: { horaEsperada: '07:00', duracionMinutos: 30 } },
       rosterProvider,
     });
 
@@ -476,7 +477,7 @@ test('startService: un checkpoint se cierra por completitud (cerrado_completo) a
   });
 });
 
-test('startService: al agotarse el margen con empleados activos incompletos, el checkpoint cierra por margen agotado sin alertas ni valores forzados (US2)', async () => {
+test('startService: al vencer la ventana con empleados activos incompletos, el checkpoint cierra por ventana vencida sin alertas ni valores forzados (US2)', async () => {
   await withTempLogDir(async (logDir) => {
     // Solo el legajo 1 ficha; el legajo 2 (activo) nunca lo hace.
     const registros = [construirFichadaBuffer({ legajo: 1, year: 2026, month: 7, day: 7, hour: 7, minute: 0 })];
@@ -499,7 +500,7 @@ test('startService: al agotarse el margen con empleados activos incompletos, el 
       now,
       timeoutMs: 2000,
       tickIntervalMs: 30,
-      checkpoints: { entrada: { horaEsperada: '07:00', margenMinutos: 30 } },
+      checkpoints: { entrada: { horaEsperada: '07:00', duracionMinutos: 30 } },
       rosterProvider,
     });
 
@@ -510,12 +511,12 @@ test('startService: al agotarse el margen con empleados activos incompletos, el 
       await new Promise((resolve) => setTimeout(resolve, 60));
       assert.equal(handle.getState().checkpoints.find((cp) => cp.id === 'entrada').estado, 'abierto');
 
-      // Se agota el margen (07:00 + 30min = 07:30) sin que legajo 2 fiche.
+      // Vence la ventana (07:00 + 30min = 07:30) sin que legajo 2 fiche.
       simulado = new Date(2026, 6, 7, 7, 35, 0, 0);
       await new Promise((resolve) => setTimeout(resolve, 60));
 
       const state = handle.getState();
-      assert.equal(state.checkpoints.find((cp) => cp.id === 'entrada').estado, 'cerrado_margen_agotado');
+      assert.equal(state.checkpoints.find((cp) => cp.id === 'entrada').estado, 'cerrado_ventana_vencida');
       assert.equal(state.empleados.find((e) => e.legajo === 1).checkpoints.entrada.completo, true);
       assert.equal(
         state.empleados.find((e) => e.legajo === 2).checkpoints.entrada.completo,
@@ -545,7 +546,7 @@ test('startService: si el reloj esta inalcanzable, el ciclo se registra como err
       now,
       timeoutMs: 500,
       tickIntervalMs: 60 * 60 * 1000,
-      checkpoints: { entrada: { horaEsperada: '07:00', margenMinutos: 30 } },
+      checkpoints: { entrada: { horaEsperada: '07:00', duracionMinutos: 30 } },
     });
 
     try {
@@ -561,7 +562,7 @@ test('startService: si el reloj esta inalcanzable, el ciclo se registra como err
   });
 });
 
-test('startService: si arranca despues de que el margen de un checkpoint ya vencio, lo cierra de inmediato por margen agotado sin llegar a consultar (Edge Case)', async () => {
+test('startService: si arranca despues de que la ventana de un checkpoint ya vencio, lo cierra de inmediato por ventana vencida sin llegar a consultar (Edge Case)', async () => {
   await withTempLogDir(async (logDir) => {
     let conexiones = 0;
     const server = await startSchedulerMockServer(() => {
@@ -569,7 +570,7 @@ test('startService: si arranca despues de que el margen de un checkpoint ya venc
       return 0;
     });
     const { port } = server.address();
-    // 08:00, muy por encima de 07:00 + 30min de margen.
+    // 08:00, muy por encima de 07:00 + 30min de ventana.
     const now = () => new Date(2026, 6, 7, 8, 0, 0, 0);
 
     const handle = startService({
@@ -579,13 +580,13 @@ test('startService: si arranca despues de que el margen de un checkpoint ya venc
       now,
       timeoutMs: 2000,
       tickIntervalMs: 60 * 60 * 1000,
-      checkpoints: { entrada: { horaEsperada: '07:00', margenMinutos: 30 } },
+      checkpoints: { entrada: { horaEsperada: '07:00', duracionMinutos: 30 } },
     });
 
     try {
       await new Promise((resolve) => setTimeout(resolve, 100));
       const state = handle.getState();
-      assert.equal(state.checkpoints.find((cp) => cp.id === 'entrada').estado, 'cerrado_margen_agotado');
+      assert.equal(state.checkpoints.find((cp) => cp.id === 'entrada').estado, 'cerrado_ventana_vencida');
       assert.equal(conexiones, 0, 'no debe llegar a consultar al reloj si el checkpoint ya vencio antes de arrancar');
     } finally {
       handle.stop();
@@ -594,17 +595,14 @@ test('startService: si arranca despues de que el margen de un checkpoint ya venc
   });
 });
 
-test('startService: una fichada nueva (rawHex distinto) de un empleado ya completo se agrega igual, sin reabrir el checkpoint ya cerrado (Edge Case)', async () => {
+test('scheduler: una fichada nueva (rawHex distinto) del mismo legajo se agrega igual mientras la ventana sigue abierta, y una vez cerrada por ventana vencida el checkpoint no se reabre ni se vuelve a consultar (Edge Case)', async () => {
   await withTempLogDir(async (logDir) => {
-    // Se necesitan DOS checkpoints: si hubiera uno solo, al cerrarse el
-    // scheduler dejaria de sondear por completo (US2/FR-003) y jamas podria
-    // llegar una fichada nueva despues. Se usa un "salida" con la misma
-    // horaEsperada pero margen mas amplio, que nunca llega a completarse
-    // (el legajo activo nunca le ficha a el), para que el scheduler siga
-    // sondeando durante todo el test.
-    let simulado = new Date(2026, 6, 7, 7, 0, 0, 0);
+    // Modelo 2026-07-14: un unico checkpoint "entrada". Sin rosterProvider, la
+    // completitud queda en false, asi que el checkpoint permanece ABIERTO
+    // durante toda su ventana [07:00, 07:30] y solo cierra por vencimiento.
+    // Se manejan los ticks a mano para controlar el instante simulado.
+    let simulado = new Date(2026, 6, 7, 7, 2, 0, 0);
     const now = () => simulado;
-    const rosterProvider = { getActiveEmployees: async () => [{ legajo: 1, activo: true }] };
 
     let registrosDelProximoTick = [
       construirFichadaBuffer({ legajo: 1, year: 2026, month: 7, day: 7, hour: 7, minute: 0 }),
@@ -612,45 +610,56 @@ test('startService: una fichada nueva (rawHex distinto) de un empleado ya comple
     const server = await startSchedulerMockServerConRegistros(() => registrosDelProximoTick);
     const { port } = server.address();
 
-    const handle = startService({
+    const store = createFichadasMemoryStore();
+    const checkpoint = new Checkpoint({ id: 'entrada', horaEsperada: '07:00', duracionMinutos: 30 });
+    const scheduler = createScheduler({
       host: '127.0.0.1',
       port,
+      checkpoints: [checkpoint],
+      store,
       logDir,
       now,
       timeoutMs: 2000,
-      tickIntervalMs: 30,
-      checkpoints: {
-        entrada: { horaEsperada: '07:00', margenMinutos: 5 },
-        salida: { horaEsperada: '07:00', margenMinutos: 60 },
-      },
-      rosterProvider,
     });
 
     try {
-      // Primer tick: legajo 1 ficha a las 07:00 -> cae en la ventana de
-      // "entrada" (primer checkpoint que matchea por hora), que se cierra
-      // por completitud (unico empleado activo). "salida" sigue abierto
-      // (legajo 1 nunca le ficha a el), asi que el scheduler sigue sondeando.
-      await new Promise((resolve) => setTimeout(resolve, 60));
-      assert.equal(handle.getState().checkpoints.find((cp) => cp.id === 'entrada').estado, 'cerrado_completo');
+      // Tick 1 (07:02, ventana abierta): legajo 1 ficha a las 07:00 -> se acumula.
+      await scheduler.tick();
+      assert.equal(checkpoint.estado, 'abierto');
+      assert.equal(store.getFichadasPorLegajo(1).length, 1);
 
-      // El reloj reporta una fichada nueva y distinta del mismo legajo,
-      // todavia dentro de la ventana horaria de "entrada" (rawHex distinto,
-      // por ejemplo una segunda marcacion real).
+      // Tick 2 (07:05, ventana todavia abierta): el reloj re-reporta la @07:00
+      // (dedup por rawHex, FR-017) y ademas una fichada nueva y distinta del
+      // mismo legajo -> solo se agrega la nueva (2 en total), sin perturbar el
+      // checkpoint.
       registrosDelProximoTick = [
-        construirFichadaBuffer({ legajo: 1, year: 2026, month: 7, day: 7, hour: 7, minute: 3 }),
+        construirFichadaBuffer({ legajo: 1, year: 2026, month: 7, day: 7, hour: 7, minute: 0 }),
+        construirFichadaBuffer({ legajo: 1, year: 2026, month: 7, day: 7, hour: 7, minute: 5 }),
       ];
-      simulado = new Date(2026, 6, 7, 7, 3, 0, 0);
-      await new Promise((resolve) => setTimeout(resolve, 60));
+      simulado = new Date(2026, 6, 7, 7, 5, 0, 0);
+      await scheduler.tick();
+      assert.equal(checkpoint.estado, 'abierto');
+      assert.equal(store.getFichadasPorLegajo(1).length, 2);
 
-      const state = handle.getState();
-      // El checkpoint "entrada" no vuelve a abrirse aunque llegue una fichada nueva.
-      assert.equal(state.checkpoints.find((cp) => cp.id === 'entrada').estado, 'cerrado_completo');
-      // Pero la fichada nueva SI se agrega al acumulado (no se descarta).
-      const fichadasLegajo1 = state.periodos.find((p) => p.legajo === 1)?.fichadas ?? [];
-      assert.equal(fichadasLegajo1.length, 2);
+      // Tick 3 (07:35, ventana vencida): el checkpoint cierra; el tick no
+      // consulta al reloj (omitido).
+      simulado = new Date(2026, 6, 7, 7, 35, 0, 0);
+      await scheduler.tick();
+      assert.equal(checkpoint.estado, 'cerrado_ventana_vencida');
+      assert.equal(scheduler.getUltimoCiclo().resultado, 'omitido');
+
+      // Tick 4 (07:40): aunque el reloj tuviera una fichada nueva, el checkpoint
+      // ya cerrado no se reabre y no se vuelve a consultar -> el acumulado no cambia.
+      registrosDelProximoTick = [
+        construirFichadaBuffer({ legajo: 1, year: 2026, month: 7, day: 7, hour: 7, minute: 20 }),
+      ];
+      simulado = new Date(2026, 6, 7, 7, 40, 0, 0);
+      await scheduler.tick();
+      assert.equal(checkpoint.estado, 'cerrado_ventana_vencida');
+      assert.equal(scheduler.getUltimoCiclo().resultado, 'omitido');
+      assert.equal(store.getFichadasPorLegajo(1).length, 2);
     } finally {
-      handle.stop();
+      scheduler.stop();
       server.close();
     }
   });
@@ -678,7 +687,7 @@ test('startService: si ActiveEmployeesProvider.getActiveEmployees() falla, el ci
       now,
       timeoutMs: 2000,
       tickIntervalMs: 60 * 60 * 1000,
-      checkpoints: { entrada: { horaEsperada: '07:00', margenMinutos: 30 } },
+      checkpoints: { entrada: { horaEsperada: '07:00', duracionMinutos: 30 } },
       rosterProvider,
     });
 

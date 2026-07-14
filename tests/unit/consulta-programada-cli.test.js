@@ -22,28 +22,24 @@ test('parseCliArgs: aplica los defaults de FR-002 y del adapter placeholder del 
   assert.equal(options.statusIntervalMs, 60 * 1000);
   assert.equal(options.fullHandshake, false);
   assert.deepEqual(options.checkpoints, {
-    entrada: { horaEsperada: '07:00', margenMinutos: 30 },
-    salida: { horaEsperada: '16:00', margenMinutos: 30 },
+    entrada: { horaEsperada: '07:00', duracionMinutos: 30 },
   });
 });
 
-test('parseCliArgs: permite sobreescribir horarios y márgenes de los checkpoints por CLI', () => {
+test('parseCliArgs: permite sobreescribir la hora y la duración de la ventana de entrada por CLI', () => {
   const options = parseCliArgs([
     '--host', '192.168.1.82',
     '--entrada-hora', '08:00',
-    '--entrada-margen', '15',
-    '--salida-hora', '17:30',
-    '--salida-margen', '20',
+    '--entrada-duracion', '15',
   ], {});
   assert.deepEqual(options.checkpoints, {
-    entrada: { horaEsperada: '08:00', margenMinutos: 15 },
-    salida: { horaEsperada: '17:30', margenMinutos: 20 },
+    entrada: { horaEsperada: '08:00', duracionMinutos: 15 },
   });
 });
 
-test('parseCliArgs: rechaza --entrada-margen no numérico', () => {
+test('parseCliArgs: rechaza --entrada-duracion no numérico', () => {
   assert.throws(
-    () => parseCliArgs(['--host', '192.168.1.82', '--entrada-margen', 'abc'], {}),
+    () => parseCliArgs(['--host', '192.168.1.82', '--entrada-duracion', 'abc'], {}),
     InvalidArgsError
   );
 });
@@ -62,9 +58,7 @@ test('parseCliArgs: toma host y parámetros desde FICHADAS_* cuando no se pasan 
     FICHADAS_TICK_INTERVAL_MS: '120000',
     FICHADAS_STATUS_INTERVAL_MS: '30000',
     FICHADAS_ENTRADA_HORA: '06:30',
-    FICHADAS_ENTRADA_MARGEN: '10',
-    FICHADAS_SALIDA_HORA: '18:00',
-    FICHADAS_SALIDA_MARGEN: '45',
+    FICHADAS_ENTRADA_DURACION: '10',
     FICHADAS_LOG_DIR: './otros-logs',
     FICHADAS_ROSTER_CONFIG: './config/otro.json',
   };
@@ -77,8 +71,7 @@ test('parseCliArgs: toma host y parámetros desde FICHADAS_* cuando no se pasan 
   assert.equal(options.logDir, './otros-logs');
   assert.equal(options.rosterConfigPath, './config/otro.json');
   assert.deepEqual(options.checkpoints, {
-    entrada: { horaEsperada: '06:30', margenMinutos: 10 },
-    salida: { horaEsperada: '18:00', margenMinutos: 45 },
+    entrada: { horaEsperada: '06:30', duracionMinutos: 10 },
   });
 });
 

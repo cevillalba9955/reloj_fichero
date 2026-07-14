@@ -22,8 +22,14 @@ activo/inactivo surge de `ActiveEmployeesProvider` (research.md §4).
 - Un `Empleado` sin `activo=true` no bloquea el cierre de ningún
   checkpoint (FR-005/FR-006): solo los empleados activos cuentan para la
   condición de completitud.
+- La completitud se evalúa **acotada al día de servicio en curso** (FR-006,
+  Clarifications 2026-07-14): un legajo está `completo` para la entrada de
+  hoy solo si tiene una fichada tageada `"entrada"` cuya `fecha` es la de
+  hoy (para fichadas sin `fecha`, el día local de recolección). Una fichada
+  de un día anterior, que el store conserva por agrupar por período mensual,
+  no lo completa hoy.
 - `checkpoints` se reinicia (vacío, todos `incompleto`) al comenzar la
-  ventana del primer checkpoint del día (Edge Case de spec.md: reinicio
+  ventana del checkpoint "entrada" del día (Edge Case de spec.md: reinicio
   diario del progreso).
 
 ## 2. Fichada
@@ -43,7 +49,7 @@ checkpoint que hace esta feature.
 | `rawHex` | string (40 caracteres hex) | Igual que en feature 001, para trazabilidad. Actúa además como identificador único de la Fichada dentro del store (FR-017): una Fichada con un `rawHex` ya presente en el store se ignora. |
 | `periodo` | string (`YYYY-MM`) | Derivado de `fecha` (research.md §5); si `fecha` es `null`, derivado de la fecha de recolección y marcado con `periodoAproximado: true`. |
 | `periodoAproximado` | boolean | `true` únicamente cuando `periodo` se derivó de la fecha de recolección en vez de `fecha` (caso excepcional). |
-| `checkpointId` | `"entrada"` \| `"salida"` \| `null` | Checkpoint al que quedó asociada (research.md §6); `null` si ningún checkpoint estaba abierto al momento de la descarga. |
+| `checkpointId` | `"entrada"` \| `null` | Checkpoint al que quedó asociada (research.md §6): `"entrada"` si su hora cae en la ventana, o —solo si `hora` es `null`— si la ventana estaba abierta al descargarla. `null` en el resto de los casos, incluida una fichada con hora válida fuera de la ventana (p. ej. una salida de un día previo descargada durante la ventana de entrada). |
 | `recolectadaEn` | string (ISO 8601) | Momento en que el servicio la descargó del reloj (distinto de `fecha`/`hora`, que son del evento real). |
 
 **Validation rules**:
@@ -67,33 +73,36 @@ checkpoint que hace esta feature.
 No es una de las tres entidades de dominio pedidas por la spec (Empleado,
 Fichada, Período), sino la configuración de scheduling que el servicio
 evalúa en cada tick. Se documenta acá por su rol central en FR-002 a
-FR-007.
+FR-007. Esta feature define un **único checkpoint diario, "entrada"**; el
+checkpoint "salida" quedó fuera de alcance (spec, Clarifications
+2026-07-14).
 
 | Campo | Tipo | Descripción |
 |---|---|---|
-| `id` | `"entrada"` \| `"salida"` | Identificador del checkpoint. |
-| `horaEsperada` | string (`HH:MM`) | 07:00 para "entrada", 16:00 para "salida" por defecto; configurable. |
-| `margenMinutos` | integer | 30 por defecto; configurable. Define la ventana de aceptación `[horaEsperada - margen, horaEsperada + margen]`. |
-| `estado` | `"pendiente"` \| `"abierto"` \| `"cerrado_completo"` \| `"cerrado_margen_agotado"` | Ver transición de estados abajo. |
+| `id` | `"entrada"` | Identificador del checkpoint (único en esta feature). |
+| `horaEsperada` | string (`HH:MM`) | 07:00 por defecto; configurable. Marca el inicio de la ventana. |
+| `duracionMinutos` | integer | 30 por defecto; configurable. Define una ventana de aceptación **de un solo lado** `[horaEsperada, horaEsperada + duracionMinutos]` (07:00 → 07:30 por defecto). |
+| `estado` | `"pendiente"` \| `"abierto"` \| `"cerrado_completo"` \| `"cerrado_ventana_vencida"` | Ver transición de estados abajo. |
 
 **State transitions**:
 
 ```
-pendiente → abierto (al llegar horaEsperada - margen, o al arrancar el
-             servicio si ya se está dentro de la ventana)
-abierto → cerrado_completo (todos los Empleados activos tienen Fichada
-           válida para este checkpoint)
-abierto → cerrado_margen_agotado (se venció horaEsperada + margen sin que
-           todos los Empleados activos estén completos — FR-007)
+pendiente → abierto (al llegar horaEsperada, o al arrancar el servicio si
+             ya se está dentro de la ventana [horaEsperada, horaEsperada +
+             duracionMinutos])
+abierto → cerrado_completo (todos los Empleados activos tienen al menos una
+           Fichada válida dentro de la ventana de "entrada")
+abierto → cerrado_ventana_vencida (se venció horaEsperada + duracionMinutos
+           sin que todos los Empleados activos estén completos — FR-007)
 ```
 
 **Validation rules**:
-- Un checkpoint en `cerrado_completo` o `cerrado_margen_agotado` no
+- Un checkpoint en `cerrado_completo` o `cerrado_ventana_vencida` no
   vuelve a `abierto` el mismo día, aunque lleguen fichadas nuevas después
   (Edge Cases de spec.md).
-- Mientras exista al menos un checkpoint en estado `abierto`, el
+- Mientras el checkpoint "entrada" esté en estado `abierto`, el
   scheduler (research.md §2) sigue disparando consultas cada 5 minutos.
-- Todos los checkpoints se reinician a `pendiente` al empezar el día
+- El checkpoint se reinicia a `pendiente` al empezar el día
   siguiente (no hay persistencia entre días, igual que entre reinicios).
 
 ## 4. Período (AñoMes)

@@ -37,8 +37,9 @@ function parseBooleano(envValue) {
 
 // contracts/service-contract.md (feature 002) + contracts/roster-provider-contract.md:
 // --host obligatorio (o FICHADAS_HOST). El resto toma los defaults de FR-002
-// (checkpoints entrada/salida 07:00/16:00 ± 30min, sondeo cada 5min) salvo que
-// se sobreescriban por CLI o por variables de entorno FICHADAS_*.
+// (único checkpoint "entrada" 07:00 con ventana de un solo lado de 30 min,
+// sondeo cada 5min) salvo que se sobreescriban por CLI o por variables de
+// entorno FICHADAS_*.
 export function parseCliArgs(argv, env = process.env) {
   let values;
   try {
@@ -56,9 +57,7 @@ export function parseCliArgs(argv, env = process.env) {
         'tick-interval-ms': { type: 'string' },
         'status-interval-ms': { type: 'string' },
         'entrada-hora': { type: 'string' },
-        'entrada-margen': { type: 'string' },
-        'salida-hora': { type: 'string' },
-        'salida-margen': { type: 'string' },
+        'entrada-duracion': { type: 'string' },
         'fichadas-archive-dir': { type: 'string' },
         'full-handshake': { type: 'boolean', default: false },
       },
@@ -75,7 +74,7 @@ export function parseCliArgs(argv, env = process.env) {
       'Uso: --host <ip> [--port 5005] [--padron archivo|oracle] ' +
       '[--roster-config ./config/active-employees.json] [--log-dir ./logs] [--timeout-ms 5000] ' +
       '[--tick-interval-ms 300000] [--status-interval-ms 60000] ' +
-      '[--entrada-hora 07:00] [--entrada-margen 30] [--salida-hora 16:00] [--salida-margen 30] ' +
+      '[--entrada-hora 07:00] [--entrada-duracion 30] ' +
       '[--full-handshake]. Cualquiera de estos tambien se puede fijar por FICHADAS_* en el .env.'
     );
   }
@@ -106,11 +105,8 @@ export function parseCliArgs(argv, env = process.env) {
   );
   if (statusIntervalMs <= 0) throw new InvalidArgsError(`--status-interval-ms / FICHADAS_STATUS_INTERVAL_MS invalido: "${statusIntervalMs}" (debe ser > 0)`);
 
-  const entradaMargen = parseEntero('--entrada-margen / FICHADAS_ENTRADA_MARGEN', pick(values['entrada-margen'], env.FICHADAS_ENTRADA_MARGEN, '30'));
-  if (entradaMargen < 0) throw new InvalidArgsError(`--entrada-margen / FICHADAS_ENTRADA_MARGEN invalido: "${entradaMargen}" (debe ser >= 0)`);
-
-  const salidaMargen = parseEntero('--salida-margen / FICHADAS_SALIDA_MARGEN', pick(values['salida-margen'], env.FICHADAS_SALIDA_MARGEN, '30'));
-  if (salidaMargen < 0) throw new InvalidArgsError(`--salida-margen / FICHADAS_SALIDA_MARGEN invalido: "${salidaMargen}" (debe ser >= 0)`);
+  const entradaDuracion = parseEntero('--entrada-duracion / FICHADAS_ENTRADA_DURACION', pick(values['entrada-duracion'], env.FICHADAS_ENTRADA_DURACION, '30'));
+  if (entradaDuracion < 0) throw new InvalidArgsError(`--entrada-duracion / FICHADAS_ENTRADA_DURACION invalido: "${entradaDuracion}" (debe ser >= 0)`);
 
   return {
     host,
@@ -128,11 +124,7 @@ export function parseCliArgs(argv, env = process.env) {
     checkpoints: {
       entrada: {
         horaEsperada: pick(values['entrada-hora'], env.FICHADAS_ENTRADA_HORA, '07:00'),
-        margenMinutos: entradaMargen,
-      },
-      salida: {
-        horaEsperada: pick(values['salida-hora'], env.FICHADAS_SALIDA_HORA, '16:00'),
-        margenMinutos: salidaMargen,
+        duracionMinutos: entradaDuracion,
       },
     },
   };
@@ -188,7 +180,7 @@ export function createFichadasSink({ archiveDir, now = () => new Date() }) {
 function formatEstadoResumen(state) {
   const lineas = [`Fecha del servicio: ${state.fechaServicio}`];
   for (const cp of state.checkpoints) {
-    lineas.push(`  Checkpoint "${cp.id}" (${cp.horaEsperada} +/-${cp.margenMinutos}min): ${cp.estado}`);
+    lineas.push(`  Checkpoint "${cp.id}" (ventana ${cp.horaEsperada} +${cp.duracionMinutos}min): ${cp.estado}`);
   }
   if (state.empleados) {
     const completos = state.empleados.filter((e) => Object.values(e.checkpoints).every((c) => c.completo)).length;
