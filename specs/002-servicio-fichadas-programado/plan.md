@@ -8,10 +8,11 @@
 
 Servicio Node.js de larga duración que reutiliza el cliente TCP del
 protocolo RS956 ya implementado (`001-consulta-fichadas-rs596`) para
-sondear el reloj biométrico cada 5 minutos alrededor de dos checkpoints
-diarios configurables (entrada ~07:00, salida ~16:00, margen ±30 min),
-hasta que cada checkpoint se cierre por completitud (todos los empleados
-activos fichados) o por vencimiento de su margen. Las fichadas recolectadas
+sondear el reloj biométrico cada 5 minutos durante la ventana de un único
+checkpoint diario configurable (entrada ~07:00, ventana de un solo lado de
+30 min: 07:00 → 07:30), hasta que el checkpoint se cierre por completitud
+(todos los empleados activos con al menos una fichada dentro de la ventana)
+o por cumplirse los 30 minutos de la ventana. Las fichadas recolectadas
 se acumulan en memoria de proceso (sin persistencia), organizadas por
 Empleado (legajo), Período (año-mes, derivado de la fecha ya decodificada
 del evento) y checkpoint. El padrón de empleados activos se obtiene de una
@@ -33,9 +34,9 @@ reutiliza `src/protocol/client.js` de feature 001 tal cual, y solo
 librería estándar de Node.js: `node:timers` (temporizador de 5 min),
 `node:fs` (adapter placeholder de padrón de empleados activos, y log
 NDJSON reutilizando el patrón de `session-logger.js`). Justificación: el
-dominio de scheduling (2 checkpoints/día con margen) no necesita una
-librería de cron (research.md §2); mantiene la política de feature 001 de
-no sumar dependencias sin justificar el porqué.
+dominio de scheduling (un checkpoint/día con ventana de 30 min) no necesita
+una librería de cron (research.md §2); mantiene la política de feature 001
+de no sumar dependencias sin justificar el porqué.
 
 **Storage**: Memoria de proceso únicamente (Map/objetos JS) para
 Empleados, Fichadas y Períodos — sin DB ni archivos de salida (spec,
@@ -69,8 +70,8 @@ Assumptions).
 
 **Scale/Scope**: Un único reloj RS956, un único proceso de servicio, un
 padrón de empleados activos del orden de decenas a un par de cientos de
-legajos (tamaño típico de plantilla de una organización, no miles); dos
-checkpoints por día.
+legajos (tamaño típico de plantilla de una organización, no miles); un
+único checkpoint por día (entrada).
 
 ## Constitution Check
 

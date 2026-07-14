@@ -8,9 +8,9 @@ import { createServiceCycleLogger } from '../logging/service-cycle-logger.js';
 // apertura/cierre de checkpoints en cada tick. `computeCompletitud` es un
 // predicado inyectable por checkpointId (async, ya que en US2 consulta el
 // padron de empleados activos); por defecto siempre `false`, para que en
-// Foundational/US1 los checkpoints solo cierren por margen agotado (FR-004,
-// mitad "a" de la condicion queda deshabilitada hasta que se integre el
-// padron).
+// Foundational/US1 los checkpoints solo cierren por vencimiento de la
+// ventana (FR-004, mitad "a" de la condicion queda deshabilitada hasta que
+// se integre el padron).
 export function createScheduler({
   host,
   port = 5005,

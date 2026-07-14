@@ -21,8 +21,8 @@ implementado. No incluye código de implementación — ver `tasks.md`
 ## Validar el ciclo de un checkpoint contra el mock (sin esperar horas reales)
 
 1. Arrancar el servicio con un `now()` inyectado que simule estar dentro
-   de la ventana de aceptación de "entrada" (por ejemplo, 07:00 con margen
-   ±30 min → simular las 07:05).
+   de la ventana de aceptación de "entrada" (por ejemplo, con horaEsperada
+   07:00 y duración 30 min → ventana 07:00–07:30 → simular las 07:05).
 2. Levantar el mock TCP del reloj (reutilizando el patrón de
    `tests/integration/` de feature 001) con fichadas pendientes para
    todos los legajos del padrón placeholder.
@@ -35,16 +35,16 @@ implementado. No incluye código de implementación — ver `tasks.md`
      ventana de aceptación) y cuáles siguen `incompleto`.
    - Apenas todos los empleados activos del padrón estén completos para
      "entrada", los siguientes ticks de 5 minutos no disparan una nueva
-     consulta motivada por ese checkpoint (aunque sí puede seguir abierto
-     el checkpoint "salida").
+     consulta y el checkpoint "entrada" se cierra (no hay un segundo
+     checkpoint "salida" en esta feature).
 
-## Validar el cierre por margen agotado
+## Validar el cierre por ventana vencida (30 min)
 
 1. Igual que arriba, pero con el mock devolviendo fichadas para menos
    empleados de los que declara el padrón placeholder.
-2. Avanzar el reloj simulado hasta superar `horaEsperada + margenMinutos`
-   del checkpoint.
-3. **Resultado esperado**: el checkpoint pasa a `cerrado_margen_agotado`;
+2. Avanzar el reloj simulado hasta superar `horaEsperada + duracionMinutos`
+   del checkpoint (07:30 con los valores por defecto).
+3. **Resultado esperado**: el checkpoint pasa a `cerrado_ventana_vencida`;
    los empleados sin fichada quedan expuestos como `incompleto` en
    `getState()`; el servicio no genera ninguna alerta ni fuerza un valor
    (FR-007/SC-006); no se disparan más consultas motivadas por ese
@@ -100,8 +100,8 @@ Debe incluir, además de los tests ya existentes de feature 001:
 
 - Arrancar el servicio después de la hora esperada de "entrada" (por
   ejemplo, a las 09:00) y confirmar que igual consulta dentro de lo que
-  quede de ventana, o considera el checkpoint cerrado si ya venció el
-  margen.
+  quede de ventana, o considera el checkpoint cerrado si ya venció la
+  ventana de 30 min.
 - Reiniciar el proceso a mitad de la ventana horaria y confirmar que el
   progreso de recolección del día se pierde y arranca de nuevo (sin
   persistencia, según spec.md Assumptions).

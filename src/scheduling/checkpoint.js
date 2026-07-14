@@ -2,10 +2,10 @@ const ESTADOS = {
   PENDIENTE: 'pendiente',
   ABIERTO: 'abierto',
   CERRADO_COMPLETO: 'cerrado_completo',
-  CERRADO_MARGEN_AGOTADO: 'cerrado_margen_agotado',
+  CERRADO_VENTANA_VENCIDA: 'cerrado_ventana_vencida',
 };
 
-const CERRADOS = new Set([ESTADOS.CERRADO_COMPLETO, ESTADOS.CERRADO_MARGEN_AGOTADO]);
+const CERRADOS = new Set([ESTADOS.CERRADO_COMPLETO, ESTADOS.CERRADO_VENTANA_VENCIDA]);
 
 function parseHoraEsperada(horaEsperada) {
   const [horas, minutos] = horaEsperada.split(':').map(Number);
@@ -21,20 +21,20 @@ function minutosDeHoraString(horaHHMMSS) {
   return horas * 60 + minutos + (segundos ?? 0) / 60;
 }
 
-// data-model.md §3: ventana de aceptación (horaEsperada ± margenMinutos) y
-// máquina de estados pendiente -> abierto -> cerrado_completo |
-// cerrado_margen_agotado. La completitud es un predicado inyectado por el
-// caller (research.md §2/§6): este módulo no sabe nada del padrón de
-// empleados activos.
+// data-model.md §3: ventana de aceptación de un solo lado
+// [horaEsperada, horaEsperada + duracionMinutos] y máquina de estados
+// pendiente -> abierto -> cerrado_completo | cerrado_ventana_vencida. La
+// completitud es un predicado inyectado por el caller (research.md §2/§6):
+// este módulo no sabe nada del padrón de empleados activos.
 export class Checkpoint {
-  constructor({ id, horaEsperada, margenMinutos = 30 }) {
+  constructor({ id, horaEsperada, duracionMinutos = 30 }) {
     this.id = id;
     this.horaEsperada = horaEsperada;
-    this.margenMinutos = margenMinutos;
+    this.duracionMinutos = duracionMinutos;
     this.estado = ESTADOS.PENDIENTE;
     const base = parseHoraEsperada(horaEsperada);
-    this._inicio = base - margenMinutos;
-    this._fin = base + margenMinutos;
+    this._inicio = base;
+    this._fin = base + duracionMinutos;
   }
 
   _dentroDeVentana(minutos) {
@@ -73,7 +73,7 @@ export class Checkpoint {
       return this.estado;
     }
     if (minutos > this._fin) {
-      this.estado = ESTADOS.CERRADO_MARGEN_AGOTADO;
+      this.estado = ESTADOS.CERRADO_VENTANA_VENCIDA;
     }
     return this.estado;
   }
@@ -93,13 +93,12 @@ export class Checkpoint {
   }
 }
 
-// FR-002: dos checkpoints por defecto (entrada ~07:00, salida ~16:00),
-// configurables en horaEsperada/margenMinutos.
+// FR-002 (Clarifications 2026-07-14): un único checkpoint "entrada"
+// (~07:00) con ventana de un solo lado de duracionMinutos (30 por defecto).
+// El checkpoint "salida" quedó fuera de alcance de esta feature.
 export function createDefaultCheckpoints(config = {}) {
-  const entrada = config.entrada ?? { horaEsperada: '07:00', margenMinutos: 30 };
-  const salida = config.salida ?? { horaEsperada: '16:00', margenMinutos: 30 };
+  const entrada = config.entrada ?? { horaEsperada: '07:00', duracionMinutos: 30 };
   return [
     new Checkpoint({ id: 'entrada', ...entrada }),
-    new Checkpoint({ id: 'salida', ...salida }),
   ];
 }

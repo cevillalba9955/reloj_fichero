@@ -20,8 +20,8 @@ ActiveEmployeesProvider.getActiveEmployees() -> Promise<Empleado[]>
 | `activo` | boolean | Siempre `true` para los elementos devueltos por este método (un provider solo devuelve activos; no hay un campo de "inactivo" que filtrar del lado del servicio). |
 
 **Comportamiento esperado**:
-- Debe resolver rápido (se llama en cada tick de 5 minutos mientras haya
-  checkpoints abiertos); no debe bloquear indefinidamente.
+- Debe resolver rápido (se llama en cada tick de 5 minutos mientras el
+  checkpoint "entrada" esté abierto); no debe bloquear indefinidamente.
 - Ante cualquier error (fuente no disponible, timeout, formato
   inesperado), DEBE rechazar la promesa — nunca devolver una lista vacía
   como sustituto silencioso de un error (FR-013).
