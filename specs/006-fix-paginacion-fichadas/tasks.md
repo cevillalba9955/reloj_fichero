@@ -11,9 +11,9 @@ NON-NEGOTIABLE). Cada tarea de implementación va precedida por su test en rojo.
 
 ## Phase 1: Setup
 
-- [ ] T001 Verificar el fixture de tráfico versionado `tests/fixtures/fichada-3paginas/stream10.json` y su `README.md` (derivados de `research/fichada.pcapng`); confirmar que `research/fichada.pcapng` sigue trackeado en git (Constitución III).
-- [ ] T002 [P] Agregar un helper de test `tests/helpers/fake-socket.js` (EventEmitter que emula `node:net` Socket: `write`, `on('data')`, `on('close')`, `destroy`) para reproducir respuestas del equipo desde el fixture, si no existe uno reutilizable en `tests/helpers/`.
-- [ ] T003 [P] Agregar un helper `tests/helpers/stream10-fixture.js` que cargue `stream10.json` y exponga: comandos `0xA4` esperados por página y el guion de respuestas del equipo (ACK + `55AA` + payload) para alimentar el fake socket.
+- [X] T001 Verificar el fixture de tráfico versionado `tests/fixtures/fichada-3paginas/stream10.json` y su `README.md` (derivados de `research/fichada.pcapng`); confirmar que `research/fichada.pcapng` sigue trackeado en git (Constitución III).
+- [X] T002 [P] Agregar un helper de test `tests/helpers/fake-socket.js` (EventEmitter que emula `node:net` Socket: `write`, `on('data')`, `on('close')`, `destroy`) para reproducir respuestas del equipo desde el fixture, si no existe uno reutilizable en `tests/helpers/`.
+- [X] T003 [P] Agregar un helper `tests/helpers/stream10-fixture.js` que cargue `stream10.json` y exponga: comandos `0xA4` esperados por página y el guion de respuestas del equipo (ACK + `55AA` + payload) para alimentar el fake socket.
 
 ---
 
@@ -21,10 +21,10 @@ NON-NEGOTIABLE). Cada tarea de implementación va precedida por su test en rojo.
 
 **Propósito**: dejar el andamiaje de decodificación por invariante disponible para las 3 historias.
 
-- [ ] T004 [US-shared] Escribir test unitario en rojo `tests/unit/encuadre-sincronizante.test.js` para una función pura de encuadre `frameRecords(buffer)` que trocee por invariante estructural (`recordType==00000001` + fecha/hora válida) y devuelva registros de 20 bytes, ignorando bytes de frontera. (FR-006, FR-010)
-- [ ] T005 [US-shared] Implementar `frameRecords(buffer)` y `looksLikeRecordStart(buffer, offset)` en `src/protocol/records.js`, reutilizando `decodeFechaHora`/`looksValid` existentes; exportar sin romper la API actual de `parseFichadaRecord`. (FR-006, FR-010)
-- [ ] T006 [US-shared] Escribir test unitario en rojo para `dedupeFichadas(records)` (clave `(legajo,fecha,hora,metodo)`, preserva orden de primera aparición) en `tests/unit/encuadre-sincronizante.test.js`. (FR-007)
-- [ ] T007 [US-shared] Implementar `dedupeFichadas(records)` en `src/protocol/records.js` y ponerlo en verde. (FR-007)
+- [X] T004 [US-shared] Escribir test unitario en rojo `tests/unit/encuadre-sincronizante.test.js` para una función pura de encuadre `frameRecords(buffer)` que trocee por invariante estructural (`recordType==00000001` + fecha/hora válida) y devuelva registros de 20 bytes, ignorando bytes de frontera. (FR-006, FR-010)
+- [X] T005 [US-shared] Implementar `frameRecords(buffer)` y `looksLikeRecordStart(buffer, offset)` en `src/protocol/records.js`, reutilizando `decodeFechaHora`/`looksValid` existentes; exportar sin romper la API actual de `parseFichadaRecord`. (FR-006, FR-010)
+- [X] T006 [US-shared] Escribir test unitario en rojo para `dedupeFichadas(records)` (clave `(legajo,fecha,hora,metodo)`, preserva orden de primera aparición) en `tests/unit/encuadre-sincronizante.test.js`. (FR-007)
+- [X] T007 [US-shared] Implementar `dedupeFichadas(records)` en `src/protocol/records.js` y ponerlo en verde. (FR-007)
 
 **Checkpoint**: encuadre + dedup verdes y aislados, sin tocar todavía el flujo de sesión.
 
@@ -38,11 +38,11 @@ corruptas, cero duplicadas.
 **Independent Test**: replay de `stream10.json` por el fake socket → 122 fichadas válidas
 idénticas a las del software oficial, `overlapCount==1`.
 
-- [ ] T008 [P] [US1] Escribir test de integración en rojo `tests/integration/paginacion-3-paginas.integration.test.js`: correr `runQuerySession` (o `queryPendingFichadas`) contra el fake socket alimentado por el fixture; afirmar 122 registros únicos, todos con `fecha/hora/legajo/metodo` no nulos y `recordType==00000001`. (SC-001)
-- [ ] T009 [US1] Corregir la fórmula de `byteLen` en `queryPendingFichadas` (`src/protocol/client.js`): `pageCount*20+4` si `hasMorePages`, `pageCount*20-8` en la última; leer `byteLen+4` de payload por página. (FR-001, FR-002, FR-003)
-- [ ] T010 [US1] Corregir el arrastre entre continuaciones en `src/protocol/client.js`: 4 bytes inicial→1ª continuación, 8 bytes continuación→continuación, con el registro reenviado marcado para descarte. (FR-004, FR-005)
-- [ ] T011 [US1] Reemplazar el troceo posicional del payload por `frameRecords` + `dedupeFichadas` al ensamblar `rawRecords` en `src/protocol/client.js`; mapear a `parseFichadaRecord`. (FR-005, FR-006, FR-007)
-- [ ] T012 [US1] Poner en verde T008 y verificar la igualdad uno-a-uno contra los registros esperados del fixture (agregar el set esperado como dato del test). (SC-002)
+- [X] T008 [P] [US1] Escribir test de integración en rojo `tests/integration/paginacion-3-paginas.integration.test.js`: correr `runQuerySession` (o `queryPendingFichadas`) contra el fake socket alimentado por el fixture; afirmar 122 registros únicos, todos con `fecha/hora/legajo/metodo` no nulos y `recordType==00000001`. (SC-001)
+- [X] T009 [US1] Corregir la fórmula de `byteLen` en `queryPendingFichadas` (`src/protocol/client.js`): `pageCount*20+4` si `hasMorePages`, `pageCount*20-8` en la última; leer `byteLen+4` de payload por página. (FR-001, FR-002, FR-003)
+- [X] T010 [US1] Corregir el arrastre entre continuaciones en `src/protocol/client.js`: 4 bytes inicial→1ª continuación, 8 bytes continuación→continuación, con el registro reenviado marcado para descarte. (FR-004, FR-005)
+- [X] T011 [US1] Reemplazar el troceo posicional del payload por `frameRecords` + `dedupeFichadas` al ensamblar `rawRecords` en `src/protocol/client.js`; mapear a `parseFichadaRecord`. (FR-005, FR-006, FR-007)
+- [X] T012 [US1] Poner en verde T008 y verificar la igualdad uno-a-uno contra los registros esperados del fixture (agregar el set esperado como dato del test). (SC-002)
 
 **Checkpoint**: US1 verde de punta a punta — el defecto reportado queda resuelto (MVP entregable).
 
@@ -54,9 +54,9 @@ idénticas a las del software oficial, `overlapCount==1`.
 
 **Independent Test**: comparar comandos generados vs. `stream10.json`, campo por campo.
 
-- [ ] T013 [P] [US2] Escribir test de contrato en rojo `tests/contract/pagination-0xA4.contract.test.js`: para el lote de 123, afirmar que `buildPendingDetailCommand`/`buildPendingDetailContinuationCommand` producen `byteLen` = 1024/1024/412 y `count` = 0x7B / 1<<16 / 2<<16, comparando con los bytes del fixture. (SC-003, FR-001, FR-002)
-- [ ] T014 [US2] Ajustar `buildPendingDetailContinuationCommand` y/o el cálculo de `byteLen` en `src/protocol/commands.js` para que el valor provenga de la fórmula (no de `bytesNecesarios-4`), y documentar la fórmula con referencia a `research/fichada.pcapng`. (FR-001, FR-002)
-- [ ] T015 [US2] Poner en verde T013 y confirmar que los comandos de 1 y 2 páginas no cambian respecto de las capturas previas. (SC-003, SC-004)
+- [X] T013 [P] [US2] Escribir test de contrato en rojo `tests/contract/pagination-0xA4.contract.test.js`: para el lote de 123, afirmar que `buildPendingDetailCommand`/`buildPendingDetailContinuationCommand` producen `byteLen` = 1024/1024/412 y `count` = 0x7B / 1<<16 / 2<<16, comparando con los bytes del fixture. (SC-003, FR-001, FR-002)
+- [X] T014 [US2] Ajustar `buildPendingDetailContinuationCommand` y/o el cálculo de `byteLen` en `src/protocol/commands.js` para que el valor provenga de la fórmula (no de `bytesNecesarios-4`), y documentar la fórmula con referencia a `research/fichada.pcapng`. (FR-001, FR-002)
+- [X] T015 [US2] Poner en verde T013 y confirmar que los comandos de 1 y 2 páginas no cambian respecto de las capturas previas. (SC-003, SC-004)
 
 **Checkpoint**: comandos verificados contra ground truth.
 
@@ -69,9 +69,9 @@ exacto varíe, sin captura oficial.
 
 **Independent Test**: flujo sintético de ≥4 páginas con solapamientos → únicos esperados.
 
-- [ ] T016 [P] [US3] Escribir test unitario en rojo en `tests/unit/encuadre-sincronizante.test.js`: construir un flujo sintético de 4+ páginas con registros solapados y bloques de cierre insertados; afirmar que `frameRecords`+`dedupeFichadas` devuelven exactamente los únicos esperados. (SC-005, FR-006, FR-007)
-- [ ] T017 [US3] Implementar el manejo de discrepancia `declaredPendingCount` vs. únicos en `src/protocol/client.js`: calcular `overlapCount`, loguearlo de forma estructurada (Principio V) y NO abortar cuando es ≥0 por solapamiento. (FR-009)
-- [ ] T018 [US3] Test en rojo→verde para el caso "bytes que no encuadran" → `RespuestaInesperadaError` explícito en lugar de exportar basura, en `tests/unit/encuadre-sincronizante.test.js`. (FR-010)
+- [X] T016 [P] [US3] Escribir test unitario en rojo en `tests/unit/encuadre-sincronizante.test.js`: construir un flujo sintético de 4+ páginas con registros solapados y bloques de cierre insertados; afirmar que `frameRecords`+`dedupeFichadas` devuelven exactamente los únicos esperados. (SC-005, FR-006, FR-007)
+- [X] T017 [US3] Implementar el manejo de discrepancia `declaredPendingCount` vs. únicos en `src/protocol/client.js`: calcular `overlapCount`, loguearlo de forma estructurada (Principio V) y NO abortar cuando es ≥0 por solapamiento. (FR-009)
+- [X] T018 [US3] Test en rojo→verde para el caso "bytes que no encuadran" → `RespuestaInesperadaError` explícito en lugar de exportar basura, en `tests/unit/encuadre-sincronizante.test.js`. (FR-010)
 
 **Checkpoint**: robustez más allá de los casos con captura.
 
@@ -79,10 +79,10 @@ exacto varíe, sin captura oficial.
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T019 [P] Actualizar la documentación del protocolo en el módulo adaptador (comentarios de `client.js`/`commands.js` y, si existe, el changelog del adaptador) con la fórmula de `byteLen`, el arrastre y la evidencia de `research/fichada.pcapng`. (Constitución III/IV)
-- [ ] T020 [P] Correr la suite completa `npm test` y confirmar cero regresiones en framing/records/client-session/query-pending-fichadas. (SC-004)
-- [ ] T021 [P] Verificar la sesión real de referencia: reprocesar `output/fichadas-192.168.1.78-2026-07-14T10_57_04.272Z.json` o su fixture y confirmar 0 registros corruptos (contra los 21 previos). (SC-001)
-- [ ] T022 Actualizar `specs/006-fix-paginacion-fichadas/quickstart.md` con cualquier ajuste de comandos/salidas surgido durante la implementación.
+- [X] T019 [P] Actualizar la documentación del protocolo en el módulo adaptador (comentarios de `client.js`/`commands.js` y, si existe, el changelog del adaptador) con la fórmula de `byteLen`, el arrastre y la evidencia de `research/fichada.pcapng`. (Constitución III/IV)
+- [X] T020 [P] Correr la suite completa `npm test` y confirmar cero regresiones en framing/records/client-session/query-pending-fichadas. (SC-004)
+- [X] T021 [P] Verificar la sesión real de referencia: reprocesar `output/fichadas-192.168.1.78-2026-07-14T10_57_04.272Z.json` o su fixture y confirmar 0 registros corruptos (contra los 21 previos). (SC-001)
+- [X] T022 Actualizar `specs/006-fix-paginacion-fichadas/quickstart.md` con cualquier ajuste de comandos/salidas surgido durante la implementación.
 
 ---
 
