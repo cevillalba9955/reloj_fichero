@@ -39,19 +39,22 @@ sin registros corruptos ni faltantes, para que la liquidación de presentismo se
 lote grande produce datos de asistencia inválidos que impactan nómina y cumplimiento legal.
 
 **Independent Test**: reproducir la sesión real de 123 fichadas a partir de
-`research/fichada.pcapng` (equipo simulado) y verificar que las 122 fichadas únicas se
-decodifican con fecha, hora, legajo y método válidos, idénticas a las que obtiene el
-software oficial.
+`research/fichada.pcapng` (equipo simulado) y verificar que las **123 fichadas declaradas** se
+decodifican con fecha, hora, legajo y método válidos, y que **todas** las fichadas del listado
+oficial del equipo para los días 13-14 (`tests/fixtures/fichada-3paginas/oficial-13-14.json`)
+están presentes, sin faltantes ni duplicados.
 
 **Acceptance Scenarios**:
 
 1. **Given** un reloj con 123 fichadas pendientes (3 páginas), **When** el servicio ejecuta
-   una sesión de consulta, **Then** todos los registros exportados tienen `fecha`, `hora`,
-   `legajo` y `método` no nulos y con `recordType = 00000001`, sin ningún registro con
-   campos en `null` por desalineo.
+   una sesión de consulta, **Then** se exportan las **123** fichadas declaradas, todas con
+   `fecha`, `hora`, `legajo` y `método` no nulos y `recordType = 00000001`, sin ningún registro
+   con campos en `null` por desalineo.
 2. **Given** la misma sesión de 123 fichadas, **When** se comparan los registros
-   decodificados contra los que produce el software oficial sobre la misma captura,
-   **Then** coinciden uno a uno (mismo legajo/fecha/hora/método), sin duplicados.
+   decodificados contra el listado oficial del equipo para los días 13-14 (37 fichadas),
+   **Then** todas están presentes (a resolución de minuto), sin faltantes ni duplicados
+   byte-idénticos. En particular, **leg 53 @ 2026-07-13 16:00** (primer registro de la 3ª
+   página) está presente.
 3. **Given** un lote de exactamente 102 fichadas (2 páginas, camino que ya funcionaba),
    **When** el servicio lo descarga, **Then** el resultado sigue siendo correcto (no hay
    regresión en el camino de 1 y 2 páginas).
@@ -87,26 +90,27 @@ generados por el driver contra los tres capturados del software oficial en
 
 ### User Story 3 - Robustez ante lotes de 4+ páginas sin captura (Priority: P2)
 
-Como responsable del driver, necesito que el encuadre de registros no dependa de aritmética
-de offsets página por página, sino que se re-sincronice por la forma del registro y
-descarte duplicados, para que un lote de 4 o más páginas (para el que todavía no hay
-captura del software oficial) no produzca datos corruptos silenciosos.
+Como responsable del driver, necesito que el encuadre no dependa de aritmética de offsets de
+arrastre página por página (que fue la fuente de un bug: perder el primer registro de la 3ª
+página), sino de reconstruir el stream continuo y encuadrarlo por la forma del registro, para
+que un lote de 4 o más páginas (para el que todavía no hay captura del software oficial) no
+produzca datos corruptos ni pérdidas silenciosas.
 
 **Why this priority**: reduce el riesgo de una clase entera de bugs futuros, pero no es el
 defecto reportado y no puede verificarse contra tráfico real todavía; por eso P2.
 
-**Independent Test**: alimentar al encuadrador un flujo sintético de N páginas con
-solapamientos y bloques de cierre insertados, y verificar que produce exactamente los
-registros únicos esperados sin importar dónde caen los cortes de página.
+**Independent Test**: alimentar al encuadrador un stream continuo de N registros (payloads
+concatenados sin bloque de cierre) y verificar que devuelve exactamente los N registros, sin
+perder ni duplicar.
 
 **Acceptance Scenarios**:
 
-1. **Given** un flujo con registros solapados entre páginas, **When** se encuadra,
-   **Then** cada registro se identifica por su invariante estructural (constante de tipo y
-   fecha/hora válida) y se emite una sola vez.
-2. **Given** un lote cuyo total declarado por el equipo excede la cantidad de registros
-   únicos (por solapamiento), **When** termina la descarga, **Then** el sistema no falla
-   por la discrepancia y registra la diferencia de forma trazable.
+1. **Given** un stream continuo de registros válidos, **When** se encuadra por invariante,
+   **Then** cada registro se identifica por su constante de tipo y fecha/hora válida, y se
+   emiten todos exactamente una vez.
+2. **Given** un stream cuyo tamaño no es múltiplo exacto de `declaredPendingCount * 20`, o cuyo
+   conteo encuadrado difiere del declarado, **When** termina la descarga, **Then** el sistema
+   falla de forma explícita y trazable (payload inesperado, FR-010), sin exportar datos.
 
 ---
 
@@ -117,14 +121,13 @@ registros únicos esperados sin importar dónde caen los cortes de página.
   regresionar.
 - **Exactamente 103 fichadas (primera vez que aparece la 3ª página con 1 registro)**: caso
   mínimo del defecto.
-- **Registro reenviado / duplicado en la frontera de página**: el último registro de una
-  página que el equipo reenvía al inicio de la siguiente debe descartarse, no contarse dos
-  veces.
-- **`declaredPendingCount` mayor que la cantidad de registros únicos**: consecuencia del
-  solapamiento; debe tratarse como esperado, no como error de datos faltantes.
-- **Lote de 4+ páginas (sin captura oficial)**: debe procesarse por el encuadre
-  auto-sincronizante; si aparece algún byte inesperado, debe fallar de forma explícita y
-  trazable en vez de exportar basura.
+- **Primer registro de una página de continuación**: sus primeros bytes vienen en el payload de
+  la página previa (el equipo los omite en la página actual). La concatenación de payloads sin
+  bloque de cierre lo re-arma; NO debe tratarse como un registro reenviado ni descartarse.
+- **Legajo administrativo/de prueba (p. ej. leg 1)**: si el equipo lo reporta como pendiente, el
+  driver DEBE devolverlo; filtrarlo del reporte final es responsabilidad de una capa superior.
+- **Stream con tamaño o conteo inconsistente con `declaredPendingCount`**: se trata como payload
+  inesperado (FR-010), no como dato faltante silencioso.
 
 ## Requirements *(mandatory)*
 
@@ -139,25 +142,30 @@ registros únicos esperados sin importar dónde caen los cortes de página.
 - **FR-003**: El driver MUST leer exactamente `byteLen + 4` bytes de payload de la respuesta
   a cada `0xA4`, dado que el equipo siempre responde esa cantidad (verificado en las 3
   páginas de la captura).
-- **FR-004**: El driver MUST arrastrar entre páginas de continuación la cantidad de bytes
-  correcta (8 bytes a partir de la segunda continuación, no 4), de modo que el registro
-  reenviado quede completo y encuadrable.
-- **FR-005**: El driver MUST descartar como duplicado el primer registro reenviado al inicio
-  de cada página de continuación posterior a la primera (coincide con el último registro de
-  la página previa) para no contarlo ni exportarlo dos veces.
+- **FR-004**: El driver MUST reconstruir el stream continuo de fichadas concatenando el
+  payload de cada página **sin su bloque de cierre de 4 bytes finales**. El primer registro de
+  cada página de continuación queda "a caballo" entre el payload de la página previa (que
+  aporta sus primeros bytes) y el de la página actual; la concatenación lo re-arma sin
+  aritmética de arrastre por posición.
+- **FR-005**: La concatenación de los payloads (sin bloque de cierre) MUST medir exactamente
+  `declaredPendingCount * 20` bytes. NO hay registros reenviados ni duplicados entre páginas:
+  cada fichada declarada aparece una sola vez en el stream continuo.
 - **FR-006**: El encuadrador de registros MUST identificar los límites de cada fichada por su
   invariante estructural (constante de tipo `recordType = 00000001` y fecha/hora que pasa la
   validación de plausibilidad ya existente), y no exclusivamente por posición fija, para
-  poder re-sincronizarse ante solapamientos variables.
-- **FR-007**: El sistema MUST deduplicar las fichadas por la tupla `(legajo, fecha, hora,
-  método)` antes de exportarlas, de modo que los reenvíos de frontera no generen registros
-  repetidos.
+  poder detectar cualquier desajuste de encuadre.
+- **FR-007**: El sistema MUST exportar **todas** las fichadas declaradas por `0xB4`
+  (`declaredPendingCount`), sin deduplicar, alineado con el principio existente **FR-013** de
+  la feature 001 ("exportar todo lo que reporte el reloj como pendiente; deduplicar es
+  responsabilidad de una capa posterior"). Para el lote de referencia: 123 declaradas → 123
+  exportadas.
 - **FR-008**: El sistema MUST preservar el camino de 1 y 2 páginas sin cambios de
   comportamiento observables (sin regresión), incluyendo el legajo como entero de 4 bytes
   little-endian y la decodificación de fecha/hora/método ya confirmadas.
-- **FR-009**: El sistema MUST tratar un `declaredPendingCount` mayor que la cantidad de
-  registros únicos (por solapamiento entre páginas) como una condición esperada, informando
-  la diferencia de forma trazable, sin abortar la sesión ni marcar datos como faltantes.
+- **FR-009**: El sistema MUST validar que la cantidad de fichadas encuadradas coincida con
+  `declaredPendingCount`; cualquier diferencia (o un stream cuyo tamaño no sea
+  `declaredPendingCount * 20`) es un payload inesperado y MUST fallar de forma explícita y
+  trazable, no exportarse.
 - **FR-010**: Ante bytes inesperados o un flujo que no encuadra según el invariante
   estructural, el sistema MUST fallar de forma explícita y trazable (error de payload
   inesperado) en lugar de exportar registros corruptos.
@@ -184,18 +192,20 @@ registros únicos esperados sin importar dónde caen los cortes de página.
 
 ### Measurable Outcomes
 
-- **SC-001**: El 100% de las fichadas de un lote de 123 registros (3 páginas) se decodifican
-  con legajo, fecha, hora y método válidos, sin ningún registro corrupto (hoy: los últimos
-  21 de 123 salen corruptos).
-- **SC-002**: Los registros decodificados coinciden uno a uno con los que produce el software
-  oficial sobre la misma captura, con cero duplicados y cero faltantes.
+- **SC-001**: El 100% de las 123 fichadas declaradas de un lote de 3 páginas se decodifican
+  con legajo, fecha, hora y método válidos, sin ningún registro corrupto, faltante ni
+  duplicado (hoy: los últimos 21 salen corruptos; una versión intermedia perdía 1 y duplicaba
+  otro).
+- **SC-002**: Las fichadas decodificadas contienen las 37 del listado oficial del equipo para
+  los días 13-14 (a resolución de minuto), con cero faltantes y cero duplicados byte-idénticos;
+  en particular, **leg 53 @ 2026-07-13 16:00** está presente.
 - **SC-003**: Los comandos `0xA4` generados para el lote de 123 registros son byte a byte
   idénticos a los tres comandos capturados del software oficial.
 - **SC-004**: Los lotes de 1 y 2 páginas mantienen el 100% de los resultados previos (cero
   regresiones en la suite de pruebas del protocolo existente).
-- **SC-005**: El encuadrador procesa un flujo sintético de al menos 4 páginas con
-  solapamientos produciendo exactamente los registros únicos esperados, demostrando robustez
-  más allá de los casos con captura.
+- **SC-005**: El encuadrador procesa un stream continuo de registros (payloads concatenados
+  sin bloque de cierre) devolviendo exactamente `declaredPendingCount` fichadas, sin perder ni
+  duplicar ninguna.
 
 ## Assumptions
 

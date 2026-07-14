@@ -54,51 +54,63 @@ determinístico; el desalineo lo produce nuestro pedido, no el dispositivo.**
 - **Rationale**: el equipo siempre agrega 4 bytes (bloque de cierre) al final. Confirmado en
   las 3 páginas.
 
-### D3 — Arrastre entre páginas de continuación (FR-004/005)
+### D3 — Reconstrucción del stream continuo (FR-004/005) — CORRECCIÓN
 
-- **Decisión**: el arrastre inicial→1ª continuación es de **4 bytes** (el legajo del primer
-  registro). El arrastre continuación→continuación es de **8 bytes**, y el primer registro que
-  reconstruye es un **duplicado** del último de la página previa (a descartar).
-- **Rationale**: en la captura, la página 3 arranca reenviando la cola (bytes 8–19) del último
-  registro de la página 2; completándolo con `rec_prev[0:8]` da un registro entero repetido y
-  luego 20 nuevos = 21 = `pageCount`. El offset de arranque crece 0→4→8 por página.
-- **Alternativas descartadas**: arrastrar 4 bytes en toda continuación (lo actual → desalinea
-  4 bytes desde la 3ª página).
+- **Decisión**: reconstruir el stream continuo de fichadas **concatenando el payload de cada
+  página sin sus 4 bytes finales (bloque de cierre)**. La concatenación mide exactamente
+  `declaredPendingCount * 20` bytes y contiene todas las fichadas, contiguas, sin solapamientos.
+- **Rationale (hallazgo corregido)**: NO hay reenvío de registros. Cada página aporta `byteLen`
+  bytes del stream (payload menos el cierre de 4). El primer registro de una página de
+  continuación queda "a caballo": sus primeros bytes (4 tras la inicial, 8 tras una
+  continuación) viajan al final del payload de la página **previa**, y el resto al principio de
+  la actual; al concatenar, se re-arma solo. Verificado contra el fixture (2460 = 123×20) y
+  contra el listado oficial de fichadas 13-14: 37/37 presentes, 0 duplicados.
+- **Bug previo (retractado)**: una versión intermedia modelaba la página 3 como un *reenvío* del
+  último registro de la página 2 y tomaba el arrastre de `(pageCount-1)*20` (cabeza del último
+  registro) en vez de `pageCount*20` (los bytes posteriores a los registros). Eso perdía el
+  primer registro real de la página 3 (**leg 53 @ 2026-07-13 16:00:18**) y fabricaba un
+  duplicado byte-idéntico de **leg 57 @ 16:00:10**. La coincidencia de que ambos registros de
+  16:00 comparten la cola (mismo timestamp/método) hizo que el registro fabricado pasara la
+  validación de invariante, enmascarando la pérdida. El listado oficial (leg 53 presente,
+  0 duplicados) lo destapó.
 
-### D4 — Encuadre auto-sincronizante + dedup (FR-006/007/010)
+### D4 — Encuadre por invariante estructural (FR-006/010)
 
-- **Decisión**: en vez de trocear por posición fija, encuadrar reconociendo el **invariante
-  estructural** de cada fichada (`recordType = 00000001` en bytes 12–15 **y** fecha/hora que
-  pasa `looksValid`), y **deduplicar** por `(legajo, fecha, hora, método)`. Si un tramo no
-  encuadra, error explícito (no exportar basura).
-- **Rationale**: hace el encuadre inmune a la variación exacta del arrastre entre páginas. La
-  fórmula de `byteLen`/arrastre está confirmada solo hasta 3 páginas; para 4+ (sin captura) el
-  encuadre por invariante + dedup se re-sincroniza solo y colapsa reenvíos, cerrando la clase
-  entera de bugs de paginación en lugar de tapar este caso puntual.
-- **Alternativas descartadas**: hard-codear offsets por página (frágil, se rompió una vez);
-  re-descargar todo por página y deduplicar (desperdicia ancho de banda y tiempo del equipo).
+- **Decisión**: trocear el stream continuo reconociendo el **invariante estructural** de cada
+  fichada (`recordType = 00000001` en bytes 12–15 **y** fecha/hora que pasa `looksValid`), y
+  validar que el conteo encuadrado sea `declaredPendingCount` y que el stream mida
+  `declaredPendingCount * 20`. Cualquier desajuste ⇒ error explícito (FR-010).
+- **Rationale**: sobre un stream contiguo el encuadre por invariante equivale a trocear de a 20
+  bytes, pero además detecta corrupción. Al no depender de aritmética de arrastre por posición,
+  elimina la clase de bug que causó la pérdida del registro de frontera.
 
-### D5 — Discrepancia `declaredPendingCount` vs. únicos (FR-009)
+### D5 — Sin deduplicación (FR-007, alineado con FR-013)
 
-- **Decisión**: tratar `declaredPendingCount` > cantidad de registros únicos como **esperado**
-  (el equipo cuenta el registro reenviado/solapado), logueando la diferencia de forma trazable,
-  sin abortar ni marcar faltantes. Ej.: 123 declarados → 122 únicos.
-- **Rationale**: el solapamiento de 1 registro por frontera continuación→continuación es
-  inherente al protocolo observado.
+- **Decisión**: **no deduplicar**. Se exportan las `declaredPendingCount` fichadas tal como las
+  reporta el equipo. `receivedRecordCount = declaredPendingCount`.
+- **Rationale**: con el encuadre corregido no existen duplicados en el stream (cada fichada
+  aparece una sola vez). Deduplicar además violaría el principio existente **FR-013** de la
+  feature 001 ("exportar todo lo que reporte el reloj; deduplicar es de una capa posterior").
+  El `dedupeFichadas` de la versión intermedia sólo servía para tapar el duplicado que el bug de
+  arrastre fabricaba, y de paso ocultaba la pérdida (122 en vez de 123); se elimina.
 
 ### D6 — Fixture de tráfico (FR-011)
 
-- **Decisión**: conservar `research/fichada.pcapng` versionado y derivar
-  `tests/fixtures/fichada-3paginas/stream10.json` (bytes crudos) para que los tests corran sin
-  tshark ni red. El `.pcapng` es la evidencia; el JSON es la fuente de los tests.
-- **Rationale**: `node --test` no lee pcapng; extraer una vez y versionar el resultado mantiene
-  los tests deterministas y reproducibles (Principio IV).
+- **Decisión**: derivar el fixture de bytes `tests/fixtures/fichada-3paginas/stream10.json` de la
+  captura, y versionar además el listado oficial de fichadas 13-14 como
+  `tests/fixtures/fichada-3paginas/oficial-13-14.json` (ground truth de contenido). El `.pcapng`
+  queda como evidencia local (excluido por `.gitignore`, igual que las capturas previas); los
+  derivados versionados son la fuente de los tests.
+- **Rationale**: `node --test` no lee pcapng; el listado oficial es lo que atrapa una pérdida o
+  duplicación de fichadas que el conteo por sí solo no revela (Principio IV).
 
 ## Incertidumbre residual (declarada)
 
 - **4+ páginas (>153 registros)**: sin captura del software oficial. Se asume que las páginas
-  intermedias siguen la regla "hay más páginas" (`+4`) y que el arrastre sigue creciendo; NO
-  está confirmado. Mitigación: D4 (encuadre por invariante + dedup) hace que el resultado sea
-  correcto aun si la aritmética exacta difiere, siempre que el equipo entregue todos los bytes.
-  Acción de seguimiento recomendada: capturar el software oficial con >153 fichadas y agregarla
-  como fixture para cerrar la extrapolación.
+  intermedias siguen la regla "hay más páginas" (`+4`) para el `byteLen`. Mitigación: la
+  reconstrucción por concatenación de payloads (sin bloque de cierre) y el encuadre por
+  invariante (D3/D4) dan el resultado correcto siempre que el equipo entregue todos los bytes y
+  el `byteLen` sea el que espera; además, el chequeo de tamaño (`stream == declared*20`) y de
+  conteo encuadrado detectan cualquier desajuste en vez de exportar en silencio. Acción de
+  seguimiento recomendada: capturar el software oficial con >153 fichadas y agregar tanto la
+  captura como su listado oficial como fixtures.

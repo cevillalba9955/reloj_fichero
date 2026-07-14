@@ -122,3 +122,24 @@ exacto varíe, sin captura oficial.
 | FR-010 | T004, T005, T018 |
 | FR-011 | T001, T003 |
 | FR-012 (fuera de alcance) | — (verificado por revisión: no se toca 0xA8) |
+
+---
+
+## Phase 7: Corrección post-implementación (bug de encuadre)
+
+Tras validar contra el **listado oficial** del equipo (días 13-14), se detectó que la versión
+inicial perdía el 1er registro de la 3ª página (**leg 53 @ 16:00**) y fabricaba un duplicado
+(**leg 57 @ 16:00**), enmascarado por el `dedupeFichadas`. Causa: el arrastre de 8 bytes se
+tomaba de `(pageCount-1)*20` en vez de `pageCount*20`. Ver [research.md §D3](./research.md).
+
+- [X] T023 Reescribir el encuadre en `src/protocol/client.js`: reconstruir el stream continuo
+  concatenando cada payload **sin su bloque de cierre de 4 bytes**; validar `stream.length ===
+  declaredPendingCount*20` y `frameRecords(stream).length === declaredPendingCount`. (FR-004/005/010)
+- [X] T024 Quitar la **deduplicación** del pipeline y `dedupeFichadas` de `src/protocol/records.js`;
+  exportar las 123 declaradas (FR-007, alineado con FR-013). Conservar `frameRecords`/`looksLikeRecordStart`.
+- [X] T025 Revertir el evento `pagination_overlap` en `src/logging/session-logger.js`.
+- [X] T026 Reforzar el test de integración: assert **123** + verificación contra el ground truth
+  oficial (`oficial-13-14.json`, 37 fichadas presentes, 0 duplicados, leg 53 @ 16:00). (SC-001/002)
+- [X] T027 Versionar el fixture `tests/fixtures/fichada-3paginas/oficial-13-14.json`. (FR-011)
+- [X] T028 Actualizar spec/research/data-model/contract/quickstart al modelo corregido (sin
+  reenvío/duplicado/dedup; 123 = declarado).

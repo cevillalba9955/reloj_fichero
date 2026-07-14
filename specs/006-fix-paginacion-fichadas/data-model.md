@@ -30,14 +30,19 @@ Una respuesta a un comando de detalle. Elementos:
 
 | Elemento | Tamaño | Descripción |
 |----------|--------|-------------|
-| header/arrastre | 4 u 8 bytes | inicio del primer registro; leído del socket (inicial) o arrastrado (continuación) |
-| registros | `pageCount * 20` | las fichadas de la página (la 1ª puede ser reenvío/duplicado) |
+| stream de la página | `byteLen` | porción del stream continuo de registros que aporta esta página (payload sin el bloque de cierre) |
 | bloque de cierre | 4 bytes | siempre presente al final del payload; se descarta |
+
+El primer registro de una página de continuación queda "a caballo": sus primeros bytes (4 tras
+la inicial, 8 tras una continuación) están al final del `stream` de la página **previa**; se
+re-arman al concatenar, sin aritmética de arrastre por posición.
 
 Atributos de cálculo por página:
 
 - `pageIndex` (0-based), `pageCount = min(remaining, 51)`, `hasMorePages`.
-- `byteLen` (comando): `pageCount*20 + 4` si `hasMorePages`, `pageCount*20 - 8` si última.
+- `carrySize` (bytes del 1er registro que aportó la página previa): `0` si inicial, `4` si la
+  previa fue la inicial, `8` si la previa fue una continuación.
+- `byteLen` (comando): `pageCount*20 + 4` si `hasMorePages`; `pageCount*20 - carrySize` si última.
 - `payloadLen` (respuesta): `byteLen + 4` (invariante del equipo).
 
 ## Sesión de descarga
@@ -46,25 +51,30 @@ La secuencia completa de páginas para un `declaredPendingCount`.
 
 | Campo | Descripción |
 |-------|-------------|
-| `declaredPendingCount` | total declarado por `0xB4` (puede incluir solapamientos) |
-| `rawRecords` / `uniqueRecords` | fichadas únicas tras encuadre + dedup |
-| `overlapCount` | `declaredPendingCount - uniqueRecords` (≥0, esperado; FR-009) |
+| `declaredPendingCount` | total declarado por `0xB4` |
+| `stream` | concatenación de los `byteLen` bytes de cada página; mide `declaredPendingCount * 20` |
+| `rawRecords` | fichadas encuadradas del `stream`; `rawRecords.length === declaredPendingCount` |
 | `status` | `success` | `error` |
 
-Regla FR-009: `overlapCount > 0` es condición **esperada** (no error); se loguea trazablemente.
+Regla FR-007/FR-013: se exportan **todas** las declaradas, **sin deduplicar**. Regla FR-009/FR-010:
+si `stream.length !== declaredPendingCount * 20` o el conteo encuadrado difiere del declarado, es
+un payload inesperado (error explícito), no un dato faltante silencioso.
 
-## Fixture de tráfico
+## Fixtures de tráfico y ground truth
 
-`tests/fixtures/fichada-3paginas/stream10.json` — array `messages` de `{dir, hex}` con la
-secuencia real del software oficial (123 fichadas, 3 páginas). Derivado de
-`research/fichada.pcapng` (evidencia). Ver `tests/fixtures/fichada-3paginas/README.md`.
+- `tests/fixtures/fichada-3paginas/stream10.json` — bytes crudos de la sesión real del software
+  oficial (123 fichadas, 3 páginas), derivado de `research/fichada.pcapng`.
+- `tests/fixtures/fichada-3paginas/oficial-13-14.json` — listado oficial del equipo para los días
+  13-14 (37 fichadas, resolución de minuto): ground truth de **contenido** (que no falte ni se
+  duplique ninguna).
 
 ## Transiciones de estado (sesión de descarga)
 
 ```text
 conteo(0xB4) → [ declaredPendingCount == 0 ] → fin (sin páginas)
              → [ > 0 ] → página 0 (inicial) → [hasMore] → página 1 (cont) → … → última
-                                             → encuadre por invariante + dedup
+                                             → concatenar payloads (sin bloque de cierre)
+                                             → encuadre por invariante (sin dedup)
                                              → cierre(0x81) → success
-   (cualquier byte que no encuadra → error de payload inesperado, FR-010)
+   (tamaño != declared*20, o conteo encuadrado != declarado → error de payload inesperado, FR-010)
 ```
