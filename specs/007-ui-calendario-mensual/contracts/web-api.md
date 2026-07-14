@@ -88,8 +88,9 @@ FR-018).
 
 Efectos (garantizados por el dominio):
 - Escritura atómica del calendario (temp + rename); `reclasificadoManual: true` en el día.
-- Evento estructurado `dia_reclasificado` con `{ periodo, dia, clasificacion, autor }`, sin
-  datos sensibles (Principio V).
+- Evento estructurado `dia_reclasificado` con
+  `{ periodo, dia, clasificacionAnterior, clasificacion, autor }`, sin datos sensibles
+  (Principio V, FR-019).
 - Idempotente respecto del valor final: refijar la misma clasificación deja el mismo estado.
 
 ## No-goals de la API (esta feature)

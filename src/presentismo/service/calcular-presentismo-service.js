@@ -42,9 +42,16 @@ export function createCalcularPresentismoService({
     if (!actual) {
       throw new Error(`presentismo: no existe calendario para ${periodo}; generalo primero`);
     }
+    const clasificacionAnterior = actual.dias.find((d) => d.fecha === fecha)?.clasificacion ?? null;
     const nuevo = reclasificarDia(actual, fecha, clasificacion);
     await repo.guardarCalendario(nuevo);
-    logger.evento('dia_reclasificado', { periodo, dia: fecha, clasificacion, autor: autor ?? null });
+    logger.evento('dia_reclasificado', {
+      periodo,
+      dia: fecha,
+      clasificacionAnterior,
+      clasificacion,
+      autor: autor ?? null,
+    });
     return nuevo;
   }
 
