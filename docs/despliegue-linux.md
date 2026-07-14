@@ -138,3 +138,7 @@ Los datos persistidos en `data/presentismo/fichadas/` quedan intactos (los consu
 - **Refresco del padrón**: `data/presentismo/padron.json` es una foto. Si cambia el padrón
   activo, reprogramar `sincronizar-padron` (requiere Oracle) y copiar/generar el snapshot.
 - **Node**: mínimo 20.12 (por `--env-file-if-exists`).
+
+## 9. Permisos de archivos
+ sudo chown -R rs956:rs956 /opt/rs956
+ 

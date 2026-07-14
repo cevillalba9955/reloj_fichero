@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, renameSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import * as ops from './presentismo-repo-ops.js';
 
@@ -43,6 +43,27 @@ export function createFilePresentismoRepository({ repoDir }) {
       const state = leer(cal.periodo);
       ops.setCalendario(state, cal);
       escribir(cal.periodo, state);
+    },
+    // feature 007: enumera los períodos con calendario persistido (YYYYMM),
+    // ordenados ascendentemente. Escanea el directorio del repo; toma solo
+    // archivos `NNNNNN.json` cuyo estado tenga un `calendario` no nulo. Sin
+    // Oracle (Principios II/VI): es la base de "el último mes generado".
+    async listarPeriodos() {
+      let entradas;
+      try {
+        entradas = readdirSync(repoDir, { withFileTypes: true });
+      } catch {
+        return [];
+      }
+      const periodos = [];
+      for (const ent of entradas) {
+        if (!ent.isFile()) continue;
+        const m = /^(\d{6})\.json$/.exec(ent.name);
+        if (!m) continue;
+        const periodo = m[1];
+        if (leer(periodo).calendario != null) periodos.push(periodo);
+      }
+      return periodos.sort();
     },
     async listarCorrecciones(periodo, legajo) {
       return ops.listCorrecciones(leer(periodo), legajo);

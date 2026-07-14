@@ -239,7 +239,7 @@ export async function queryPendingFichadas(socket, reader, logger, { timeoutMs, 
   if (reader.length > 0) {
     throw new RespuestaInesperadaError(
       `Sobraron ${reader.length} bytes sin consumir tras leer el detalle 0xA4 declarado por 0xB4 ` +
-      `(${declaredPendingCount}). Payload inesperado (FR-010).`
+      `(${declaredPendingCount}). Payload inesperado, equivalente a FR-010 (FR-014).`
     );
   }
 

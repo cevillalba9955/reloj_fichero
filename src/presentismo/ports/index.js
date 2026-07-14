@@ -27,6 +27,7 @@
  * @typedef {Object} PresentismoRepository
  * @property {(periodo:string) => Promise<object|null>} cargarCalendario
  * @property {(cal:object) => Promise<void>} guardarCalendario
+ * @property {() => Promise<string[]>} listarPeriodos  YYYYMM con calendario, ordenados asc
  * @property {(periodo:string, legajo?:number) => Promise<object[]>} listarCorrecciones
  * @property {(c:object) => Promise<void>} guardarCorreccion
  * @property {(periodo:string, legajo:number, fecha:string) => Promise<void>} revertirCorreccion
@@ -41,6 +42,7 @@ const METODOS = {
   PresentismoRepository: [
     'cargarCalendario',
     'guardarCalendario',
+    'listarPeriodos',
     'listarCorrecciones',
     'guardarCorreccion',
     'revertirCorreccion',
