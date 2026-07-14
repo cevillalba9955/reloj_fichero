@@ -34,11 +34,12 @@ Escenarios de aceptación cubiertos:
   `0xA4` generados para el lote de 123 coinciden byte a byte con los del software oficial
   (`byteLen` 1024 / 1024 / 412; `count` 0x7B / 1<<16 / 2<<16).
 - **Integración (SC-001/002)** — `tests/integration/paginacion-3-paginas.integration.test.js`:
-  se replay-ea `stream10.json` a través de un socket falso; la sesión decodifica **122 fichadas
-  únicas**, todas con `fecha/hora/legajo/metodo` válidos, sin duplicados ni faltantes, y
-  `overlapCount == 1`.
-- **Unit (SC-005)** — `tests/unit/encuadre-sincronizante.test.js`: un flujo sintético de ≥4
-  páginas con solapamientos produce exactamente los registros únicos esperados.
+  se replay-ea `stream10.json` a través de un servidor de loopback; la sesión decodifica las
+  **123 fichadas declaradas**, todas con `fecha/hora/legajo/metodo` válidos, y contiene las 37
+  del listado oficial de los días 13-14 (`oficial-13-14.json`), sin faltantes ni duplicados; en
+  particular **leg 53 @ 2026-07-13 16:00** (registro de frontera de página).
+- **Unit (SC-005)** — `tests/unit/encuadre-sincronizante.test.js`: `frameRecords` sobre un stream
+  continuo devuelve todos los registros sin perder ni duplicar.
 
 ## 3. Verificar no-regresión (1 y 2 páginas)
 
@@ -50,6 +51,6 @@ npm test
 
 ## Resultado esperado (post-fix)
 
-- Lote de 123 → 122 fichadas únicas, 0 corruptas, 0 duplicadas.
+- Lote de 123 → **123 fichadas** exportadas (= declaradas), 0 corruptas, 0 duplicadas, 0 faltantes.
+- Las 37 fichadas del listado oficial de los días 13-14 presentes (incluye leg 53 @ 16:00).
 - Comandos `0xA4` idénticos al software oficial.
-- Discrepancia declarado(123) vs. únicos(122) logueada como esperada, sin error.

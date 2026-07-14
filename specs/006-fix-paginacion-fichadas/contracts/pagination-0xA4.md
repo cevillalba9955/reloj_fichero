@@ -31,20 +31,22 @@ derivado byte a byte de `research/fichada.pcapng` (software oficial, 123 fichada
 ```
 
 - El equipo **siempre** entrega `byteLen + 4` bytes de payload tras el marcador `55 AA`.
-- Estructura del payload: `[header/arrastre] [registros de 20B] [bloque de cierre 4B]`.
-  - Página inicial: los primeros 4 bytes son el legajo del 1er registro (parte del payload).
-  - Continuación: el 1er registro se completa con los bytes **arrastrados** de la página previa
-    (4 bytes desde la inicial; 8 bytes desde una continuación, y en ese caso el registro
-    resultante es un **duplicado** del último de la página previa → descartar).
+- Estructura del payload: `[stream de registros: byteLen bytes] [bloque de cierre 4B]`.
+  - El `stream` de cada página es una porción del stream continuo de fichadas. El primer registro
+    de una página de continuación queda "a caballo": sus primeros bytes (4 tras la inicial, 8 tras
+    una continuación) están al final del `stream` de la página previa.
+  - **No hay reenvíos ni duplicados** entre páginas; cada fichada aparece una sola vez.
 - Los últimos 4 bytes del payload son el bloque de cierre (se descartan).
 
 ## Post-condiciones (encuadre)
 
-1. Concatenar `arrastre + payload` y encuadrar por **invariante estructural** (`recordType ==
-   00000001` y fecha/hora válida), no por posición fija.
-2. Deduplicar por `(legajo, fecha, hora, metodo)`.
-3. `uniqueRecords ≤ declaredPendingCount`; la diferencia (`overlapCount`) es esperada.
-4. Cualquier tramo que no encuadra ⇒ error de payload inesperado (no exportar basura).
+1. Concatenar los `stream` de todas las páginas (payload **sin** los 4 bytes de cierre). El
+   resultado mide exactamente `declaredPendingCount * 20` bytes.
+2. Encuadrar por **invariante estructural** (`recordType == 00000001` y fecha/hora válida).
+3. **Sin deduplicar** (FR-007/FR-013): se exportan las `declaredPendingCount` fichadas.
+   `rawRecords.length === declaredPendingCount`.
+4. Si el tamaño del stream no es `declaredPendingCount * 20`, o el conteo encuadrado difiere del
+   declarado, o algún tramo no encuadra ⇒ error de payload inesperado (no exportar basura).
 
 ## Invariantes de regresión (no romper)
 

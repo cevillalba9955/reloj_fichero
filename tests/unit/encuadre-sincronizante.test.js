@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { frameRecords, dedupeFichadas, parseFichadaRecord, RECORD_SIZE } from '../../src/protocol/records.js';
+import { frameRecords, parseFichadaRecord, RECORD_SIZE } from '../../src/protocol/records.js';
 
 // Registros reales validos (20 bytes) tomados de research/fichada.pcapng.
 const R = {
@@ -38,37 +38,20 @@ test('frameRecords: buffer vacio o sin registros validos devuelve lista vacia', 
   assert.deepEqual(frameRecords(Buffer.from('00'.repeat(40), 'hex')), []);
 });
 
-// --- FR-007: deduplicacion por (legajo, fecha, hora, metodo) ---
+// --- Modelo de paginacion (research.md §D3): el stream continuo es la
+// concatenacion de los payloads sin su bloque de cierre. frameRecords sobre ese
+// stream contiguo devuelve TODAS las fichadas, sin perder ni duplicar. ---
 
-test('dedupeFichadas: colapsa el registro reenviado y preserva el orden de primera aparicion', () => {
-  const withDup = [R.a, R.b, R.b, R.c]; // R.b reenviado (duplicado de frontera)
-  const { records, removed } = dedupeFichadas(withDup);
-  assert.equal(removed, 1);
-  assert.deepEqual(records, [R.a, R.b, R.c]);
-});
-
-test('dedupeFichadas: sin duplicados no remueve nada', () => {
-  const { records, removed } = dedupeFichadas([R.a, R.b, R.c, R.d]);
-  assert.equal(removed, 0);
-  assert.equal(records.length, 4);
-});
-
-// --- SC-005 / US3: robustez ante un flujo sintetico de 4+ paginas con solapes ---
-
-test('frameRecords + dedupeFichadas: flujo sintetico de 4 paginas con solapes -> unicos exactos', () => {
-  // Simula 4 paginas: cada continuacion reenvia el ultimo registro de la previa
-  // (duplicado) y hay bloques de cierre/arrastre entre medio.
-  const page1 = Buffer.concat([R.a, R.b, CARRIED, CLOSING]);
-  const page2 = Buffer.concat([R.b, R.c, CARRIED, CLOSING]); // reenvia R.b
-  const page3 = Buffer.concat([R.c, R.d, CARRIED, CLOSING]); // reenvia R.c
-  const page4 = Buffer.concat([R.d, R.e, CLOSING]); // reenvia R.d
-  const all = Buffer.concat([page1, page2, page3, page4]);
-
-  const framed = frameRecords(all);
-  const { records, removed } = dedupeFichadas(framed);
-
-  assert.equal(removed, 3, 'tres registros reenviados colapsados');
-  assert.deepEqual(records.map((r) => parseFichadaRecord(r).legajo), [10, 74, 71, 35, 57]);
+test('frameRecords: stream contiguo de N registros (payloads sin cierre concatenados) -> N registros exactos', () => {
+  const stream = Buffer.concat([R.a, R.b, R.c, R.d, R.e]);
+  const framed = frameRecords(stream);
+  assert.equal(framed.length, 5, 'no se pierde ni duplica ninguno');
+  assert.deepEqual(
+    framed.map((r) => parseFichadaRecord(r).legajo),
+    [10, 74, 71, 35, 57],
+  );
+  // Sin duplicados byte-identicos.
+  assert.equal(new Set(framed.map((r) => r.toString('hex'))).size, 5);
 });
 
 // --- FR-010: fallo explicito cuando corresponde (verificado a nivel driver) ---

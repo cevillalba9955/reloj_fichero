@@ -6,7 +6,6 @@ const VALID_EVENTS = new Set([
   'response_received',
   'keepalive_discarded',
   'session_closed',
-  'pagination_overlap',
   'error',
 ]);
 

@@ -18,7 +18,7 @@ import {
   buildPendingDetailContinuationCommand,
   MAX_RECORDS_PER_PAGE,
 } from './commands.js';
-import { RECORD_SIZE, frameRecords, dedupeFichadas } from './records.js';
+import { RECORD_SIZE, frameRecords } from './records.js';
 
 export class ConexionRechazadaError extends Error {}
 export class RespuestaInesperadaError extends Error {}
@@ -169,11 +169,11 @@ export async function queryPendingFichadas(socket, reader, logger, { timeoutMs, 
     return { declaredPendingCount, rawRecords: [], nextSeq: seq + 1 };
   }
 
-  const collected = [];
+  // Se acumula el "stream de registros" de cada pagina (su payload SIN el bloque
+  // de cierre). Concatenados, forman el stream continuo de declaredPendingCount
+  // fichadas, sin solapamientos ni arrastres que reconstruir a mano.
+  const pageStreams = [];
   let remaining = declaredPendingCount;
-  // Bytes de arrastre para completar el primer registro de la pagina en curso.
-  // Vacio en la pagina inicial; luego lo fija la pagina anterior (ver abajo).
-  let carryIn = Buffer.alloc(0);
   let pageIndex = 0;
   let detailSeq = seq;
 
@@ -183,17 +183,19 @@ export async function queryPendingFichadas(socket, reader, logger, { timeoutMs, 
     const pageCount = Math.min(remaining, MAX_RECORDS_PER_PAGE);
     const hasMorePages = remaining > pageCount;
 
-    // Fórmula de `byteLen` (feature 006, research.md §D1, verificada byte a
-    // byte contra el software oficial en research/fichada.pcapng, lote de 123):
+    // Fórmula de `byteLen` (feature 006, research.md §D1, verificada byte a byte
+    // contra el software oficial en research/fichada.pcapng, lote de 123 = 3
+    // páginas, y contra el listado oficial de fichadas de los días 13-14):
     // - Si hay más páginas por venir: `pageCount*20 + 4` (páginas 1 y 2 = 1024).
-    // - En la última página: `pageCount*20 - carryIn.length`. `carryIn` mide 0
-    //   en la inicial, 4 si la previa fue la inicial (caso de 2 páginas → -4,
-    //   comportamiento previo ya validado) y 8 si la previa fue una
-    //   continuación (caso de 3+ páginas → -8; página 3 = 412). El equipo omite
-    //   justo esos `carryIn` bytes del primer registro y los espera arrastrados.
+    // - En la última página: `pageCount*20 - carrySize`. `carrySize` es cuántos
+    //   bytes del primer registro de esta página quedaron en el payload de la
+    //   página previa (y por eso el equipo los omite acá): 0 si la única página
+    //   es la inicial; 4 si la previa fue la inicial (2 páginas → -4); 8 si la
+    //   previa fue una continuación (3+ páginas → -8; página 3 = 412).
+    const carrySize = isFirstPage ? 0 : pageIndex === 1 ? 4 : 8;
     const byteLen = hasMorePages
       ? pageCount * RECORD_SIZE + 4
-      : pageCount * RECORD_SIZE - carryIn.length;
+      : pageCount * RECORD_SIZE - carrySize;
 
     const detailCmd = isFirstPage
       ? buildPendingDetailCommand(detailSeq, declaredPendingCount, byteLen)
@@ -215,9 +217,12 @@ export async function queryPendingFichadas(socket, reader, logger, { timeoutMs, 
       );
     }
 
-    // El equipo responde SIEMPRE `byteLen + 4` bytes de payload tras el
-    // marcador (research.md §D2; confirmado en las 3 páginas de la captura).
-    // Los últimos 4 son un bloque de cierre que se descarta.
+    // El equipo responde SIEMPRE `byteLen + 4` bytes de payload tras el marcador
+    // (research.md §D2; confirmado en las 3 páginas de la captura). Los últimos 4
+    // son el bloque de cierre: se descartan. Lo que queda (`byteLen` bytes) es la
+    // porción del stream continuo de registros que aporta esta página; el primer
+    // registro de la próxima queda "a caballo" entre esta página y la siguiente,
+    // y se re-arma solo al concatenar (research.md §D3).
     const payload = await reader.readExact(byteLen + 4, { timeoutMs });
     const closingBlockHex = payload.subarray(payload.length - 4).toString('hex').toUpperCase();
     logger.log('response_received', {
@@ -225,38 +230,7 @@ export async function queryPendingFichadas(socket, reader, logger, { timeoutMs, 
       byteLength: ACK_SIZE + 2 + payload.length,
       detail: `bloqueCierre=${closingBlockHex}`,
     });
-
-    // fullBuffer = arrastre + payload. En la inicial el legajo del 1er registro
-    // viene inline en el payload; en continuaciones lo aporta `carryIn`.
-    const fullBuffer = Buffer.concat([carryIn, payload]);
-
-    // Encuadre por invariante estructural (research.md §D4, FR-006): en vez de
-    // trocear por posición fija, se reconocen los registros por su forma. Debe
-    // dar exactamente `pageCount` registros; si no, el payload no encuadra y se
-    // reporta como error explícito en vez de exportar basura (FR-010).
-    const framed = frameRecords(fullBuffer);
-    if (framed.length !== pageCount) {
-      throw new RespuestaInesperadaError(
-        `La página ${pageIndex + 1} del detalle 0xA4 no encuadra: se esperaban ${pageCount} ` +
-        `fichadas y el invariante estructural detectó ${framed.length} (research.md §D4, FR-010).`
-      );
-    }
-    for (const rec of framed) {
-      collected.push(rec);
-    }
-
-    if (hasMorePages) {
-      // Arrastre hacia la próxima página (research.md §D3, FR-004/005):
-      // - Desde la página inicial: 4 bytes (el legajo del 1er registro NUEVO de
-      //   la próxima), tomados justo después de los registros ya encuadrados.
-      //   La próxima página NO reenvía ningún registro.
-      // - Desde una continuación: 8 bytes = la cabeza del ÚLTIMO registro de
-      //   esta página; el equipo reenvía ese registro entero al inicio de la
-      //   próxima (duplicado que luego colapsa la deduplicación, FR-005/007).
-      carryIn = isFirstPage
-        ? Buffer.from(fullBuffer.subarray(pageCount * RECORD_SIZE, pageCount * RECORD_SIZE + 4))
-        : Buffer.from(fullBuffer.subarray((pageCount - 1) * RECORD_SIZE, (pageCount - 1) * RECORD_SIZE + 8));
-    }
+    pageStreams.push(payload.subarray(0, payload.length - 4));
 
     remaining -= pageCount;
     pageIndex += 1;
@@ -269,17 +243,24 @@ export async function queryPendingFichadas(socket, reader, logger, { timeoutMs, 
     );
   }
 
-  // Deduplicación por (legajo, fecha, hora, método): colapsa los registros que
-  // el equipo reenvía en cada frontera de continuación (research.md §D5,
-  // FR-007). `overlapCount` = declarados por 0xB4 menos únicos; es una
-  // condición ESPERADA por el solapamiento entre páginas (FR-009), no un error.
-  const { records: rawRecords, removed: overlapCount } = dedupeFichadas(collected);
-  if (overlapCount > 0) {
-    logger.log('pagination_overlap', {
-      detail:
-        `declarados=${declaredPendingCount} unicos=${rawRecords.length} overlap=${overlapCount} ` +
-        `(registros reenviados en fronteras de pagina colapsados por dedup, FR-009)`,
-    });
+  // Stream continuo de fichadas: la concatenación de los payloads (sin cierre)
+  // mide exactamente `declaredPendingCount * RECORD_SIZE` (research.md §D3). Se
+  // encuadra por invariante estructural (FR-006) y debe dar todas las fichadas
+  // declaradas, sin deduplicar (FR-013: se exporta todo lo reportado). Cualquier
+  // desajuste de tamaño o de encuadre es un payload inesperado (FR-010).
+  const stream = Buffer.concat(pageStreams);
+  if (stream.length !== declaredPendingCount * RECORD_SIZE) {
+    throw new RespuestaInesperadaError(
+      `El stream de fichadas mide ${stream.length} bytes; se esperaban ` +
+      `${declaredPendingCount * RECORD_SIZE} (${declaredPendingCount} x ${RECORD_SIZE}). Payload inesperado (FR-010).`
+    );
+  }
+  const rawRecords = frameRecords(stream);
+  if (rawRecords.length !== declaredPendingCount) {
+    throw new RespuestaInesperadaError(
+      `El encuadre por invariante detectó ${rawRecords.length} fichadas y el equipo declaró ` +
+      `${declaredPendingCount} (research.md §D4, FR-010).`
+    );
   }
 
   return { declaredPendingCount, rawRecords, nextSeq: detailSeq + 1 };

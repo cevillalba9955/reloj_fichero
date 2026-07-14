@@ -152,27 +152,6 @@ export function frameRecords(buffer) {
   return records;
 }
 
-// Deduplica fichadas por la tupla (legajo, fecha, hora, metodo), preservando el
-// orden de primera aparicion (FR-007). Colapsa los registros que el equipo
-// reenvia en cada frontera de pagina de continuacion. Recibe y devuelve
-// sub-buffers de 20 bytes; informa cuantos se removieron.
-export function dedupeFichadas(records) {
-  const seen = new Set();
-  const unique = [];
-  let removed = 0;
-  for (const raw of records) {
-    const r = parseFichadaRecord(raw);
-    const key = `${r.legajo}|${r.fecha}|${r.hora}|${r.metodo}`;
-    if (seen.has(key)) {
-      removed += 1;
-      continue;
-    }
-    seen.add(key);
-    unique.push(raw);
-  }
-  return { records: unique, removed };
-}
-
 export function parseFichadaRecord(buffer) {
   if (buffer.length !== RECORD_SIZE) {
     throw new RangeError(

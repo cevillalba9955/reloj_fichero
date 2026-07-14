@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { connectSocket, BufferedSocketReader, queryPendingFichadas } from '../../src/protocol/client.js';
@@ -18,10 +18,17 @@ function withTempLogDir(fn) {
   }
 }
 
+function loadOficial() {
+  const url = new URL('../fixtures/fichada-3paginas/oficial-13-14.json', import.meta.url);
+  return JSON.parse(readFileSync(url, 'utf8')).records;
+}
+
 // Regresion de la feature 006: descarga real de 123 fichadas (3 paginas) del
-// software oficial, reproducida byte a byte desde research/fichada.pcapng.
-// Antes del fix, los 21 registros de la 3ra pagina salian corruptos.
-test('queryPendingFichadas: lote de 123 (3 paginas) decodifica 122 fichadas unicas y validas', async () => {
+// software oficial, reproducida byte a byte desde research/fichada.pcapng, y
+// validada contra el listado oficial de fichadas de los dias 13-14 provisto por
+// el usuario. Antes del fix del encuadre se perdia el 1er registro de la 3ra
+// pagina (leg 53 @ 16:00) y se generaba un duplicado (leg 57 @ 16:00).
+test('queryPendingFichadas: lote de 123 (3 paginas) decodifica las 123 fichadas declaradas, sin perder ni duplicar', async () => {
   await withTempLogDir(async (logDir) => {
     const fx = loadStream10();
     const responses = [fx.b4Ack, ...fx.a4Responses];
@@ -33,13 +40,13 @@ test('queryPendingFichadas: lote de 123 (3 paginas) decodifica 122 fichadas unic
 
     const result = await queryPendingFichadas(socket, reader, logger, { timeoutMs: 2000, seq: 1 });
 
-    // Conteo declarado por el equipo (0xB4) y unicos tras encuadre + dedup.
+    // Se exportan TODAS las declaradas por 0xB4, sin deduplicar (FR-013).
     assert.equal(result.declaredPendingCount, 123, 'declaredPendingCount');
-    assert.equal(result.rawRecords.length, 122, 'fichadas unicas tras dedup');
+    assert.equal(result.rawRecords.length, 123, 'todas las fichadas declaradas');
 
     const parsed = result.rawRecords.map(parseFichadaRecord);
 
-    // Ningun registro corrupto: todos con invariante estructural y campos legibles.
+    // Ningun registro corrupto: invariante estructural + campos legibles.
     for (const [i, r] of parsed.entries()) {
       assert.equal(r.recordTypeConstant, '00000001', `rec ${i} recordType`);
       assert.notEqual(r.fecha, null, `rec ${i} fecha`);
@@ -48,24 +55,33 @@ test('queryPendingFichadas: lote de 123 (3 paginas) decodifica 122 fichadas unic
       assert.ok(Number.isInteger(r.legajo), `rec ${i} legajo`);
     }
 
-    // Dedup efectiva: no hay dos fichadas con la misma tupla (legajo,fecha,hora,metodo).
-    const keys = parsed.map((r) => `${r.legajo}|${r.fecha}|${r.hora}|${r.metodo}`);
-    assert.equal(new Set(keys).size, 122, 'sin duplicados por tupla');
+    // Sin duplicados byte-identicos (el bug de encuadre producia exactamente uno).
+    const rawHexes = result.rawRecords.map((b) => b.toString('hex'));
+    assert.equal(new Set(rawHexes).size, 123, 'no hay registros byte-identicos duplicados');
 
-    // Spot-check: primer registro conocido (pagina 1) y un registro del borde
-    // de la pagina 3 (que antes salia desplazado).
-    assert.deepEqual(
-      { legajo: parsed[0].legajo, fecha: parsed[0].fecha, hora: parsed[0].hora, metodo: parsed[0].metodo },
-      { legajo: 10, fecha: '2026-07-06', hora: '15:59:51', metodo: 'rostro' },
-      'primer registro',
+    // --- Verificacion contra el GROUND TRUTH oficial (dias 13-14) ---
+    // Todas las fichadas del listado oficial deben estar presentes (a resolucion
+    // de minuto). Esto es lo que atrapa la perdida del registro de frontera.
+    const nuestrosMin = new Set(
+      parsed
+        .filter((r) => r.fecha === '2026-07-13' || r.fecha === '2026-07-14')
+        .map((r) => `${r.legajo}|${r.fecha}|${r.hora.slice(0, 5)}`),
     );
-    const borde = parsed.find((r) => r.legajo === 35 && r.fecha === '2026-07-13' && r.hora === '16:00:32');
-    assert.ok(borde, 'registro de borde de pagina 3 (leg 35, 2026-07-13 16:00:32) presente y bien encuadrado');
-    assert.equal(borde.metodo, 'huella');
+    for (const [legajo, fecha, hhmm] of loadOficial()) {
+      assert.ok(
+        nuestrosMin.has(`${legajo}|${fecha}|${hhmm}`),
+        `falta la fichada oficial: legajo ${legajo} ${fecha} ${hhmm}`,
+      );
+    }
 
-    // Los 3 comandos 0xA4 que envio el driver deben pedir el byteLen del software oficial.
+    // Chequeo puntual del registro que el bug perdia: leg 53 @ 2026-07-13 16:00:18.
+    const leg53 = parsed.find(
+      (r) => r.legajo === 53 && r.fecha === '2026-07-13' && r.hora === '16:00:18',
+    );
+    assert.ok(leg53, 'leg 53 @ 2026-07-13 16:00:18 presente (registro de frontera de pagina)');
+
+    // Los 3 comandos 0xA4 que envio el driver deben pedir el byteLen del oficial.
     const a4Sent = received.filter((c) => c[3] === 0xa4);
-    assert.equal(a4Sent.length, 3, 'tres comandos 0xA4 enviados');
     assert.deepEqual(
       a4Sent.map((c) => c.readUInt16LE(12)),
       fx.a4Fields.map((f) => f.byteLen),
