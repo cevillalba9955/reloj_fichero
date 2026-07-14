@@ -20,32 +20,34 @@ el principio y duplicaría trabajo ya validado contra hardware real.
 **Alternatives considered**: Ninguna — está impuesto por la spec (FR-001)
 y por la constitución.
 
-## 2. Mecanismo de scheduling (checkpoints entrada/salida)
+## 2. Mecanismo de scheduling (checkpoint "entrada")
 
 **Decisión**: Un temporizador nativo de Node.js (`setInterval` de 5
-minutos, sin librerías de cron) evalúa en cada tick el estado de los dos
-checkpoints configurados (entrada/salida): si un checkpoint está abierto
-(dentro de su ventana de aceptación y con empleados activos aún
-incompletos para él) y no hay ya una consulta en curso, dispara una
-`runQuerySession`. El reloj de pared se abstrae detrás de una función
-`now()` inyectable (mismo patrón que `session-logger.js` de feature 001),
-para poder testear el comportamiento de apertura/cierre de checkpoints sin
-esperar tiempo real.
+minutos, sin librerías de cron) evalúa en cada tick el estado del único
+checkpoint configurado ("entrada"): si el checkpoint está abierto
+(dentro de su ventana de aceptación de un solo lado `[horaEsperada,
+horaEsperada + duracionMinutos]` y con empleados activos aún incompletos
+para él) y no hay ya una consulta en curso, dispara una `runQuerySession`.
+El reloj de pared se abstrae detrás de una función `now()` inyectable
+(mismo patrón que `session-logger.js` de feature 001), para poder testear
+el comportamiento de apertura/cierre del checkpoint sin esperar tiempo
+real.
 
-**Rationale**: El dominio no necesita expresividad de cron (solo dos
-horarios configurables por día); agregar una librería de terceros sería
-complejidad no justificada para este alcance (mismo criterio que feature
-001 con `node:util.parseArgs`). Un `now()` inyectable es imprescindible
-para poder escribir tests deterministas de "se abre/cierra el checkpoint
-X a la hora Y" sin usar temporizadores reales de horas.
+**Rationale**: El dominio no necesita expresividad de cron (solo un
+horario configurable por día con su ventana de 30 min); agregar una
+librería de terceros sería complejidad no justificada para este alcance
+(mismo criterio que feature 001 con `node:util.parseArgs`). Un `now()`
+inyectable es imprescindible para poder escribir tests deterministas de
+"se abre/cierra el checkpoint a la hora Y" sin usar temporizadores reales
+de horas.
 
 **Alternatives considered**:
 - `node-cron` / `node-schedule`: rechazadas — resuelven expresiones cron
-  arbitrarias, que este dominio no necesita (solo 2 horarios/día con
-  margen), y suman una dependencia de runtime evitable.
+  arbitrarias, que este dominio no necesita (un solo horario/día con
+  ventana de 30 min), y suman una dependencia de runtime evitable.
 - Un *scheduler* basado en fechas absolutas calculadas una vez al arrancar
   el proceso (en vez de polling cada 5 min): rechazada — no reacciona bien
-  a que el servicio arranque a mitad de un checkpoint ya abierto (Edge
+  a que el servicio arranque a mitad del checkpoint ya abierto (Edge
   Case de la spec), y complica el caso de reinicio a mitad de jornada.
 
 ## 3. Prevención de solapamiento de consultas (single-flight)
@@ -113,25 +115,42 @@ confirmada.
 **Alternatives considered**: Ninguna — es una corrección directa de una
 suposición que quedó obsoleta durante esta misma sesión de planificación.
 
-## 6. Asociación de una Fichada a un checkpoint (entrada/salida)
+## 6. Asociación de una Fichada al checkpoint "entrada"
 
 **Decisión**: Dado el `hora` decodificado de una Fichada, se la asocia al
-checkpoint (entrada o salida) cuya ventana de aceptación (`horaEsperada ±
-margen`) contiene esa hora. Si ninguna ventana la contiene (fichada fuera
-de margen) o si `hora` es `null`, se la asocia al checkpoint cuya ventana
-estaba abierta en el momento de la descarga (FR-006); si ningún checkpoint
-estaba abierto en ese instante (por ejemplo, se descargó fuera de horario
-por un reinicio tardío), la fichada se guarda igual en el store, asociada
-al Empleado/Período correspondiente, pero sin checkpoint asignado.
+checkpoint "entrada" si esa hora cae dentro de su ventana de aceptación
+de un solo lado (`[horaEsperada, horaEsperada + duracionMinutos]`). El
+respaldo de asociarla al checkpoint que estaba abierto al momento de la
+descarga aplica **únicamente cuando `hora` es `null`** (registro que no
+se pudo decodificar, FR-006). Una fichada con **hora válida pero fuera de
+la ventana** (por ejemplo, una salida de un día previo que el reloj recién
+reporta a la mañana siguiente, ya dentro de la ventana de entrada de hoy)
+NO se taguea a "entrada": queda con `checkpointId: null`. En cualquier
+caso la fichada se guarda igual en el store, asociada al Empleado/Período
+correspondiente — nunca se pierde.
 
-**Rationale**: FR-006/FR-008 de la spec ya fijan este comportamiento;
-aquí solo se precisa el caso borde de "ningún checkpoint abierto" que la
-spec no cubre explícitamente, resuelto de forma conservadora (no se
-pierde la fichada, simplemente no queda tageada a un checkpoint).
+Además, la **completitud se acota al día de servicio en curso**: un legajo
+solo cuenta como completo para la entrada de hoy si tiene una fichada
+válida (tageada "entrada") cuya `fecha` es la de hoy (para el respaldo de
+`hora`/`fecha` nulas, se usa el día local de recolección). Como el store
+agrupa por período mensual y conserva fichadas de días anteriores, sin
+este acotamiento una entrada de ayer marcaría a un empleado como completo
+hoy — cerrando el checkpoint por completitud sin que nadie fiche.
 
-**Alternatives considered**: Descartar la fichada si no calza en ningún
-checkpoint — rechazada, viola el espíritu de FR-008 (nunca rechazar una
-fichada real) y el principio de protección de datos de la constitución.
+**Rationale**: FR-006/FR-008 de la spec fijan este comportamiento. La
+restricción del respaldo a solo `hora === null` y el acotamiento diario de
+la completitud resuelven la interacción entre "el reloj no borra fichadas"
+(las de la tarde llegan al día siguiente) y "el store agrupa por mes"
+(conserva días previos): sin ambos, una salida de ayer podría quedar
+tageada "entrada" y/o falsear la completitud de hoy.
+
+**Alternatives considered**:
+- Descartar la fichada si no calza en la ventana de entrada — rechazada,
+  viola el espíritu de FR-008 (nunca rechazar una fichada real) y el
+  principio de protección de datos de la constitución.
+- Mantener el respaldo "checkpoint abierto al descargar" también para
+  horas válidas fuera de ventana (comportamiento previo) — rechazado: es
+  justamente lo que tageaba una salida de ayer como entrada de hoy.
 
 ## 7. Forma del estado en memoria expuesto (FR-014)
 

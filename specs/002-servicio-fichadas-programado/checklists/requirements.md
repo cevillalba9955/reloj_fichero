@@ -41,7 +41,17 @@
   en vez de un único corte genérico a las 16:00. Esto reemplaza la lectura
   literal de "ventana 7:00–16:00" por dos ventanas de aceptación (una por
   cada momento esperado), documentado explícitamente en Assumptions para
-  que quede trazable de dónde salió.
+  que quede trazable de dónde salió. **Superado por la sesión 2026-07-14**
+  (ver última nota): el modelo pasó a un único momento "entrada" con
+  ventana de un solo lado.
+- **Sesión de clarificación 2026-07-14**: el modelo de dos momentos con
+  margen simétrico ±30 se reemplazó por un **único checkpoint "entrada"**
+  con **ventana de un solo lado** `[hora de entrada, hora de entrada + 30
+  min]` (07:00 → 07:30 por defecto); el momento "salida" quedó fuera de
+  alcance. Propagado a spec.md (FR-002/003/004/006/007), plan.md,
+  research.md (§2/§6), data-model.md (§2/§3), contracts/ y quickstart.md.
+  El código en `src/` y sus tests quedaron marcados para rework en
+  `tasks.md` (Phase 7, T031–T035) — todavía implementan el modelo anterior.
 - La dependencia de un padrón externo de empleados activos (RRHH/Oracle,
   todavía no integrado en este proyecto) es un riesgo de alcance a tener en
   cuenta en `/speckit-plan`: el mecanismo concreto de esa integración no se

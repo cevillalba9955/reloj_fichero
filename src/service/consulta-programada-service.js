@@ -25,9 +25,9 @@ export function startService(options) {
     timeoutMs = 5000,
     tickIntervalMs = 5 * 60 * 1000,
     fullHandshake = false,
-    // FR-005: opcional — sin el, los checkpoints solo cierran por margen
-    // agotado (mitad "a" de FR-004 deshabilitada) y getState() no expone
-    // `empleados[]` (US1). Con el, se integra el padron de empleados
+    // FR-005: opcional — sin el, el checkpoint solo cierra por vencimiento
+    // de la ventana (mitad "a" de FR-004 deshabilitada) y getState() no
+    // expone `empleados[]` (US1). Con el, se integra el padron de empleados
     // activos como predicado de completitud real (US2).
     rosterProvider = null,
     // spec 005: sink opcional de persistencia durable de fichadas; se pasa tal
@@ -55,8 +55,12 @@ export function startService(options) {
     if (!rosterProvider) return false;
     const empleadosActivos = await rosterProvider.getActiveEmployees();
     ultimoRosterConocido = empleadosActivos;
+    // FR-006 (2026-07-14): la completitud se acota al día en curso, para que
+    // una fichada de un día anterior conservada en el store no cierre el
+    // checkpoint de hoy por completitud.
+    const fechaServicio = formatFecha(now());
     return empleadosActivos.every((empleado) =>
-      store.tieneFichadaValidaParaCheckpoint(empleado.legajo, checkpointId)
+      store.tieneFichadaValidaParaCheckpoint(empleado.legajo, checkpointId, fechaServicio)
     );
   }
 
@@ -77,11 +81,12 @@ export function startService(options) {
 
   scheduler.start();
 
-  function buildEmpleadoCheckpoints(legajo) {
-    const fichadasDelLegajo = store.getFichadasPorLegajo(legajo);
+  function buildEmpleadoCheckpoints(legajo, fechaServicio) {
     const resultado = {};
     for (const checkpoint of checkpoints) {
-      const fichadaQueLoCompleta = fichadasDelLegajo.find((f) => f.checkpointId === checkpoint.id);
+      // Solo cuenta como "completo" una fichada del día de servicio en curso
+      // (FR-006, 2026-07-14), consistente con computeCompletitud.
+      const fichadaQueLoCompleta = store.getFichadaQueCompleta(legajo, checkpoint.id, fechaServicio);
       resultado[checkpoint.id] = {
         completo: Boolean(fichadaQueLoCompleta),
         fichadaRawHex: fichadaQueLoCompleta?.rawHex ?? null,
@@ -94,19 +99,20 @@ export function startService(options) {
   // `empleados[]` solo se expone cuando hay un rosterProvider configurado
   // (US2); sin el, queda `undefined` (US1).
   function getState() {
+    const fechaServicio = formatFecha(now());
     return {
-      fechaServicio: formatFecha(now()),
+      fechaServicio,
       checkpoints: checkpoints.map((cp) => ({
         id: cp.id,
         horaEsperada: cp.horaEsperada,
-        margenMinutos: cp.margenMinutos,
+        duracionMinutos: cp.duracionMinutos,
         estado: cp.estado,
       })),
       empleados: rosterProvider
         ? ultimoRosterConocido.map((empleado) => ({
             legajo: empleado.legajo,
             activo: true,
-            checkpoints: buildEmpleadoCheckpoints(empleado.legajo),
+            checkpoints: buildEmpleadoCheckpoints(empleado.legajo, fechaServicio),
           }))
         : undefined,
       periodos: store.getPeriodos(),

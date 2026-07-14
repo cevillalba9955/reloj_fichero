@@ -134,7 +134,7 @@ test('drop-in: el checkpoint cierra por cerrado_completo con el padrón Oracle (
       now,
       timeoutMs: 2000,
       tickIntervalMs: 60 * 60 * 1000,
-      checkpoints: { entrada: { horaEsperada: '07:00', margenMinutos: 30 } },
+      checkpoints: { entrada: { horaEsperada: '07:00', duracionMinutos: 30 } },
       rosterProvider,
     });
 
@@ -225,7 +225,7 @@ test('padrón vacío: se registra como error/padron_vacio, no cierra por complet
       now,
       timeoutMs: 2000,
       tickIntervalMs: 60 * 60 * 1000,
-      checkpoints: { entrada: { horaEsperada: '07:00', margenMinutos: 30 } },
+      checkpoints: { entrada: { horaEsperada: '07:00', duracionMinutos: 30 } },
       rosterProvider,
     });
 

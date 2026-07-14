@@ -10,12 +10,12 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "horaEsperada", "margenMinutos", "estado"],
+        "required": ["id", "horaEsperada", "duracionMinutos", "estado"],
         "properties": {
-          "id": { "type": "string", "enum": ["entrada", "salida"] },
+          "id": { "type": "string", "enum": ["entrada"] },
           "horaEsperada": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$" },
-          "margenMinutos": { "type": "integer", "minimum": 0 },
-          "estado": { "type": "string", "enum": ["pendiente", "abierto", "cerrado_completo", "cerrado_margen_agotado"] }
+          "duracionMinutos": { "type": "integer", "minimum": 0, "description": "Duración de la ventana de un solo lado [horaEsperada, horaEsperada + duracionMinutos]; 30 por defecto" },
+          "estado": { "type": "string", "enum": ["pendiente", "abierto", "cerrado_completo", "cerrado_ventana_vencida"] }
         }
       }
     },
@@ -63,7 +63,7 @@
                 "rawHex": { "type": "string", "pattern": "^[0-9A-Fa-f]{40}$", "description": "Identificador único de la fichada dentro del store (FR-017): nunca aparece repetido entre los elementos de 'fichadas' de un mismo período, ni en distintos períodos" },
                 "periodo": { "type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$" },
                 "periodoAproximado": { "type": "boolean" },
-                "checkpointId": { "type": ["string", "null"], "enum": ["entrada", "salida", null] },
+                "checkpointId": { "type": ["string", "null"], "enum": ["entrada", null] },
                 "recolectadaEn": { "type": "string", "format": "date-time" }
               }
             }

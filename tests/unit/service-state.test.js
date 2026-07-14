@@ -79,7 +79,7 @@ test('getState(): cumple la forma completa de contracts/state-schema.json cuando
       now,
       timeoutMs: 2000,
       tickIntervalMs: 60 * 60 * 1000,
-      checkpoints: { entrada: { horaEsperada: '07:00', margenMinutos: 30 } },
+      checkpoints: { entrada: { horaEsperada: '07:00', duracionMinutos: 30 } },
       rosterProvider,
     });
 
@@ -94,7 +94,7 @@ test('getState(): cumple la forma completa de contracts/state-schema.json cuando
       assert.match(state.fechaServicio, /^\d{4}-\d{2}-\d{2}$/);
       assert.ok(Array.isArray(state.checkpoints));
       for (const cp of state.checkpoints) {
-        for (const campo of ['id', 'horaEsperada', 'margenMinutos', 'estado']) {
+        for (const campo of ['id', 'horaEsperada', 'duracionMinutos', 'estado']) {
           assert.ok(campo in cp, `cada checkpoint debe incluir "${campo}"`);
         }
       }
