@@ -4,6 +4,8 @@ import {
   generarCalendario,
   reclasificarDia,
   parsePeriodo,
+  periodoAnterior,
+  periodoSiguiente,
   Clasificacion,
   diaDe,
 } from '../../src/presentismo/domain/calendario-mes.js';
@@ -62,4 +64,21 @@ test('reclasificar rechaza fecha fuera del mes y clasificación inválida', () =
   const cal = generarCalendario('202607', LV);
   assert.throws(() => reclasificarDia(cal, '2026-08-01', Clasificacion.FERIADO), /no pertenece/);
   assert.throws(() => reclasificarDia(cal, '2026-07-09', 'Vacaciones'), /clasificación inválida/);
+});
+
+// T002 (feature 008) — aritmética de períodos YYYYMM para la frontera generable.
+test('periodoSiguiente y periodoAnterior avanzan un mes', () => {
+  assert.equal(periodoSiguiente('202607'), '202608');
+  assert.equal(periodoAnterior('202607'), '202606');
+});
+
+test('periodoSiguiente/periodoAnterior cruzan el límite de año', () => {
+  assert.equal(periodoSiguiente('202612'), '202701', 'dic → ene del año siguiente');
+  assert.equal(periodoAnterior('202601'), '202512', 'ene → dic del año anterior');
+});
+
+test('periodoSiguiente/periodoAnterior validan el formato YYYYMM', () => {
+  assert.throws(() => periodoSiguiente('2026-07'), /período inválido/);
+  assert.throws(() => periodoAnterior('202613'), /mes inválido/);
+  assert.throws(() => periodoSiguiente('20267'), /período inválido/);
 });

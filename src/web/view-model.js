@@ -1,4 +1,4 @@
-import { parsePeriodo } from '../presentismo/domain/calendario-mes.js';
+import { parsePeriodo, periodoAnterior, periodoSiguiente } from '../presentismo/domain/calendario-mes.js';
 import { recortar, Tramo } from '../presentismo/domain/periodo-liquidacion.js';
 
 // feature 007 — Armado de las proyecciones de presentación (view-models) que la
@@ -28,6 +28,27 @@ export function hoyLocal(now = new Date()) {
   const m = String(now.getMonth() + 1).padStart(2, '0');
   const d = String(now.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+}
+
+// Período 'YYYYMM' del mes actual según el reloj del servidor (feature 008).
+export function mesActualPeriodo(now = new Date()) {
+  return `${String(now.getFullYear()).padStart(4, '0')}${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// Calcula la frontera generable (feature 008): los 0..2 períodos habilitados
+// para generar ahora, garantizando contigüidad y sin superar el mes actual.
+// - Sin períodos: solo el mes semilla (mesActual) (FR-005).
+// - Con períodos: min-1 siempre (backfill), y max+1 solo si no es futuro (FR-004).
+// `periodos` puede venir en cualquier orden; se usan su mínimo y máximo.
+export function calcularFronteraGenerable({ periodos = [], mesActual }) {
+  if (periodos.length === 0) return [mesActual];
+  const ordenados = [...periodos].sort();
+  const min = ordenados[0];
+  const max = ordenados[ordenados.length - 1];
+  const generables = [periodoAnterior(min)];
+  const siguiente = periodoSiguiente(max);
+  if (siguiente <= mesActual) generables.push(siguiente);
+  return generables.sort();
 }
 
 // La leyenda: una clave por distinción visual (FR-006). Texto legible garantiza

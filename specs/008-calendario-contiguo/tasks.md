@@ -33,7 +33,7 @@ Web app existente: backend en `src/`, frontend en `frontend/src/`, tests en `tes
 
 **Purpose**: Punto de partida verificable sobre la rama `008-calendario-contiguo`.
 
-- [ ] T001 Confirmar baseline verde: ejecutar `npm test` (backend) y `cd frontend && npm test` y registrar que pasan antes de tocar código, sobre la rama `008-calendario-contiguo`.
+- [X] T001 Confirmar baseline verde: ejecutar `npm test` (backend) y `cd frontend && npm test` y registrar que pasan antes de tocar código, sobre la rama `008-calendario-contiguo`.
 
 ---
 
@@ -44,12 +44,12 @@ las tres historias (todas dependen de `generables`/`mesActual`).
 
 **⚠️ CRITICAL**: Ninguna historia puede completarse hasta terminar esta fase.
 
-- [ ] T002 [P] Unit tests (test-first) de `periodoAnterior`/`periodoSiguiente` (cruce de año dic→ene y ene→dic, validación de `YYYYMM` inválido) en `tests/unit/presentismo-calendario-mes.test.js`.
-- [ ] T003 Implementar helpers puros `periodoAnterior(periodo)` y `periodoSiguiente(periodo)` (o `desplazarPeriodo`) en `src/presentismo/domain/calendario-mes.js`, validando con `parsePeriodo`. Hace pasar T002.
-- [ ] T004 Implementar `calcularFronteraGenerable({ periodos, mesActual })` y un helper `mesActualPeriodo(now)` (deriva `YYYYMM` de `hoyLocal`) en `src/web/view-model.js` (depende de T003).
-- [ ] T005 Extender `GET /api/calendarios` para devolver `mesActual` y `generables` (además de `periodos`/`ultimo`) usando T004, en `src/web/api/calendario-handlers.js` (depende de T004).
-- [ ] T006 Contract test del `GET` extendido: `mesActual` y `generables` correctos en 3 casos — sin períodos (`generables=[mesActual]`), caso normal (`{min-1, max+1}`), y caso `max = mesActual` (solo backfill `min-1`) — en `tests/contract/web-api-calendario.test.js` (verifica T005).
-- [ ] T007 Frontend: en `frontend/src/App.jsx`, leer y almacenar `mesActual` y `generables` desde `listarCalendarios()` y propagarlos como props a `NavegacionMes` y `EstadoVacio` (depende de T005).
+- [X] T002 [P] Unit tests (test-first) de `periodoAnterior`/`periodoSiguiente` (cruce de año dic→ene y ene→dic, validación de `YYYYMM` inválido) en `tests/unit/presentismo-calendario-mes.test.js`.
+- [X] T003 Implementar helpers puros `periodoAnterior(periodo)` y `periodoSiguiente(periodo)` (o `desplazarPeriodo`) en `src/presentismo/domain/calendario-mes.js`, validando con `parsePeriodo`. Hace pasar T002.
+- [X] T004 Implementar `calcularFronteraGenerable({ periodos, mesActual })` y un helper `mesActualPeriodo(now)` (deriva `YYYYMM` de `hoyLocal`) en `src/web/view-model.js` (depende de T003).
+- [X] T005 Extender `GET /api/calendarios` para devolver `mesActual` y `generables` (además de `periodos`/`ultimo`) usando T004, en `src/web/api/calendario-handlers.js` (depende de T004).
+- [X] T006 Contract test del `GET` extendido: `mesActual` y `generables` correctos en 3 casos — sin períodos (`generables=[mesActual]`), caso normal (`{min-1, max+1}`), y caso `max = mesActual` (solo backfill `min-1`) — en `tests/contract/web-api-calendario.test.js` (verifica T005).
+- [X] T007 Frontend: en `frontend/src/App.jsx`, leer y almacenar `mesActual` y `generables` desde `listarCalendarios()` y propagarlos como props a `NavegacionMes` y `EstadoVacio` (depende de T005).
 
 **Checkpoint**: El backend expone la frontera generable y la UI la recibe. Las historias pueden avanzar.
 
@@ -63,12 +63,12 @@ calendario, lo persiste y muestra la grilla; invocar sobre un mes ya generado es
 **Independent Test**: Con al menos un mes generado, navegar al mes contiguo generable, presionar
 "Generar calendario" y ver la grilla del mes recién generado; repetir la generación no duplica.
 
-- [ ] T008 [US1] Contract test: `POST /api/calendarios/:periodo/generar` sobre un período de `generables` → 200 con `VistaCalendarioMes`; sobre un período **ya generado** → 200 sin regenerar ni duplicar; en `tests/contract/web-api-calendario.test.js` (depende de T006, mismo archivo).
-- [ ] T009 [P] [US1] Integration test (test-first) del flujo feliz: repo vacío → generar semilla (`mesActual`) → generar `max+1` (si ≤ `mesActual`), verificando que la secuencia se extiende y la frontera se recalcula, en `tests/integration/generar-calendario-contiguo.test.js` (archivo nuevo).
-- [ ] T010 [US1] Endurecer `POST /:periodo/generar` en `src/web/api/calendario-handlers.js`: idempotencia (si el período ya está generado, devolver la vista actual **sin** llamar a `generarCalendario`) y, en éxito, devolver la `VistaCalendarioMes` recién generada. Hace pasar T008/T009 (parte feliz).
-- [ ] T011 [US1] Frontend `frontend/src/components/EstadoVacio.jsx`: mostrar el botón "Generar calendario" **solo** cuando el período mostrado ∈ `generables` (recibido por props), en lugar de mostrarlo siempre.
-- [ ] T012 [US1] Frontend `frontend/src/App.jsx`: tras una generación exitosa, refrescar también `generables` y `mesActual` (no solo `periodos`) para reflejar la nueva frontera (mismo archivo que T007; secuencial).
-- [ ] T013 [P] [US1] Component test `frontend/src/components/EstadoVacio.test.jsx`: el botón aparece solo cuando el período es generable y su `onClick` dispara la acción.
+- [X] T008 [US1] Contract test: `POST /api/calendarios/:periodo/generar` sobre un período de `generables` → 200 con `VistaCalendarioMes`; sobre un período **ya generado** → 200 sin regenerar ni duplicar; en `tests/contract/web-api-calendario.test.js` (depende de T006, mismo archivo).
+- [X] T009 [P] [US1] Integration test (test-first) del flujo feliz: repo vacío → generar semilla (`mesActual`) → generar `max+1` (si ≤ `mesActual`), verificando que la secuencia se extiende y la frontera se recalcula, en `tests/integration/generar-calendario-contiguo.test.js` (archivo nuevo).
+- [X] T010 [US1] Endurecer `POST /:periodo/generar` en `src/web/api/calendario-handlers.js`: idempotencia (si el período ya está generado, devolver la vista actual **sin** llamar a `generarCalendario`) y, en éxito, devolver la `VistaCalendarioMes` recién generada. Hace pasar T008/T009 (parte feliz).
+- [X] T011 [US1] Frontend `frontend/src/components/EstadoVacio.jsx`: mostrar el botón "Generar calendario" **solo** cuando el período mostrado ∈ `generables` (recibido por props), en lugar de mostrarlo siempre.
+- [X] T012 [US1] Frontend `frontend/src/App.jsx`: tras una generación exitosa, refrescar también `generables` y `mesActual` (no solo `periodos`) para reflejar la nueva frontera (mismo archivo que T007; secuencial).
+- [X] T013 [P] [US1] Component test `frontend/src/components/EstadoVacio.test.jsx`: el botón aparece solo cuando el período es generable y su `onClick` dispara la acción.
 
 **Checkpoint**: US1 funcional e independiente — se generan meses contiguos generables desde la IU.
 
@@ -83,11 +83,11 @@ en meses vacíos no generables y explica qué período debe generarse primero.
 `PERIODO_NO_CONTIGUO`; un mes posterior al actual → 409 `PERIODO_FUTURO`; en la UI, un mes vacío
 no generable no muestra botón y sí un mensaje con el período requerido.
 
-- [ ] T014 [US2] Contract test: `POST /:periodo/generar` sobre período no contiguo → 409 `PERIODO_NO_CONTIGUO` (mensaje identifica el período a generar primero); sobre período posterior a `mesActual` → 409 `PERIODO_FUTURO`; en `tests/contract/web-api-calendario.test.js` (mismo archivo que T008; secuencial).
-- [ ] T015 [US2] Integration test: repo con secuencia → intentar saltear (`max+2`) → rechazo y secuencia intacta; backfill `min-1` → 200 y secuencia extendida hacia atrás; en `tests/integration/generar-calendario-contiguo.test.js` (mismo archivo que T009; secuencial).
-- [ ] T016 [US2] Agregar las guardas a `POST /:periodo/generar` en `src/web/api/calendario-handlers.js`: 409 `PERIODO_FUTURO` si `> mesActual`; 409 `PERIODO_NO_CONTIGUO` (con mensaje "generá primero X") si no es adyacente; orden formato → ya-generado → futuro → no-contiguo → generar (mismo archivo que T010; secuencial). Hace pasar T014/T015.
-- [ ] T017 [US2] Frontend `frontend/src/components/EstadoVacio.jsx`: cuando el período mostrado está vacío y ∉ `generables`, mostrar un mensaje que identifique el período generable más cercano en la dirección del mostrado (mismo archivo que T011; secuencial).
-- [ ] T018 [US2] Component test `frontend/src/components/EstadoVacio.test.jsx`: período vacío no generable no muestra botón y muestra el mensaje de no-contiguo (mismo archivo que T013; secuencial).
+- [X] T014 [US2] Contract test: `POST /:periodo/generar` sobre período no contiguo → 409 `PERIODO_NO_CONTIGUO` (mensaje identifica el período a generar primero); sobre período posterior a `mesActual` → 409 `PERIODO_FUTURO`; en `tests/contract/web-api-calendario.test.js` (mismo archivo que T008; secuencial).
+- [X] T015 [US2] Integration test: repo con secuencia → intentar saltear (`max+2`) → rechazo y secuencia intacta; backfill `min-1` → 200 y secuencia extendida hacia atrás; en `tests/integration/generar-calendario-contiguo.test.js` (mismo archivo que T009; secuencial).
+- [X] T016 [US2] Agregar las guardas a `POST /:periodo/generar` en `src/web/api/calendario-handlers.js`: 409 `PERIODO_FUTURO` si `> mesActual`; 409 `PERIODO_NO_CONTIGUO` (con mensaje "generá primero X") si no es adyacente; orden formato → ya-generado → futuro → no-contiguo → generar (mismo archivo que T010; secuencial). Hace pasar T014/T015.
+- [X] T017 [US2] Frontend `frontend/src/components/EstadoVacio.jsx`: cuando el período mostrado está vacío y ∉ `generables`, mostrar un mensaje que identifique el período generable más cercano en la dirección del mostrado (mismo archivo que T011; secuencial).
+- [X] T018 [US2] Component test `frontend/src/components/EstadoVacio.test.jsx`: período vacío no generable no muestra botón y muestra el mensaje de no-contiguo (mismo archivo que T013; secuencial).
 
 **Checkpoint**: US1 + US2 — imposible crear huecos desde la IU; los rechazos por API son explícitos.
 
@@ -103,9 +103,9 @@ previo.
 (si existe) y desde ahí queda deshabilitado; si `max+1` es futuro, "mes siguiente" está
 deshabilitado desde el último generado; simétrico para "mes anterior".
 
-- [ ] T019 [US3] Frontend `frontend/src/components/NavegacionMes.jsx`: deshabilitar "siguiente" ⟺ `periodoSiguiente(P) ∉ periodos ∪ generables` y "anterior" ⟺ `periodoAnterior(P) ∉ periodos ∪ generables`, usando props del backend; **eliminar** `periodoHoy()`/`siguienteLocked` y toda comparación con la fecha del cliente.
-- [ ] T020 [US3] Frontend `frontend/src/App.jsx`: asegurar que `periodos` y `generables` se pasan como props a `NavegacionMes` (ajustar si T007 no lo cubrió) (mismo archivo que T007/T012; secuencial).
-- [ ] T021 [P] [US3] Component test `frontend/src/components/NavegacionMes.test.jsx`: "siguiente" deshabilitado más allá del frontera; "siguiente" deshabilitado cuando `max+1` es futuro; "anterior" deshabilitado en el borde `min-1`.
+- [X] T019 [US3] Frontend `frontend/src/components/NavegacionMes.jsx`: deshabilitar "siguiente" ⟺ `periodoSiguiente(P) ∉ periodos ∪ generables` y "anterior" ⟺ `periodoAnterior(P) ∉ periodos ∪ generables`, usando props del backend; **eliminar** `periodoHoy()`/`siguienteLocked` y toda comparación con la fecha del cliente.
+- [X] T020 [US3] Frontend `frontend/src/App.jsx`: asegurar que `periodos` y `generables` se pasan como props a `NavegacionMes` (ajustar si T007 no lo cubrió) (mismo archivo que T007/T012; secuencial).
+- [X] T021 [P] [US3] Component test `frontend/src/components/NavegacionMes.test.jsx`: "siguiente" deshabilitado más allá del frontera; "siguiente" deshabilitado cuando `max+1` es futuro; "anterior" deshabilitado en el borde `min-1`.
 
 **Checkpoint**: Las tres historias funcionan de forma independiente y la contigüidad es visible en la navegación.
 
@@ -115,10 +115,10 @@ deshabilitado desde el último generado; simétrico para "mes anterior".
 
 **Purpose**: Consistencia, limpieza y validación final.
 
-- [ ] T022 [P] Actualizar la nota de no-goals: el contrato de la 007 decía "No genera meses"; dejar constancia en `specs/007-ui-calendario-mensual/contracts/web-api.md` (o en la doc de la web) de que la feature 008 lo deroga, apuntando a `specs/008-calendario-contiguo/contracts/web-api.md`.
-- [ ] T023 Eliminar código muerto/de depuración remanente del trabajo previo en `frontend/src/components/NavegacionMes.jsx` y `frontend/src/App.jsx` (no debe quedar lógica de fecha del cliente ni logs de debug).
-- [ ] T024 Ejecutar la suite completa: `npm test` (backend) y `cd frontend && npm test`; asegurar verde y sin regresiones en los tests de la feature 007.
-- [ ] T025 [P] Ejecutar la validación de [quickstart.md](quickstart.md) end-to-end (API y navegador) y confirmar SC-001..SC-004.
+- [X] T022 [P] Actualizar la nota de no-goals: el contrato de la 007 decía "No genera meses"; dejar constancia en `specs/007-ui-calendario-mensual/contracts/web-api.md` (o en la doc de la web) de que la feature 008 lo deroga, apuntando a `specs/008-calendario-contiguo/contracts/web-api.md`.
+- [X] T023 Eliminar código muerto/de depuración remanente del trabajo previo en `frontend/src/components/NavegacionMes.jsx` y `frontend/src/App.jsx` (no debe quedar lógica de fecha del cliente ni logs de debug).
+- [X] T024 Ejecutar la suite completa: `npm test` (backend) y `cd frontend && npm test`; asegurar verde y sin regresiones en los tests de la feature 007.
+- [X] T025 [P] Ejecutar la validación de [quickstart.md](quickstart.md) end-to-end (API y navegador) y confirmar SC-001..SC-004.
 
 ---
 

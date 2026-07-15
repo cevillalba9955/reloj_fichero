@@ -97,7 +97,9 @@ Efectos (garantizados por el dominio):
 
 - No expone endpoints de cálculo de presentismo por empleado, correcciones ni pausas (son de
   la feature 004 y de vistas futuras).
-- No genera meses (`generar-calendario` sigue siendo del CLI/otra vista).
+- ~~No genera meses (`generar-calendario` sigue siendo del CLI/otra vista).~~ **Derogado por la
+  feature 008**: la generación de meses desde la IU/API se agrega con guardas de contigüidad.
+  Ver [`specs/008-calendario-contiguo/contracts/web-api.md`](../../008-calendario-contiguo/contracts/web-api.md).
 - No expone padrón, nombres ni fichadas.
 
 ## Tests de contrato asociados
