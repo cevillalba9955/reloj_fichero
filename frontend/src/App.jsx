@@ -110,7 +110,7 @@ export default function App({ cliente = clientePorDefecto }) {
         {periodoMostrado && ultimo && (
           <NavegacionMes
             periodo={periodoMostrado}
-            ultimo={ultimo}
+            mesActual={mesActual}
             periodos={periodos}
             generables={generables}
             onIr={cargarMes}

@@ -15,8 +15,8 @@ test('siguiente, anterior y volver invocan onIr cuando el destino es alcanzable'
   const onIr = vi.fn();
   render(
     <NavegacionMes
-      periodo="202607"
-      ultimo="202608"
+      periodo="202608"
+      mesActual="202607"
       periodos={['202606', '202607', '202608']}
       generables={['202605', '202609']}
       onIr={onIr}
@@ -24,19 +24,37 @@ test('siguiente, anterior y volver invocan onIr cuando el destino es alcanzable'
   );
 
   fireEvent.click(screen.getByLabelText('Mes siguiente'));
-  expect(onIr).toHaveBeenCalledWith('202608');
+  expect(onIr).toHaveBeenCalledWith('202609');
 
   fireEvent.click(screen.getByLabelText('Mes anterior'));
-  expect(onIr).toHaveBeenCalledWith('202606');
+  expect(onIr).toHaveBeenCalledWith('202607');
 
-  fireEvent.click(screen.getByText(/Volver al último/));
-  expect(onIr).toHaveBeenCalledWith('202608');
+  // "Volver al mes en curso" lleva a mesActual (202607), que está generado.
+  fireEvent.click(screen.getByText(/Volver al mes en curso/));
+  expect(onIr).toHaveBeenCalledWith('202607');
 });
 
-test('"volver" queda deshabilitado si ya estamos en el último', () => {
+test('"volver al mes en curso" queda deshabilitado si ya estamos en el mes actual', () => {
   const onIr = vi.fn();
-  render(<NavegacionMes periodo="202608" ultimo="202608" periodos={['202608']} onIr={onIr} />);
-  expect(screen.getByText(/Volver al último/)).toBeDisabled();
+  render(
+    <NavegacionMes periodo="202607" mesActual="202607" periodos={['202607']} onIr={onIr} />,
+  );
+  expect(screen.getByText(/Volver al mes en curso/)).toBeDisabled();
+});
+
+test('"volver al mes en curso" deshabilitado si el mes actual no es alcanzable (evita callejón sin salida)', () => {
+  const onIr = vi.fn();
+  // Datos viejos en el pasado; el mes actual (202607) queda lejos de la frontera.
+  render(
+    <NavegacionMes
+      periodo="202602"
+      mesActual="202607"
+      periodos={['202601', '202602']}
+      generables={['202512', '202603']}
+      onIr={onIr}
+    />,
+  );
+  expect(screen.getByText(/Volver al mes en curso/)).toBeDisabled();
 });
 
 // US3 (feature 008) — el "siguiente" se puede pisar hasta la frontera generable,
@@ -48,7 +66,7 @@ test('"siguiente" deshabilitado más allá de la frontera generable', () => {
   render(
     <NavegacionMes
       periodo="202609"
-      ultimo="202608"
+      mesActual="202608"
       periodos={['202607', '202608']}
       generables={['202606', '202609']}
       onIr={onIr}
@@ -66,7 +84,7 @@ test('"siguiente" deshabilitado cuando el mes+1 sería futuro (no está en gener
   render(
     <NavegacionMes
       periodo="202607"
-      ultimo="202607"
+      mesActual="202607"
       periodos={['202606', '202607']}
       generables={['202605']}
       onIr={onIr}
@@ -81,7 +99,7 @@ test('"anterior" deshabilitado en el borde de backfill (min-1)', () => {
   render(
     <NavegacionMes
       periodo="202605"
-      ultimo="202607"
+      mesActual="202607"
       periodos={['202606', '202607']}
       generables={['202605']}
       onIr={onIr}
