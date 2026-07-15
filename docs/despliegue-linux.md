@@ -4,6 +4,9 @@ Guía reproducible para correr el **servicio-fichadas-programado** (feature 002)
 de producción en un servidor Linux, con **persistencia de fichadas** (feature 005) hacia el
 archivo por período que consume el cálculo de presentismo (feature 004).
 
+Cubre también el despliegue de la **interfaz web de presentismo** (frontend + API, features 007 +
+008) como servicio systemd aparte — ver [§8](#8-despliegue-de-la-interfaz-web-frontend--api).
+
 Convenciones por defecto (ajustables): usuario de sistema `rs956`, instalación en `/opt/rs956`,
 Node en `/usr/bin/node`. Referencias: [spec 005](../specs/005-servicio-despliegue-linux/spec.md),
 [contrato systemd](../specs/005-servicio-despliegue-linux/contracts/systemd-deployment.md).
@@ -127,7 +130,87 @@ sudo systemctl disable --now rs956-fichadas.service rs956-fichadas-restart.timer
 
 Los datos persistidos en `data/presentismo/fichadas/` quedan intactos (los consume el cálculo).
 
-## 8. Notas operativas
+## 8. Despliegue de la interfaz web (frontend + API)
+
+La UI de presentismo (features 007 + 008: calendario mensual, generación contigua de meses y
+reclasificación) se sirve con `src/web/server.js`: expone la API en `/api` y los estáticos del
+build de React (`frontend/dist`). Opera solo sobre los archivos JSON locales del dominio —no
+toca Oracle ni el reloj— y **reutiliza la misma configuración `PRESENTISMO_*`** del cálculo
+(mismo `data/presentismo/`, `config/categorias.json` y `logs/`).
+
+Referencias: [contrato web-api 008](../specs/008-calendario-contiguo/contracts/web-api.md).
+
+### 8.1 Construir el frontend en el servidor
+
+`frontend/dist/` está gitignored (no viene en el clone) y `vite` es dependencia de desarrollo,
+así que el build usa `npm ci` **completo** (no `--omit=dev`):
+
+```bash
+cd /opt/rs956/frontend
+sudo -u rs956 npm ci            # instala React + vite (devDependencies incluidas)
+sudo -u rs956 npm run build     # genera /opt/rs956/frontend/dist
+```
+
+> Alternativa sin toolchain de build en el servidor: construir `frontend/dist` en otra máquina
+> (`npm ci && npm run build`) y copiar el directorio `dist/` a `/opt/rs956/frontend/`.
+
+### 8.2 Configurar el puerto
+
+El servidor escucha en `PRESENTISMO_WEB_PORT` (default `4173`). Ajustable en el unit
+(`Environment=`) o en `.env`:
+
+```dotenv
+PRESENTISMO_WEB_PORT=4173
+```
+
+Si `frontend/dist` no existe, la web responde con un aviso pidiendo compilar el frontend (la API
+sigue funcionando).
+
+### 8.3 Activar el servicio web
+
+```bash
+sudo cp deploy/rs956-web.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now rs956-web.service        # arranque al boot + ya
+```
+
+Si `node` no está en `/usr/bin/node`, editar `ExecStart` del unit con la ruta real
+(`which node`).
+
+### 8.4 Verificación
+
+```bash
+systemctl status rs956-web                            # active (running)
+curl -s http://localhost:4173/api/calendarios         # { "periodos": [...], "ultimo": ..., "mesActual": ..., "generables": [...] }
+```
+
+Abrir `http://<servidor>:4173/` en el navegador: debe mostrar el calendario del último mes
+generado. Si no hay ninguno, el estado vacío ofrece generar el mes en curso (semilla).
+
+### 8.5 Exposición y reverse proxy (opcional)
+
+El servicio corre como usuario sin privilegios en un puerto alto (4173). Para servir en `80`/`443`
+con TLS, usar un reverse proxy (nginx/Caddy) por delante en vez de darle privilegios al proceso
+Node. Ejemplo mínimo nginx:
+
+```nginx
+server {
+    listen 80;
+    server_name presentismo.example;
+    location / { proxy_pass http://127.0.0.1:4173; }
+}
+```
+
+### 8.6 Actualización
+
+```bash
+sudo -u rs956 git -C /opt/rs956 pull
+sudo -u rs956 npm --prefix /opt/rs956 ci --omit=dev          # deps del backend
+cd /opt/rs956/frontend && sudo -u rs956 npm ci && sudo -u rs956 npm run build   # rebuild del front
+sudo systemctl restart rs956-web.service
+```
+
+## 9. Notas operativas
 
 - **Persistencia**: el servicio escribe las fichadas en `data/presentismo/fichadas/<periodo>.json`
   (dedup por `rawHex`, escritura atómica). El store en memoria se usa sólo para la completitud
@@ -139,6 +222,6 @@ Los datos persistidos en `data/presentismo/fichadas/` quedan intactos (los consu
   activo, reprogramar `sincronizar-padron` (requiere Oracle) y copiar/generar el snapshot.
 - **Node**: mínimo 20.12 (por `--env-file-if-exists`).
 
-## 9. Permisos de archivos
+## 10. Permisos de archivos
  sudo chown -R rs956:rs956 /opt/rs956
  
