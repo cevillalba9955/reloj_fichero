@@ -20,6 +20,9 @@ const clientePorDefecto = crearClienteCalendario();
 export default function App({ cliente = clientePorDefecto }) {
   const [estado, setEstado] = useState({ tipo: 'cargando' });
   const [ultimo, setUltimo] = useState(null);
+  const [periodos, setPeriodos] = useState([]);
+  const [generables, setGenerables] = useState([]);
+  const [mesActual, setMesActual] = useState(null);
   const [aviso, setAviso] = useState(null);
   const [dialogo, setDialogo] = useState(null); // { dia, clasificacion }
 
@@ -40,8 +43,12 @@ export default function App({ cliente = clientePorDefecto }) {
   const inicializar = useCallback(async () => {
     setEstado({ tipo: 'cargando' });
     try {
-      const { ultimo: ult } = await cliente.listarCalendarios();
+      const { ultimo: ult, periodos: perds, generables: gen, mesActual: mes } =
+        await cliente.listarCalendarios();
       setUltimo(ult);
+      setPeriodos(perds ?? []);
+      setGenerables(gen ?? []);
+      setMesActual(mes ?? null);
       if (!ult) setEstado({ tipo: 'vacio-global' });
       else await cargarMes(ult);
     } catch (err) {
@@ -75,12 +82,39 @@ export default function App({ cliente = clientePorDefecto }) {
     }
   }
 
+  async function generarCalendarioDelPeriodo(periodo) {
+    if (!periodo) return;
+    setAviso(null);
+    try {
+      setEstado({ tipo: 'cargando' });
+      await cliente.generarCalendario(periodo);
+      // Refrescar la frontera completa: la generación corre el rango y cambia
+      // qué períodos quedan generables (feature 008).
+      const { ultimo: ult, periodos: perds, generables: gen, mesActual: mes } =
+        await cliente.listarCalendarios();
+      setUltimo(ult ?? null);
+      setPeriodos(perds ?? []);
+      setGenerables(gen ?? []);
+      setMesActual(mes ?? null);
+      await cargarMes(periodo);
+    } catch (err) {
+      setAviso(`No se pudo generar el calendario: ${err.message}`);
+      await inicializar();
+    }
+  }
+
   return (
     <main className="app">
       <header className="app-header">
         <h1>Calendario de presentismo</h1>
         {periodoMostrado && ultimo && (
-          <NavegacionMes periodo={periodoMostrado} ultimo={ultimo} onIr={cargarMes} />
+          <NavegacionMes
+            periodo={periodoMostrado}
+            mesActual={mesActual}
+            periodos={periodos}
+            generables={generables}
+            onIr={cargarMes}
+          />
         )}
       </header>
 
@@ -106,11 +140,21 @@ export default function App({ cliente = clientePorDefecto }) {
       )}
 
       {estado.tipo === 'vacio-global' && (
-        <EstadoVacio mensaje="Aún no se generó ningún calendario." />
+        <EstadoVacio
+          mensaje="Aún no se generó ningún calendario."
+          periodo={mesActual}
+          generables={generables}
+          onGenerar={() => generarCalendarioDelPeriodo(mesActual)}
+        />
       )}
 
       {estado.tipo === 'vacio-mes' && (
-        <EstadoVacio mensaje={`El calendario del período ${estado.periodo} aún no fue generado.`} />
+        <EstadoVacio
+          mensaje={`El calendario del período ${estado.periodo} aún no fue generado.`}
+          periodo={estado.periodo}
+          generables={generables}
+          onGenerar={() => generarCalendarioDelPeriodo(estado.periodo)}
+        />
       )}
 
       {estado.tipo === 'con-datos' && (

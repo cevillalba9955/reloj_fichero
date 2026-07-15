@@ -22,6 +22,24 @@ export function parsePeriodo(periodo) {
   return { anio, mes };
 }
 
+// Desplaza un período 'YYYYMM' en `delta` meses (con cruce de año). Puro y
+// determinista; valida con parsePeriodo. Base para la frontera generable
+// (feature 008).
+export function desplazarPeriodo(periodo, delta) {
+  const { anio, mes } = parsePeriodo(periodo);
+  // mes-1 lleva a base 0; Date normaliza el desborde de meses y el año.
+  const d = new Date(Date.UTC(anio, mes - 1 + delta, 1));
+  return `${String(d.getUTCFullYear()).padStart(4, '0')}${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+export function periodoSiguiente(periodo) {
+  return desplazarPeriodo(periodo, 1);
+}
+
+export function periodoAnterior(periodo) {
+  return desplazarPeriodo(periodo, -1);
+}
+
 function diasEnMes(anio, mes) {
   // Día 0 del mes siguiente = último día de este mes.
   return new Date(Date.UTC(anio, mes, 0)).getUTCDate();

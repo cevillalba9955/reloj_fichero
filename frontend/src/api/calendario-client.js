@@ -26,6 +26,13 @@ export function crearClienteCalendario({ fetchImpl, base = '/api' } = {}) {
     obtenerCalendario(periodo) {
       return pedir(`/calendarios/${periodo}`);
     },
+    // POST /api/calendarios/:periodo/generar → genera calendario para el período
+    generarCalendario(periodo) {
+      return pedir(`/calendarios/${periodo}/generar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
     // POST /api/calendarios/:periodo/reclasificar → VistaCalendarioMes actualizada (US3)
     reclasificar(periodo, { fecha, clasificacion, autor = null }) {
       return pedir(`/calendarios/${periodo}/reclasificar`, {
