@@ -9,14 +9,31 @@ export function periodoAdyacente(periodo, delta) {
   return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
-export default function NavegacionMes({ periodo, ultimo, onIr }) {
+// Devuelve el YYYYMM del mes actual (hoy).
+function periodoHoy() {
+  const hoy = new Date();
+  return `${hoy.getFullYear()}${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+}
+
+export default function NavegacionMes({ periodo, ultimo, periodos = [], onIr }) {
+  const mesActual = periodoHoy();
+  const periodicidadSiguiente = periodoAdyacente(periodo, 1);
+
+  // Desactivar "siguiente" si es futuro y no tiene calendario generado
+  const siguienteLocked = periodicidadSiguiente > mesActual && !periodos.includes(periodicidadSiguiente);
+
   return (
     <nav className="navegacion" aria-label="Navegación de meses">
       <button type="button" aria-label="Mes anterior" onClick={() => onIr(periodoAdyacente(periodo, -1))}>
         ◀
       </button>
       <span className="nav-periodo">{periodo}</span>
-      <button type="button" aria-label="Mes siguiente" onClick={() => onIr(periodoAdyacente(periodo, 1))}>
+      <button
+        type="button"
+        aria-label="Mes siguiente"
+        disabled={siguienteLocked}
+        onClick={() => onIr(periodicidadSiguiente)}
+      >
         ▶
       </button>
       <button

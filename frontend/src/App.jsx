@@ -20,6 +20,7 @@ const clientePorDefecto = crearClienteCalendario();
 export default function App({ cliente = clientePorDefecto }) {
   const [estado, setEstado] = useState({ tipo: 'cargando' });
   const [ultimo, setUltimo] = useState(null);
+  const [periodos, setPeriodos] = useState([]);
   const [aviso, setAviso] = useState(null);
   const [dialogo, setDialogo] = useState(null); // { dia, clasificacion }
 
@@ -40,8 +41,9 @@ export default function App({ cliente = clientePorDefecto }) {
   const inicializar = useCallback(async () => {
     setEstado({ tipo: 'cargando' });
     try {
-      const { ultimo: ult } = await cliente.listarCalendarios();
+      const { ultimo: ult, periodos: perds } = await cliente.listarCalendarios();
       setUltimo(ult);
+      setPeriodos(perds ?? []);
       if (!ult) setEstado({ tipo: 'vacio-global' });
       else await cargarMes(ult);
     } catch (err) {
@@ -75,12 +77,26 @@ export default function App({ cliente = clientePorDefecto }) {
     }
   }
 
+  async function generarCalendarioDelPeriodo() {
+    if (!estado.periodo) return;
+    try {
+      setEstado({ tipo: 'cargando' });
+      await cliente.generarCalendario(estado.periodo);
+      const { periodos: perds } = await cliente.listarCalendarios();
+      setPeriodos(perds ?? []);
+      await cargarMes(estado.periodo);
+    } catch (err) {
+      setAviso(`No se pudo generar el calendario: ${err.message}`);
+      setEstado({ tipo: 'vacio-mes', periodo: estado.periodo });
+    }
+  }
+
   return (
     <main className="app">
       <header className="app-header">
         <h1>Calendario de presentismo</h1>
         {periodoMostrado && ultimo && (
-          <NavegacionMes periodo={periodoMostrado} ultimo={ultimo} onIr={cargarMes} />
+          <NavegacionMes periodo={periodoMostrado} ultimo={ultimo} periodos={periodos} onIr={cargarMes} />
         )}
       </header>
 
@@ -110,7 +126,11 @@ export default function App({ cliente = clientePorDefecto }) {
       )}
 
       {estado.tipo === 'vacio-mes' && (
-        <EstadoVacio mensaje={`El calendario del período ${estado.periodo} aún no fue generado.`} />
+        <EstadoVacio
+          mensaje={`El calendario del período ${estado.periodo} aún no fue generado.`}
+          accion={generarCalendarioDelPeriodo}
+          etiquetaBoton="Generar calendario"
+        />
       )}
 
       {estado.tipo === 'con-datos' && (

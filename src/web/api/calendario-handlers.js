@@ -44,6 +44,17 @@ export function registrarRutas(router, ctx) {
     return { status: 200, body: await vistaDe(ctx, params.periodo) };
   });
 
+  // POST /api/calendarios/:periodo/generar — genera el calendario para el período
+  router.add('POST', '/api/calendarios/:periodo/generar', async ({ params }) => {
+    validarPeriodo(params.periodo);
+    try {
+      await ctx.service.generarCalendario(params.periodo);
+      return { status: 200, body: await vistaDe(ctx, params.periodo) };
+    } catch (err) {
+      throw new ApiError(500, 'ERROR_GENERANDO_CALENDARIO', err.message);
+    }
+  });
+
   // POST /api/calendarios/:periodo/reclasificar (US3) — se registra abajo.
   registrarReclasificar(router, ctx);
 }

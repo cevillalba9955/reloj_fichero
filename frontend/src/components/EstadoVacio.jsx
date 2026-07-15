@@ -2,10 +2,15 @@
 // calendario generado o cuando el mes navegado no tiene calendario. No ofrece la
 // acción de reclasificar (FR-018): esta vista no la incluye.
 
-export default function EstadoVacio({ mensaje }) {
+export default function EstadoVacio({ mensaje, accion, etiquetaBoton }) {
   return (
     <div className="estado-vacio" role="status">
       <p>{mensaje}</p>
+      {accion && etiquetaBoton && (
+        <button type="button" onClick={accion}>
+          {etiquetaBoton}
+        </button>
+      )}
     </div>
   );
 }
