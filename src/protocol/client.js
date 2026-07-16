@@ -16,7 +16,7 @@ import {
   buildPendingCountCommand,
   buildPendingDetailCommand,
   buildPendingDetailContinuationCommand,
-  MAX_RECORDS_PER_PAGE,
+  MAX_PAGE_BYTES,
 } from './commands.js';
 import { RECORD_SIZE, frameRecords } from './records.js';
 
@@ -143,18 +143,26 @@ function nowIso() {
 // alguna, pide el detalle (0xA4), verificado byte a byte contra
 // research/protocolo_prosoft_rs596.md §6.
 //
-// research.md §5.18 (2026-07-08): para lotes grandes (declaredPendingCount >
-// MAX_RECORDS_PER_PAGE) el equipo no responde una sola llamada 0xA4 pidiendo
-// todo de una vez (probado en vivo: timeout, socket cerrado sin ACK). Hace
-// falta paginar en llamadas sucesivas, replicando el comportamiento
-// confirmado del software oficial: la 1ra llamada pide
-// min(remaining, MAX_RECORDS_PER_PAGE) registros con el count habitual
-// (declaredPendingCount total); las llamadas de continuacion usan un campo
-// "count" distinto (indice de pagina, ver buildPendingDetailContinuationCommand)
-// y reutilizan como header los ultimos 4 bytes de la pagina anterior en vez
-// de leer un header nuevo — el equipo, si se le repite el count original,
-// reinicia la entrega desde el primer pendiente en vez de continuar
-// (confirmado en vivo, no solo hipotesis).
+// research.md §5.18 (2026-07-08): para lotes grandes el equipo no responde
+// una sola llamada 0xA4 pidiendo todo de una vez (probado en vivo: timeout,
+// socket cerrado sin ACK). Hace falta paginar en llamadas sucesivas,
+// replicando el comportamiento confirmado del software oficial.
+//
+// research.md §5.19 (2026-07-16, research/fichada_2.pcapng, 173 pendientes =
+// 4 paginas): la paginacion es por BYTES, no por registros. El stream total
+// mide declaredPendingCount * RECORD_SIZE; cada pagina pide
+// min(bytesRestantes, MAX_PAGE_BYTES) sin alinear a fronteras de registro
+// (el registro que queda "a caballo" entre dos paginas se rearma al
+// concatenar). Una formula anterior que paginaba por registros (51 por
+// pagina, con un descuento de arrastre en la ultima) coincidia con esta
+// hasta 3 paginas y divergia en 4+ (pedia 4 bytes de mas en la ultima
+// pagina; el equipo los respondia igual, corrompiendo el total — bug
+// reproducido en vivo con 173 pendientes y corregido con esa captura).
+// La 1ra llamada usa el count habitual (declaredPendingCount total); las de
+// continuacion usan un campo "count" distinto (indice de pagina, ver
+// buildPendingDetailContinuationCommand) — el equipo, si se le repite el
+// count original, reinicia la entrega desde el primer pendiente en vez de
+// continuar (confirmado en vivo, no solo hipotesis).
 export async function queryPendingFichadas(socket, reader, logger, { timeoutMs, seq }) {
   const countCmd = buildPendingCountCommand(seq);
   socket.write(countCmd);
@@ -173,29 +181,21 @@ export async function queryPendingFichadas(socket, reader, logger, { timeoutMs, 
   // de cierre). Concatenados, forman el stream continuo de declaredPendingCount
   // fichadas, sin solapamientos ni arrastres que reconstruir a mano.
   const pageStreams = [];
-  let remaining = declaredPendingCount;
+  const totalStreamBytes = declaredPendingCount * RECORD_SIZE;
+  let deliveredBytes = 0;
   let pageIndex = 0;
   let detailSeq = seq;
 
-  while (remaining > 0) {
+  while (deliveredBytes < totalStreamBytes) {
     detailSeq += 1;
     const isFirstPage = pageIndex === 0;
-    const pageCount = Math.min(remaining, MAX_RECORDS_PER_PAGE);
-    const hasMorePages = remaining > pageCount;
 
-    // Fórmula de `byteLen` (feature 006, research.md §D1, verificada byte a byte
-    // contra el software oficial en research/fichada.pcapng, lote de 123 = 3
-    // páginas, y contra el listado oficial de fichadas de los días 13-14):
-    // - Si hay más páginas por venir: `pageCount*20 + 4` (páginas 1 y 2 = 1024).
-    // - En la última página: `pageCount*20 - carrySize`. `carrySize` es cuántos
-    //   bytes del primer registro de esta página quedaron en el payload de la
-    //   página previa (y por eso el equipo los omite acá): 0 si la única página
-    //   es la inicial; 4 si la previa fue la inicial (2 páginas → -4); 8 si la
-    //   previa fue una continuación (3+ páginas → -8; página 3 = 412).
-    const carrySize = isFirstPage ? 0 : pageIndex === 1 ? 4 : 8;
-    const byteLen = hasMorePages
-      ? pageCount * RECORD_SIZE + 4
-      : pageCount * RECORD_SIZE - carrySize;
+    // Fórmula de `byteLen` (research.md §5.19, verificada byte a byte contra el
+    // software oficial en research/fichada_2.pcapng, lote de 173 = 4 páginas:
+    // 1024 + 1024 + 1024 + 388): cada página pide lo que falta del stream
+    // total, con tope MAX_PAGE_BYTES. Las fronteras de página NO se alinean a
+    // registros — el corte puede caer en medio de una fichada.
+    const byteLen = Math.min(totalStreamBytes - deliveredBytes, MAX_PAGE_BYTES);
 
     const detailCmd = isFirstPage
       ? buildPendingDetailCommand(detailSeq, declaredPendingCount, byteLen)
@@ -204,7 +204,7 @@ export async function queryPendingFichadas(socket, reader, logger, { timeoutMs, 
     logger.log('command_sent', {
       commandCode: '0xA4',
       byteLength: detailCmd.length,
-      detail: `pagina=${pageIndex + 1} pageCount=${pageCount} byteLen=${byteLen}`,
+      detail: `pagina=${pageIndex + 1} byteLen=${byteLen} restantes=${totalStreamBytes - deliveredBytes}`,
     });
 
     const ackDetail = await reader.readExact(ACK_SIZE, { timeoutMs });
@@ -218,11 +218,12 @@ export async function queryPendingFichadas(socket, reader, logger, { timeoutMs, 
     }
 
     // El equipo responde SIEMPRE `byteLen + 4` bytes de payload tras el marcador
-    // (research.md §D2; confirmado en las 3 páginas de la captura). Los últimos 4
-    // son el bloque de cierre: se descartan. Lo que queda (`byteLen` bytes) es la
-    // porción del stream continuo de registros que aporta esta página; el primer
-    // registro de la próxima queda "a caballo" entre esta página y la siguiente,
-    // y se re-arma solo al concatenar (research.md §D3).
+    // (research.md §D2/§5.19; confirmado en las 4 páginas de fichada_2.pcapng).
+    // Los últimos 4 son el bloque de cierre: NO son parte del stream de
+    // registros y se descartan (§5.19 lo confirma por continuidad estructural:
+    // el registro partido en la frontera de página continúa exacto en la página
+    // siguiente, sin contar esos 4 bytes). Lo que queda (`byteLen` bytes) es la
+    // porción del stream continuo de registros que aporta esta página.
     const payload = await reader.readExact(byteLen + 4, { timeoutMs });
     const closingBlockHex = payload.subarray(payload.length - 4).toString('hex').toUpperCase();
     logger.log('response_received', {
@@ -232,7 +233,7 @@ export async function queryPendingFichadas(socket, reader, logger, { timeoutMs, 
     });
     pageStreams.push(payload.subarray(0, payload.length - 4));
 
-    remaining -= pageCount;
+    deliveredBytes += byteLen;
     pageIndex += 1;
   }
 

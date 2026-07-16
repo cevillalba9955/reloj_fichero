@@ -28,8 +28,10 @@ test('json-exporter: escribe un archivo JSON valido con la forma de contracts/ou
       status: 'success',
       errorReason: null,
     };
+    // Registro real de research.md §6.1 con el encuadre corregido (§5.9):
+    // legajo 1 (Cesar Villalba) + campo0..campo3 de la captura.
     const record = parseFichadaRecord(
-      hexToBuffer('01 00 00 16 F9 71 02 05 00 00 00 01 00 00 00 10 99 02 00 00')
+      hexToBuffer('01 00 00 00 01 00 00 16 F9 71 02 05 00 00 00 01 00 00 00 10')
     );
 
     const outputFilePath = exportSessionToJson({ session, records: [record], outputDir });
@@ -39,8 +41,8 @@ test('json-exporter: escribe un archivo JSON valido con la forma de contracts/ou
     assert.equal(document.receivedRecordCount, 1);
     assert.equal(document.records.length, 1);
     assert.match(document.records[0].rawHex, /^[0-9A-F]{40}$/);
-    assert.equal(document.records[0].fecha, null);
-    assert.equal(typeof document.records[0].legajo, 'number');
+    assert.equal(document.records[0].fecha, '2026-07-02');
+    assert.equal(document.records[0].legajo, 1);
     assert.ok(outputFilePath.includes('192.168.1.50'));
   });
 });

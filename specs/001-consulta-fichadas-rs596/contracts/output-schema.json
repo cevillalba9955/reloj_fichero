@@ -33,8 +33,8 @@
           "legajo": {
             "type": ["integer", "null"],
             "minimum": 0,
-            "maximum": 4294967295,
-            "description": "Legajo/ID de empleado (research.md §5.9/§5.11/§5.15): los 4 bytes del bloque re-encuadrado, leídos como entero little-endian, confirmado contra tres sesiones reales independientes para los tres métodos de verificación (huella, rostro y tarjeta — dos fichadas por tarjeta en control_fichada.csv, filas 3 y 6, decodificaron su legajo real correctamente) y contra una fichada de prueba real con legajo 9999 que no entra en 1 byte. No hay evidencia de que el legajo se codifique distinto según el método; una sospecha anterior sobre tarjeta se basaba en un valor mal atribuido a un registro colgante y quedó retractada (research.md §5.11)."
+            "maximum": 65535,
+            "description": "Legajo/ID de empleado (research.md §5.9/§5.11/§5.15/§5.20): los primeros 2 bytes del bloque re-encuadrado, leídos como entero little-endian, confirmado contra tres sesiones reales independientes para los tres métodos de verificación (huella, rostro y tarjeta — dos fichadas por tarjeta en control_fichada.csv, filas 3 y 6, decodificaron su legajo real correctamente) y contra una fichada de prueba real con legajo 9999 que no entra en 1 byte. Los bytes 2-3 del bloque tienen significado desconocido (siempre '00 00' en todas las capturas reales, §5.20): si llegan con otro valor, no se puede saber si son parte del número o otra información, y legajo se reporta null (el valor crudo completo queda en rawHex). No hay evidencia de que el legajo se codifique distinto según el método; una sospecha anterior sobre tarjeta se basaba en un valor mal atribuido a un registro colgante y quedó retractada (research.md §5.11)."
           },
           "metodo": {
             "type": ["string", "null"],

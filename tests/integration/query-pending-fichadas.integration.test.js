@@ -216,6 +216,71 @@ test('queryPendingFichadas: 53 fichadas pendientes pagina 0xA4 en 2 llamadas (ca
   });
 });
 
+test('queryPendingFichadas: 173 fichadas pendientes pagina 0xA4 en 4 llamadas por bytes (captura real, research.md §5.19)', async () => {
+  await withTempLogDir(async (logDir) => {
+    const fixture = loadFixture('ciento-setenta-y-tres-pendientes-paginado.json');
+
+    // Pagina 1: la captura trae el "header" (legajo del primer registro, ver
+    // research.md §5.9) separado del resto del buffer; el equipo los envia
+    // como un unico payload continuo.
+    const respuestas = [
+      [
+        fixture.respuestaA4Pagina1Ack,
+        fixture.respuestaA4Pagina1PayloadMarker,
+        fixture.respuestaA4Pagina1Header,
+        fixture.respuestaA4Pagina1RecordsBuffer,
+      ].join(' '),
+      ...[2, 3, 4].map((n) =>
+        [
+          fixture[`respuestaA4Pagina${n}Ack`],
+          fixture[`respuestaA4Pagina${n}PayloadMarker`],
+          fixture[`respuestaA4Pagina${n}RecordsBuffer`],
+        ].join(' ')
+      ),
+    ];
+
+    const steps = [
+      { expect: hexToBuffer(fixture.comandoB4), respond: hexToBuffer(fixture.respuestaB4) },
+      ...[1, 2, 3, 4].map((n) => ({
+        expect: hexToBuffer(fixture[`comandoA4Pagina${n}`]),
+        respond: hexToBuffer(respuestas[n - 1]),
+      })),
+    ];
+    const server = await startScriptedServer(steps);
+    const { port } = server.address();
+    const socket = await connectSocket('127.0.0.1', port, 2000);
+    const reader = new BufferedSocketReader(socket);
+    const logger = createSessionLogger({ sessionId: 's-paginado-173', logDir });
+
+    const result = await queryPendingFichadas(socket, reader, logger, { timeoutMs: 2000, seq: 5 });
+
+    assert.equal(result.declaredPendingCount, 173);
+    assert.equal(result.rawRecords.length, 173);
+    assert.equal(result.nextSeq, 10, 'debe reservar seq 6-9 (0xA4 paginas 1-4) para el proximo comando (0x81)');
+
+    const records = result.rawRecords.map(parseFichadaRecord);
+    // Las primeras 53 fichadas de esta captura son byte a byte las mismas del
+    // lote de cincuenta-tres-pendientes-paginado.json (no se borraron del
+    // equipo entre ambas capturas): mismos anclajes de calibracion.
+    assert.equal(records[0].legajo, 10);
+    assert.equal(records[36].legajo, 9999, 'legajo de prueba multibyte (research.md §5.15)');
+    // El registro 52 (indice 51) quedo partido entre las paginas 1 y 2
+    // (frontera de pagina en el byte 1024, en medio de la fichada): si el
+    // rearmado por concatenacion fallara, este registro (y todos los
+    // siguientes) saldria corrupto.
+    assert.equal(records[51].legajo, 1, 'registro partido entre paginas 1 y 2');
+    assert.equal(records[51].fecha, '2026-07-08');
+    // Todas las fichadas decodifican fecha/hora/tipo validos (el encuadre por
+    // invariante estructural las habria descartado si no).
+    assert.equal(records.filter((r) => r.fecha !== null && !r.anomaly).length, 173);
+    const fechas = new Set(records.map((r) => r.fecha));
+    assert.ok(fechas.has('2026-07-06') && fechas.has('2026-07-16'), 'el lote real abarca del 6 al 16 de julio de 2026');
+
+    socket.destroy();
+    server.close();
+  });
+});
+
 test('queryPendingFichadas: discrepancia entre 0xB4 declarado y bytes extra recibidos en 0xA4 (FR-014) se reporta como error', async () => {
   await withTempLogDir(async (logDir) => {
     const unRegistro = loadFixture('un-registro-pendiente.json');
