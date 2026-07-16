@@ -1,0 +1,40 @@
+[Unit]
+# Interfaz web de presentismo (features 007 + 008): sirve el build del frontend
+# React y la API /api (calendario mensual, generación contigua de meses,
+# reclasificación). Opera solo sobre archivos JSON locales del dominio; no toca
+# Oracle ni el reloj.
+Description=RS956 - Interfaz web de presentismo (frontend + API)
+Documentation=file:/opt/rs956/docs/despliegue-linux.md
+After=network.target
+
+[Service]
+Type=simple
+User=rs956
+Group=rs956
+
+# Los paths por defecto son relativos (./data, ./logs, ./config, ./frontend/dist):
+# el directorio de trabajo DEBE ser la raíz de la instalación.
+WorkingDirectory=/opt/rs956
+
+# Puerto de escucha (default 4173 si se omite). Ajustable acá o en .env.
+Environment=PRESENTISMO_WEB_PORT=4173
+
+# Mismo cargador de .env que `npm run web` (Node >= 20.12).
+# Ajustar la ruta de node si no es /usr/bin/node (ver `which node`).
+ExecStart=/usr/bin/node --env-file-if-exists=.env src/web/server.js
+
+# Reinicio ante caída inesperada.
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+
+# Endurecimiento básico. La web lee la config y el build del frontend, y escribe
+# calendarios (generar/reclasificar) bajo data/ y logs bajo logs/.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/rs956/logs /opt/rs956/data
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
