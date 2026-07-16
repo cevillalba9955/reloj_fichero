@@ -50,16 +50,25 @@ Valida end-to-end las 4 historias del spec sobre el entorno local ya usado por
 
 ## Escenario 4 — Consultar nuevas fichadas al reloj (US4)
 
-1. Con un scheduler de prueba (fake del cliente de protocolo, mismo patrón que los
-   tests de 002) que devuelve 2 fichadas nuevas al hacer `tick()`, `POST
-   /api/fichadas-hoy/consultar-reloj`.
+Requiere los dos procesos levantados localmente (research.md §4): el servicio de
+fichadas (`node src/cli/consulta-programada.js --host <fake-o-real> ...`, con
+`FICHADAS_CONTROL_PORT` seteado) y el servidor web (`FICHADAS_CONTROL_URL` apuntando a
+`http://127.0.0.1:<FICHADAS_CONTROL_PORT>`). En tests automatizados, un servidor HTTP
+de prueba en el puerto de control reemplaza al proceso real (ver
+`contracts/control-api.md`).
+
+1. Con el proceso de fichadas usando un scheduler de prueba (fake del cliente de
+   protocolo, mismo patrón que los tests de 002) que devuelve 2 fichadas nuevas al
+   hacer `tick()`, `POST /api/fichadas-hoy/consultar-reloj` contra el servidor web.
 2. **Esperado**: **200**, `resultado: "ok"`, `fichadasNuevas: 2`, y la vista devuelta
-   ya refleja esas fichadas.
+   ya refleja esas fichadas (el web hizo `POST /tick` local y luego recalculó).
 3. Disparar dos `POST /api/fichadas-hoy/consultar-reloj` en paralelo (sin esperar la
    primera respuesta).
 4. **Esperado**: una responde `"ok"` (o `"omitido"` si ya terminó y no había nada
-   nuevo) y la otra `"omitido"` — nunca dos sesiones TCP concurrentes contra el reloj.
-5. Con el scheduler de prueba forzado a fallar (timeout simulado), repetir el `POST`.
+   nuevo) y la otra `"omitido"` — nunca dos sesiones TCP concurrentes contra el reloj
+   (el single-flight vive en el proceso de fichadas, no en el web).
+5. Con el proceso de fichadas caído (o el `FICHADAS_CONTROL_URL` apuntando a un puerto
+   sin nada escuchando), repetir el `POST` contra el web.
 6. **Esperado**: **502** `ERROR_CONSULTANDO_RELOJ`, `GET /api/fichadas-hoy`
    inmediatamente después sigue devolviendo los datos previos sin corromperse.
 

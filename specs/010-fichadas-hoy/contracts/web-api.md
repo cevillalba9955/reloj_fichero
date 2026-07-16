@@ -90,18 +90,24 @@ Body:
 
 ## `POST /api/fichadas-hoy/consultar-reloj`
 
-Sin body. Dispara `scheduler.tick()` (research.md §4) y, si trajo fichadas nuevas, las
-importa al archivo acumulativo del período actual.
+Sin body. **No** dispara ningún `scheduler` en el proceso web (research.md §4: el web
+server y el servicio de fichadas son procesos de SO separados en el despliegue real).
+El handler hace un `POST` HTTP local a `FICHADAS_CONTROL_URL` (default
+`http://127.0.0.1:5006`) `/tick` — ver `contracts/control-api.md` — y, si esa llamada
+devuelve éxito, recalcula y devuelve la `VistaFichadasHoy` (el sink de persistencia ya
+escribió las fichadas nuevas en el archivo del período de forma síncrona antes de que
+el `/tick` respondiera; no hace falta un paso de importación separado).
 
 - **200**
   ```json
   { "resultado": "ok", "fichadasNuevas": 3, "vista": { "...VistaFichadasHoy" } }
   ```
-  (o `"resultado": "omitido"` con `fichadasNuevas: 0` si ya había una consulta en
-  curso — mismo contrato que `getUltimoCiclo()` de 002; no es un error).
-- **502** `ERROR_CONSULTANDO_RELOJ` si el ciclo del scheduler termina en error (reloj
-  no responde, timeout) — la vista existente no se ve afectada; el cliente conserva lo
-  que ya tenía en pantalla (FR-010 del spec).
+  (o `"resultado": "omitido"` con `fichadasNuevas: 0` si el servicio de fichadas ya
+  tenía una consulta en curso — mismo contrato que `getUltimoCiclo()` de 002; no es un
+  error).
+- **502** `ERROR_CONSULTANDO_RELOJ` si el `POST /tick` local falla (el servicio de
+  fichadas no responde, está caído, o su ciclo terminó en error) — la vista existente
+  no se ve afectada; el cliente conserva lo que ya tenía en pantalla (FR-010 del spec).
 
 ## Notas comunes
 

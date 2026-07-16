@@ -37,10 +37,14 @@ tocar el protocolo RS956 (Principio III) ni el acceso Oracle (Principio II):
    porque la lista de hoy debe mostrar la hora corregida, no solo el total (spec
    FR-003/FR-005).
 
-La consulta manual al reloj (US4) reutiliza el `scheduler` ya entregado en la feature
-002 (`tick()`, single-flight) — no se toca el protocolo — y agrega el paso, hoy solo
-disponible vía CLI, de importar las fichadas nuevas del store en memoria al archivo
-acumulativo por período que consume 004, expuesto ahora también desde la capa web.
+La consulta manual al reloj (US4) **no llama al scheduler en el mismo proceso**: el
+servidor web (`rs956-web.service`) y el servicio de fichadas (`rs956-fichadas.service`,
+donde vive el `scheduler` de la feature 002) corren como procesos de sistema operativo
+separados en el despliegue real (`deploy/*.service`, research.md §4). Se agrega un
+servidor de control HTTP mínimo, atado a `127.0.0.1`, dentro del proceso de fichadas
+(`POST /tick`), y la API web lo llama por HTTP local — el proceso de fichadas sigue
+siendo el único dueño de la conexión al reloj (Principio III), sin tocar protocolo
+desde la capa web.
 
 ## Technical Context
 
@@ -89,9 +93,11 @@ lock. Ninguna respuesta expone datos biométricos crudos (Principio V, FR-015).
 
 **Scale/Scope**: Un establecimiento, hasta ~500 empleados, un solo día por vista.
 Cambios acotados a: `src/presentismo/domain/` (situación + extensión de
-corrección/pausa), `src/presentismo/service/` (orquestación de "hoy" + importación
-bajo demanda), `src/web/` (nuevos handlers + wiring de roster/scheduler en el
-contexto web, hoy ausente), y `frontend/src/` (página + componentes nuevos).
+corrección/pausa), `src/presentismo/service/` (orquestación de "hoy"), `src/web/`
+(nuevos handlers + wiring de roster en el contexto web, hoy ausente),
+`src/cli/consulta-programada.js` + `src/service/consulta-programada-service.js`
+(servidor de control HTTP local `POST /tick`, research.md §4), y `frontend/src/`
+(página + componentes nuevos).
 
 ## Constitution Check
 
@@ -109,10 +115,11 @@ Constitución vigente: **RS956 Fichaje Constitution v1.2.0**.
   escrituras nuevas a Oracle; el nombre/legajo esperado del día sale del snapshot
   local del padrón (`local-file-active-employees-provider`, ya existente), de solo
   lectura. **Cumple** (N/A, sin cambios de superficie Oracle).
-- **III — Protocolo RS956 Aislado (NON-NEGOTIABLE)**: la consulta manual al reloj
-  reutiliza `scheduler.tick()` tal cual (feature 002); esta feature no toca framing,
-  comandos ni el driver. La API web solo dispara el ciclo y reporta su resultado.
-  **Cumple**.
+- **III — Protocolo RS956 Aislado (NON-NEGOTIABLE)**: la consulta manual al reloj se
+  dispara vía HTTP local hacia el proceso que ya posee el `scheduler`/driver
+  (`rs956-fichadas.service`, research.md §4); la API web nunca abre ni comparte una
+  conexión al reloj, y sigue existiendo un único proceso dueño de la sesión TCP en
+  todo momento. Esta feature no toca framing, comandos ni el driver. **Cumple**.
 - **IV — Test-First en Capas Críticas**: la situación de hoy y la extensión de
   corrección/pausa (entrada/salida, retiro anticipado) impactan directamente el dato
   de presentismo que alimentará liquidación → se tratan como capa crítica: tests
@@ -151,7 +158,8 @@ specs/010-fichadas-hoy/
 ├── data-model.md         # Fase 1 — entidades nuevas/extendidas y forma de la vista
 ├── quickstart.md         # Fase 1 — escenarios de validación end-to-end
 ├── contracts/
-│   └── web-api.md        # Fase 1 — endpoints /api/fichadas-hoy/*
+│   ├── web-api.md         # Fase 1 — endpoints /api/fichadas-hoy/*
+│   └── control-api.md     # Fase 1 — POST /tick local (research.md §4)
 ├── checklists/
 │   └── requirements.md   # Checklist de calidad de la spec (ya creado por /speckit-specify)
 └── tasks.md              # Fase 2 (/speckit-tasks — NO lo crea /speckit-plan)
@@ -173,17 +181,21 @@ src/
 │   ├── ports/
 │   │   └── index.js                # sin cambios de forma (pausa/corrección siguen
 │   │                               # siendo objetos abiertos; `tipo` es campo adicional)
-│   ├── adapters/
-│   │   └── file-fichadas-archive.js  # + función de importación reutilizable desde
-│   │                                 # memoria (hoy solo invocada por el CLI)
 │   └── service/
 │       ├── calcular-presentismo-service.js  # + calcularHoy(periodo, fecha, legajos),
 │       │                                    # cargarRetiroAnticipado (envuelve cargarPausa)
-│       └── consultar-reloj-service.js       # NUEVO — orquesta scheduler.tick() +
-│                                             # importación de fichadas nuevas al archivo
+│       └── consultar-reloj-cliente.js       # NUEVO — cliente HTTP local hacia
+│                                             # POST /tick del servicio de fichadas
+├── service/
+│   └── consulta-programada-service.js  # startService(): expone `tick` en el handle
+│                                        # devuelto (hoy solo {getState, stop})
+├── cli/
+│   └── consulta-programada.js      # + servidor de control HTTP local (127.0.0.1,
+│                                    # FICHADAS_CONTROL_PORT) con POST /tick
 ├── web/
 │   ├── wiring.js                   # + roster provider, categoryProvider, fichadasProvider
-│   │                               # y scheduler en el contexto web (hoy ausentes)
+│   │                               # y cliente de control del servicio de fichadas
+│   │                               # (FICHADAS_CONTROL_URL) en el contexto web (hoy ausentes)
 │   ├── view-model.js               # + construirVistaFichadasHoy(...)
 │   └── api/
 │       └── fichadas-hoy-handlers.js # NUEVO — GET /api/fichadas-hoy,

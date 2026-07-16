@@ -99,28 +99,61 @@ total sin declarar una hora puntual (compatibilidad con 004).
 
 ## §4. Consulta manual al reloj ("consultar nuevas fichadas")
 
-**Decisión**: la API web dispara `scheduler.tick()` (ya existente, feature 002,
-single-flight vía `consultaEnCurso`) sobre una instancia de scheduler cableada en el
-contexto web (`crearContextoWeb`, hoy sin scheduler). Tras el `tick`, si hubo fichadas
-nuevas en el store en memoria, se reutiliza la lógica de importación que hoy solo
-expone el subcomando CLI `importar-fichadas` (factorizada como función de servicio
-`importarFichadasDesdeMemoria(periodo)` en `src/presentismo/adapters/
-file-fichadas-archive.js`, invocable tanto desde el CLI como desde el nuevo handler
-web) para que esas fichadas queden en el archivo acumulativo del período y
-`calcularEmpleado`/`calcularHoy` las vean de inmediato. El endpoint
-`POST /api/fichadas-hoy/consultar-reloj` no introduce un segundo lock: delega el
-single-flight al scheduler y devuelve `{ resultado: 'ok'|'omitido'|'error',
-fichadasNuevas, detail }` (misma forma que `getUltimoCiclo()`).
+**Hallazgo (corrige un supuesto inicial)**: `src/web/server.js` (`rs956-web.service`) y
+`src/cli/consulta-programada.js` (`rs956-fichadas.service`) se despliegan como **dos
+procesos de sistema operativo separados** (`deploy/rs956-web.service`,
+`deploy/rs956-fichadas.service`), sin memoria compartida. La API web **no puede**
+invocar `scheduler.tick()` en el mismo proceso — el scheduler vive en el proceso del
+servicio de fichadas. Cualquier diseño que asuma un `scheduler` cableado dentro de
+`crearContextoWeb` es inválido en producción (aunque funcione en tests que arrancan
+todo en un solo proceso).
+
+**Decisión**: agregar al proceso `rs956-fichadas.service` un pequeño servidor de
+control HTTP adicional (`node:http`, sin framework — igual que `src/web/server.js`),
+atado únicamente a `127.0.0.1` (nunca expuesto fuera del host) en un puerto propio
+(`FICHADAS_CONTROL_PORT`, default `5006`), con una única ruta `POST /tick` que llama a
+`scheduler.tick()` (se expone `tick` desde `startService()`, hoy solo devuelve
+`{getState, stop}`) y responde con el mismo resultado que `getUltimoCiclo()`. Esto
+preserva que el proceso de fichadas sea el **único dueño** de la conexión TCP al reloj
+en todo momento (Principio III, sin dos procesos abriendo sesiones concurrentes) y
+reutiliza el single-flight ya resuelto en 002 (`consultaEnCurso`) sin agregar un
+segundo lock.
+
+El proceso web (`consultar-reloj-service.js`, nuevo, en `src/presentismo/service/` o
+`src/web/`) hace un `fetch` HTTP local a `FICHADAS_CONTROL_URL` (default
+`http://127.0.0.1:5006`) `POST /tick` y devuelve su resultado al handler. Como el sink
+`persistirFichadas` (ya existente, `createFichadasSink`, `src/cli/
+consulta-programada.js`) escribe en el archivo acumulativo del período **de forma
+síncrona dentro del propio `tick()`** (el scheduler hace `await
+persistirFichadas(...)` antes de devolver el ciclo), no hace falta ningún paso de
+"importación" adicional desde el lado web: cuando el `POST /tick` responde, el archivo
+ya está actualizado y un `GET /api/fichadas-hoy` inmediatamente después ya ve las
+fichadas nuevas.
+
+Si el servicio de fichadas no está corriendo o no responde (`ECONNREFUSED`, timeout),
+el endpoint web devuelve `502 ERROR_CONSULTANDO_RELOJ` (contracts/web-api.md) sin tocar
+los datos ya mostrados.
 
 **Alternativas consideradas**:
+- *Cablear un `scheduler` propio dentro del proceso web y llamar `tick()`
+  in-process*: rechazada tras verificar el despliegue real (`deploy/*.service`) — es
+  el supuesto original de este research y **es incorrecto**: crearía una segunda
+  conexión al reloj desde un segundo proceso, sin coordinación con el
+  `consultaEnCurso` del proceso de fichadas (dos sesiones TCP concurrentes posibles,
+  violando el espíritu single-flight de 002 y arriesgando el protocolo no
+  documentado, Principio III).
 - *Nuevo mecanismo de sincronización independiente del scheduler (una consulta HTTP
-  directa al reloj)*: rechazada — duplicaría el driver del protocolo fuera de su
-  módulo aislado (violaría Principio III) y el single-flight ya resuelto en 002.
+  directa al reloj desde el proceso web)*: rechazada — duplicaría el driver del
+  protocolo fuera de su módulo aislado (violaría Principio III).
 - *Importar automáticamente en cada `GET /api/fichadas-hoy`*: rechazada — acoplaría
   lectura con escritura de red hacia el dispositivo en cada refresco de pantalla,
   contra el requisito del spec de que la consulta al reloj sea un disparo explícito
-  (FR-008, Historia 4) y contra el principio de que el reloj se consulta bajo demanda o
-  por el ciclo programado, no en cada GET.
+  (FR-008, Historia 4).
+- *Señalización por archivo (el proceso web escribe un "pedido de tick" que el
+  servicio de fichadas sondea)*: rechazada frente al control HTTP local — agrega
+  latencia (depende del intervalo de sondeo) y complejidad de manejo de archivos
+  concurrentes sin necesidad, cuando un servidor `node:http` atado a loopback es más
+  simple y ya es el patrón usado por `src/web/server.js`.
 
 ## §5. Roster/nombre del empleado en el wiring web
 
