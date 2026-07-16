@@ -2,7 +2,7 @@
 
 **Estado:** Ingeniería inversa parcial, basada en análisis de tráfico de red (Wireshark) entre el software oficial "Gestión de Personal Pro-Soft" y el equipo.
 
-**Última actualización:** 8 de julio de 2026 (§5.18: analizada `research/fichada_id_99.pcapng`, captura real software oficial ↔ equipo con `ID DISPOSITIVO=99` y 53 fichadas pendientes — confirma que el byte 2 de los COMANDOS también es `ID DISPOSITIVO`, no una constante, y descubre paginación real de `0xA4` para lotes grandes; §5.17: decodificado el byte 2 del ACK — es `ID DISPOSITIVO`, no una constante; corregido `parseAckHeader` para no rechazar equipos con `ID DISPOSITIVO != 1`; §5.16: `fecha` y `hora` quedan totalmente decodificados sin ambigüedad; §5.15: `legajo` corregido a entero de 4 bytes; §5.14: retractada la hipótesis sobre el bloque de cierre de `0xA4`; se eliminaron las secciones con hipótesis ya refutadas — AM/PM, criterio de desempate — que llevaban a conclusiones erróneas sobre fichadas nuevas)
+**Última actualización:** 16 de julio de 2026 (§5.20: analizada `research/fichada_3.pcapng` con `ID DISPOSITIVO=255` configurado en el equipo Y en el software oficial — el byte 2 de los comandos es el ID configurado en el *software* (que el equipo no valida), el ID de los ACK es el del equipo; y corrección del `legajo`: solo hay evidencia de 2 bytes (los bytes 2-3 del campo, siempre `00 00`, podrían ser otra información); §5.19: analizada `research/fichada_2.pcapng`, captura real software oficial ↔ equipo con 173 fichadas pendientes = 4 páginas de `0xA4` — la paginación es por **bytes** (`min(bytesRestantes, 1024)` sobre un total de `count*20`), no por registros; el bloque de 4 bytes al final de cada página **no es contenido del stream** (se descarta); corregida la fórmula de `byteLen` de la última página que fallaba con 4+ páginas; §5.18: analizada `research/fichada_id_99.pcapng`, captura real software oficial ↔ equipo con `ID DISPOSITIVO=99` y 53 fichadas pendientes — confirma que el byte 2 de los COMANDOS también es `ID DISPOSITIVO`, no una constante, y descubre paginación real de `0xA4` para lotes grandes; §5.17: decodificado el byte 2 del ACK — es `ID DISPOSITIVO`, no una constante; corregido `parseAckHeader` para no rechazar equipos con `ID DISPOSITIVO != 1`; §5.16: `fecha` y `hora` quedan totalmente decodificados sin ambigüedad; §5.15: `legajo` corregido a entero de 4 bytes; §5.14: retractada la hipótesis sobre el bloque de cierre de `0xA4`; se eliminaron las secciones con hipótesis ya refutadas — AM/PM, criterio de desempate — que llevaban a conclusiones erróneas sobre fichadas nuevas)
 
 **Advertencia:** Este documento no está basado en documentación oficial del fabricante (no existe públicamente). Es el resultado de observar tráfico real. Los campos marcados como "confirmado" fueron validados comparando múltiples capturas; los marcados como "hipótesis" o "sin resolver" son observaciones no verificadas y pueden estar incompletos o ser incorrectos.
 
@@ -145,7 +145,7 @@ Cada registro de 20 bytes se divide en 5 campos de 4 bytes:
 | campo[1] | 4–7 | ✅ Completo (ver §5.16) | Año/mes/día/hora/minuto empaquetados: byte0=año (`(byte>>2)+1964`), byte1=mes (nibble alto), byte2=día del mes (bits 0-4) + `hourMod8` (bits 5-7), byte3=minuto (bits 2-7) + bloque de 8 horas (bits 0-1). `F9 71` (año 2026, mes julio) es la combinación vista en casi todas las capturas por ser el período en que se hicieron; cambia con fechas de prueba distintas |
 | campo[2] | 8–11 | ✅ (bytes), ❌ (significado) | No es fijo entre sesiones: `00 00 00 01` el 2026-07-02, `00 00 00 02` el 2026-07-03 (§5.8) — mismo valor para todos los registros de un lote, distinto entre lotes. Hipótesis vigente sin confirmar: contador de lote/sesión de descarga. Descartada la hipótesis de que fuera el legajo (§5.6) |
 | campo[3] | 12–15 | ✅ Confirmado (parcial) | Varía entre registros con distinto método de verificación: `00 00 00 10`/`00 00 00 30`/`00 00 00 40` (huella/tarjeta/rostro, ver §5.6) |
-| campo[4] | 16–19 | ✅ Confirmado (los 4 bytes = legajo, ver §5.9/§5.15) | El bloque completo de 4 bytes, leído little-endian, es el legajo del empleado — el parser actual lo asigna al registro equivocado por un error de encuadre de 4 bytes (ver §5.9); no leer esta fila sin la corrección de encuadre |
+| campo[4] | 16–19 | ✅ bytes 0-1 (= legajo LE16, ver §5.9/§5.15/§5.20); ❌ bytes 2-3 | Los primeros 2 bytes, leídos little-endian, son el legajo del empleado. Los bytes 2-3 son siempre `00 00` en todas las capturas reales y su significado es desconocido (podrían ser los bytes altos del legajo o otra cosa, ver §5.20). El parser viejo asignaba este bloque al registro equivocado por un error de encuadre de 4 bytes (ver §5.9); no leer esta fila sin la corrección de encuadre |
 
 > Nota: se confirmó por separado el comando `0xB2` que trae la fecha/hora *actual del equipo* en un formato simple de bytes individuales (ver sección 5.4), distinto del formato de campo[1] de arriba (empaquetado en bits, ver §5.16). Son dos formatos distintos para dos cosas distintas: la hora del reloj vs. el timestamp de cada fichada.
 
@@ -564,6 +564,14 @@ distinga "2 bytes" de "4 bytes completos" — se usa `readUInt32LE` (los 4
 bytes enteros) porque es el ancho real del campo en el registro, no
 porque haya evidencia de un legajo que necesite el tercer o cuarto byte.
 
+> **Corrección (2026-07-16, ver §5.20):** ese razonamiento estaba al revés
+> — "es el ancho del campo" no es evidencia de que los 4 bytes codifiquen
+> el mismo número. Los bytes 2-3, siempre `00 00` en todas las capturas,
+> podrían ser otra información aún no identificada. Desde §5.20 el `legajo`
+> se decodifica como `readUInt16LE` (los 2 bytes confirmados) y un valor
+> distinto de `00 00` en los bytes 2-3 hace que el legajo se reporte como
+> no confiable (`null`), con el crudo siempre disponible en `rawHex`.
+
 ---
 
 ### 5.16 CORRECCIÓN COMPLETA ✅: `fecha` y `hora` quedan totalmente decodificados — el "flag AM/PM" y el "criterio de desempate" eran el día del mes, mal interpretado (2026-07-06)
@@ -826,7 +834,7 @@ siempre). 51 (llamada 1) + 2 (llamada 2) = **53 — coincide exacto con el
   el futuro*, aún sin confirmar).
 
 **Fórmula hipotética para `byteLen` (bytes 12-13 del comando `0xA4`), sin
-confirmar más allá de esta única calibración:**
+confirmar más allá de esta única calibración — SUPERADA por §5.19 ⚠️:**
 - Primera llamada de una sesión: `byteLen = min(declaredCount, PAGE_SIZE) * RECORD_SIZE + 4`
   (el `+4` reserva espacio para el legajo colgante/próxima página). Con
   `PAGE_SIZE≈51` da `51*20+4=1024`, coincide exacto.
@@ -834,6 +842,16 @@ confirmar más allá de esta única calibración:**
   (no hace falta re-pedir el header: ya se tiene del colgante de la
   llamada anterior). Con `remainingCount=2` da `2*20-4=36`, coincide
   exacto.
+
+> **Corrección (2026-07-16, ver §5.19):** esta fórmula por registros daba
+> los mismos números que la real (por bytes) para lotes de hasta 3 páginas
+> — por eso "coincidía exacto" acá y en la feature 006 — pero divergía a
+> partir de 4 páginas. La fórmula real, calibrada con un lote de 173 (4
+> páginas), es `byteLen = min(bytesRestantes, 1024)` sobre un total de
+> `declaredCount * 20`, sin ningún concepto de "registros por página" ni de
+> "header arrastrado". También queda corregida la interpretación del bloque
+> colgante: **no** es el header/legajo de la página siguiente — no es
+> contenido del stream en absoluto (ver §5.19).
 
 **Impacto en la implementación actual (bug real, no solo hallazgo de
 investigación) — RESUELTO ✅ (2026-07-08):** `src/protocol/client.js`/
@@ -882,6 +900,157 @@ datos para una 3ra página (`declaredPendingCount > 102`). Tampoco está
 confirmado si `MAX_RECORDS_PER_PAGE=51` es el límite real del firmware o
 solo un valor seguro por debajo del límite verdadero (§5.18 arriba,
 sin resolver).
+
+> **Actualización (2026-07-16):** ambas dudas quedaron resueltas en §5.19 —
+> `pageIndex << 16` confirmado hasta `pageIndex=3` (4 páginas), y el límite
+> es de **bytes** (1024 por página), no de registros.
+
+---
+
+### 5.19 CORRECCIÓN ✅: la paginación de `0xA4` es por BYTES, no por registros — lote real de 173 fichadas = 4 páginas (2026-07-16)
+
+`research/fichada_2.pcapng` (stream TCP 43: tráfico real "Gestión de
+Personal Pro-Soft" ↔ equipo en `192.168.1.78`, `ID DISPOSITIVO=99`, 173
+fichadas pendientes) es la primera captura con más de 3 páginas de `0xA4`,
+y refuta el modelo de paginación por registros de §5.18/feature 006
+(`pageCount = min(remaining, 51)` con descuento de "arrastre" en la última
+página). Ese modelo coincidía numéricamente con el real hasta 3 páginas —
+por eso todas las calibraciones previas (53 = 2 páginas, 123 = 3 páginas)
+lo "confirmaban" — y recién diverge en la 4ta: contra este lote de 173, el
+cliente propio pedía `byteLen=392` en la última página, el equipo respondía
+igual (`392+4` bytes), y el stream quedaba con 4 bytes de más
+(3464 ≠ 173×20 = 3460, error FR-010 reproducido en vivo el 2026-07-16,
+log `logs/session-192.168.1.78-2026-07-16T12-52-03-389Z.ndjson`).
+
+**Lo que hace realmente el software oficial (4 llamadas `0xA4`):**
+
+```
+0xB4 -> AA 55 63 01 AD 00 00 00 05 00                      (0xAD = 173 pendientes)
+
+Pagina 1: 55 AA 01 A4 00 00 00 00  AD 00 00 00  00 04  06 00   count=173, byteLen=1024
+Pagina 2: 55 AA 01 A4 00 00 00 00  00 00 01 00  00 04  07 00   pageIndex=1<<16, byteLen=1024
+Pagina 3: 55 AA 01 A4 00 00 00 00  00 00 02 00  00 04  08 00   pageIndex=2<<16, byteLen=1024
+Pagina 4: 55 AA 01 A4 00 00 00 00  00 00 03 00  84 01  09 00   pageIndex=3<<16, byteLen=0x184=388
+```
+
+Cada respuesta trae `ACK(10) + 55 AA + byteLen + 4` bytes. La fórmula real,
+verificada byte a byte:
+
+```
+totalBytes = declaredPendingCount * 20        (173*20 = 3460)
+byteLen(pagina k) = min(totalBytes - entregado, 1024)   -> 1024, 1024, 1024, 388
+```
+
+**El modelo correcto del stream (verificado registro por registro):**
+
+- El stream continuo de fichadas mide exactamente `declaredCount * 20` bytes
+  (con el encuadre de §5.9: arranca con el legajo del primer registro) y se
+  corta en páginas de a lo sumo 1024 bytes **sin alinear a registros**: la
+  frontera de página cae en medio de una fichada (acá, el registro 52 quedó
+  partido: sus primeros 4 bytes al final de la página 1, los otros 16 al
+  principio de la página 2) y se rearma solo al concatenar.
+- Los 4 bytes extra al final de cada página (bloque de cierre, §5.14) **NO
+  son contenido del stream**: se descartan siempre, también en las páginas
+  intermedias. Concatenando solo los `byteLen` de contenido de las 4 páginas
+  se obtienen 3460 bytes = 173 fichadas exactas, las 173 con estructura
+  válida (fechas reales 2026-07-06 a 2026-07-16, legajos todos ya conocidos
+  del equipo de calibración, incluido el 9999 de prueba de §5.15).
+- Esto corrige la interpretación de §5.18 ("el bloque colgante es el
+  header/legajo de la página siguiente"): era un artefacto de la aritmética
+  del caso de 2 páginas, donde ambos modelos dan el mismo total. Evidencia
+  directa: el cierre de la página 1 es `BA 91 00 00` **en las dos capturas
+  paginadas** (fichada_id_99.pcapng y fichada_2.pcapng) porque las primeras
+  53 fichadas del lote nuevo son byte a byte las mismas del lote viejo
+  (nunca se borraron del equipo) — mismo contenido de página, mismo cierre —
+  mientras que los cierres de las demás páginas (40 89, 5B 92, 42 42, 70 06)
+  no se parecen a ningún legajo del lote. El significado real del bloque
+  sigue sin resolverse (¿checksum de página?), pero ya está confirmado que
+  se descarta.
+
+**Hallazgo secundario — byte 2 de los comandos:** en esta captura el
+software oficial envió **todos** sus comandos con byte 2 = `01`, aun con el
+equipo configurado con `ID DISPOSITIVO=99` (los ACK vuelven `AA 55 63 01
+...`). En `fichada_id_99.pcapng` (§5.18, mismo equipo) había enviado `63`.
+Es decir: ni siquiera el software oficial es consistente con ese byte, y el
+equipo acepta ambos — refuerza que el byte 2 del comando no se valida
+(§5.18, Diferencia 1) y que el `01` fijo del cliente propio es seguro.
+
+> **Resuelto (2026-07-16, ver §5.20):** la "inconsistencia" del software
+> oficial tenía explicación: el byte 2 del comando es el `ID DISPOSITIVO`
+> configurado **en el software** (acá estaba mal configurado en `1`,
+> validado por el usuario; en fichada_id_99 estaba en `99`). El equipo no
+> lo valida en ningún caso.
+
+**Corrección aplicada (2026-07-16):** `src/protocol/commands.js` reemplaza
+`MAX_RECORDS_PER_PAGE=51` por `MAX_PAGE_BYTES=1024`;
+`src/protocol/client.js` (`queryPendingFichadas`) pagina por bytes
+(`byteLen = min(bytesRestantes, 1024)`) en vez de por registros, sin
+`carrySize`. Para lotes de hasta 3 páginas ambas fórmulas emiten
+exactamente los mismos comandos (no cambia ningún comportamiento ya
+validado); la diferencia aparece recién con 4+ páginas. Fixture de contrato
+nuevo con los bytes reales de esta captura:
+`tests/contract/fixtures/ciento-setenta-y-tres-pendientes-paginado.json`,
+ejercido en `tests/integration/query-pending-fichadas.integration.test.js`
+(incluye el registro partido en la frontera de página como anclaje).
+
+---
+
+### 5.20 `ID DISPOSITIVO=255` en ambos extremos, resolución del byte 2 de los comandos, y CORRECCIÓN ⚠️ del ancho del `legajo` (2026-07-16)
+
+`research/fichada_3.pcapng`: el usuario reconfiguró a propósito el `ID
+DISPOSITIVO` **en el equipo y en el software oficial** a `255` (el máximo
+que permite la configuración) y capturó una nueva descarga completa del
+mismo lote de 173 pendientes. Cuatro streams TCP al puerto 5005: dos sondas
+de conectividad (solo `0x80`, con una variante de trama de 20 bytes en vez
+de 16 — bytes 10-11 en `00 00` y 4 bytes extra en cero al final, que el
+equipo respondió con el ACK normal), una sesión de identificación (`0x80` +
+`0x13`×3 + `0xC3` + `0x81`) y la sesión de descarga (stream 19).
+
+#### El byte 2 de los comandos es el ID configurado en el SOFTWARE, y el equipo no lo valida
+
+Con ambos extremos en `255`, **todos** los comandos del software oficial
+llevan byte 2 = `FF` y todos los ACK del equipo vuelven con byte 2 = `FF`.
+Esto cierra la aparente inconsistencia entre `fichada_id_99.pcapng`
+(comandos con `63`) y `fichada_2.pcapng` (comandos con `01` contra el mismo
+equipo con ID 99): en esta última **el software estaba mal configurado con
+ID 1** (validado por el usuario) y el equipo respondió igual toda la sesión.
+Modelo confirmado:
+
+- Byte 2 del **comando** = `ID DISPOSITIVO` configurado en el software
+  oficial. El equipo **no lo valida** (aceptó `01` teniendo ID 99).
+- Byte 2 del **ACK** = `ID DISPOSITIVO` configurado en el equipo (§5.17),
+  independiente de lo que haya enviado el software.
+- El `01` fijo que envía el cliente propio (`src/protocol/commands.js`)
+  sigue siendo seguro con cualquier ID del equipo (probado ya contra ID 1,
+  99 y 255).
+
+La sesión de descarga es por lo demás **byte a byte equivalente** a la de
+`fichada_2.pcapng` (mismos 173 pendientes sin borrar, mismas 4 páginas
+`1024/1024/1024/388`, mismos 4 bloques de cierre `BA91/4089/5B92/4242`) —
+re-confirma la paginación por bytes de §5.19 con otro `ID DISPOSITIVO`, y
+confirma de paso que los bloques de cierre no dependen del ID.
+
+#### CORRECCIÓN: solo hay evidencia de 2 bytes de `legajo` — los bytes 2-3 del campo tienen significado desconocido
+
+Observación del usuario, verificada contra todas las capturas: la única
+fichada real que usa más de 1 byte de legajo es la de prueba `9999`
+(`0F 27 00 00`, §5.15) — es decir, hay evidencia de los bytes 0-1
+(little-endian), pero **ninguna** fichada real tuvo jamás un valor distinto
+de `00 00` en los bytes 2-3 del campo (verificado también en los 173
+registros de este lote: 173/173 con bytes 2-3 en `00 00`). Que el campo
+re-encuadrado mida 4 bytes no implica que los 4 codifiquen el mismo número:
+los bytes 2-3 podrían ser los bytes altos del legajo **o cualquier otra
+información aún no identificada**. `readUInt32LE` daba la casualidad de
+coincidir solo porque esos bytes siempre fueron cero.
+
+**Corrección aplicada (2026-07-16):** `src/protocol/records.js` decodifica
+`legajo = readUInt16LE(0)` (los 2 bytes confirmados) y trata los bytes 2-3
+como chequeo de plausibilidad: si algún día llegan distintos de `00 00`, el
+`legajo` se reporta `null` (no confiable — no se puede saber si esos bytes
+son parte del número u otra cosa) y el valor crudo completo queda como
+siempre en `rawHex` para investigarlo. Ningún resultado ya confirmado
+cambia (todos los legajos reales entran en 2 bytes).
+`contracts/output-schema.json` (feature 001) acota `legajo` a `0..65535`.
 
 ---
 
@@ -1176,10 +1345,13 @@ vigente:
 - [ ] (§5.9) Agregar el lote de 28 fichadas del 2026-07-03 como fixture de contrato (`tests/contract/fixtures/`), ya con el encuadre corregido.
 - [ ] (§5.9/§5.14) Confirmar con una tercera sesión (idealmente con más de un registro pendiente) que el re-encuadre de campo[4] es consistente y no depende del método de verificación ni de si hay borrado de por medio.
 - [x] (§5.14, 2026-07-06) Loguear el contenido crudo del bloque de 4 bytes que sobra al final de cada respuesta `0xA4` (en vez de descartarlo en silencio), para poder investigar su significado real a futuro.
-- [x] (§5.15, 2026-07-06) Corregir `legajo` a entero de 4 bytes little-endian (antes solo el primer byte) — confirmado con una fichada de prueba real con legajo 9999.
+- [x] (§5.15, 2026-07-06) Corregir `legajo` a entero little-endian de más de 1 byte — confirmado con una fichada de prueba real con legajo 9999. (Corregido de nuevo el 2026-07-16, §5.20: de 4 bytes a los 2 confirmados; los bytes 2-3 del campo quedan como incógnita.)
+- [ ] (§5.20) Identificar qué codifican los bytes 2-3 del campo del legajo (siempre `00 00` en todas las capturas reales). Una prueba dirigida posible: dar de alta un legajo de prueba `> 65535` en el software oficial (si lo permite) y ver si el tercer byte se usa, o si el software lo rechaza.
 - [x] (§5.16, 2026-07-06) Decodificar `fecha` y `hora` por completo (año/mes/día/hora/minuto/segundo), sin ambigüedad ni criterio de desempate — calibrado probando el reloj con fechas de prueba a propósito (3 años, varios días/meses, y los 3 casos límite de bloque horario: 0, 12, 23).
 - [ ] (§5.16) Probar un año fuera del rango 2015-2026 en los extremos (por ejemplo, año 2000 o 2099) para confirmar que la fórmula de año no tiene un techo/piso distinto fuera de ese rango.
 - [ ] (§5.16) Confirmar el significado real de los flags fijos de `byte8` (bits 0-1) y `byte9` (bits 0-3), y de los 3 bytes constantes de campo[0] (bytes 4-6, `01 00 00`) — hoy solo se usan como chequeo de plausibilidad.
 - [x] (§5.18, 2026-07-08) Implementar paginación de `0xA4` en `src/protocol/client.js`/`commands.js` para lotes grandes — implementado y validado en vivo contra el equipo real (53 pendientes, 2 páginas), ver detalle en §5.18.
-- [ ] (§5.18) Determinar con un segundo lote de tamaño distinto (ej. 52 o 100 pendientes) si el límite real de `0xA4` es "1024 bytes de recordsBuffer" o "51 registros por llamada" (ambas hipótesis dan el mismo resultado con los únicos datos disponibles hoy).
-- [ ] (§5.18) Confirmar si la fórmula `pageIndex << 16` para el campo "count" de continuación generaliza a una 3ra página o más — solo hay un punto de calibración (`pageIndex=1`, dos páginas totales); no hay una captura real con `declaredPendingCount > 102`.
+- [x] (§5.18/§5.19, 2026-07-16) Determinar si el límite real de `0xA4` es "1024 bytes de recordsBuffer" o "51 registros por llamada" — resuelto con el lote de 173 (`research/fichada_2.pcapng`): el límite es de **bytes** (1024), las fronteras de página caen en medio de un registro.
+- [x] (§5.18/§5.19, 2026-07-16) Confirmar si la fórmula `pageIndex << 16` generaliza a una 3ra página o más — confirmada hasta `pageIndex=3` (4 páginas, 173 pendientes).
+- [ ] (§5.19) El significado del bloque de cierre de 4 bytes por página sigue sin resolverse (¿checksum de página?) — ya confirmado que NO es contenido del stream y que se descarta; queda solo la curiosidad de qué codifica.
+- [ ] (§5.19) Confirmar contra el listado del software oficial los legajos/fechas del lote de 173 (hoy validados solo por estructura interna + coincidencia byte a byte de las primeras 53 con el lote ya calibrado de §5.18).

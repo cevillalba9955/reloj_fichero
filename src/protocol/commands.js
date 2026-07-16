@@ -63,15 +63,16 @@ export function buildPendingCountCommand(seq) {
   return withSequence(PENDING_COUNT_BASE, seq);
 }
 
-// research.md §5.18 (2026-07-08, calibrado contra un equipo real con 53
-// pendientes, research/fichada_id_99.pcapng): el equipo se niega a
-// responder un solo 0xA4 pidiendo mas de este tope de registros (recordsBuffer
-// resultante quedaba sin ACK, timeout, socket cerrado). El software oficial
-// pagina en llamadas de a lo sumo este valor. 51 esta confirmado como
-// seguro (probado end-to-end); no se probo el limite exacto (podria
-// aceptar hasta 52, o el tope real podria ser un limite de bytes distinto
-// a 51*20 — ver research.md §5.18 para el detalle de la incertidumbre).
-export const MAX_RECORDS_PER_PAGE = 51;
+// research.md §5.19 (2026-07-16, research/fichada_2.pcapng, 173 pendientes =
+// 4 paginas): la paginacion del 0xA4 es por BYTES, no por registros. El
+// software oficial pide en cada pagina `min(bytesRestantes, 1024)` sobre un
+// total de `declaredPendingCount * 20`, sin alinear las fronteras de pagina
+// a registros (un registro puede quedar partido entre dos paginas; el stream
+// se rearma al concatenar). 1024 es el tope observado en todas las capturas
+// paginadas (§5.18 y §5.19); pedir mas de lo que el equipo tolera en una
+// sola llamada lo deja mudo (timeout, socket cerrado — probado en vivo,
+// §5.18). No se probo si el firmware acepta un tope mayor.
+export const MAX_PAGE_BYTES = 1024;
 
 export function buildPendingDetailCommand(seq, count, byteLength = count * RECORD_SIZE) {
   const buffer = Buffer.from(PENDING_DETAIL_BASE);
@@ -91,12 +92,11 @@ export function buildPendingDetailCommand(seq, count, byteLength = count * RECOR
 //
 // feature 006 (research/fichada.pcapng, lote real de 123 = 3 paginas): la
 // formula `pageIndex << 16` quedo confirmada tambien para la 3ra pagina
-// (pageIndex=2 -> 0x00020000), no solo para pageIndex=1. El valor de
-// `byteLength` NO se calcula aca: lo determina el caller (client.js) segun la
-// formula verificada contra esa captura (pageCount*20+4 si hay mas paginas;
-// pageCount*20 - bytesArrastrados en la ultima). Para 4+ paginas (>153
-// pendientes) todavia no hay captura; el encuadre por invariante + dedup del
-// caller cubre esa extrapolacion.
+// (pageIndex=2 -> 0x00020000). research.md §5.19 (research/fichada_2.pcapng,
+// 173 = 4 paginas) la confirma ademas para pageIndex=3 (0x00030000). El valor
+// de `byteLength` NO se calcula aca: lo determina el caller (client.js) segun
+// la formula por bytes verificada contra esa captura
+// (min(bytesRestantes, MAX_PAGE_BYTES)).
 export function buildPendingDetailContinuationCommand(seq, pageIndex, byteLength) {
   return buildPendingDetailCommand(seq, pageIndex << 16, byteLength);
 }

@@ -170,6 +170,22 @@ test('records: parseFichadaRecord decodifica legajo de mas de 1 byte, little-end
   }
 });
 
+test('records: parseFichadaRecord reporta legajo null si los bytes 2-3 del campo no son 00 00 (research.md §5.20: solo hay evidencia de 2 bytes de legajo)', () => {
+  // Registro sintetico (no capturado): el registro real del fixture de 9999
+  // con el byte 2 del campo legajo alterado. En todas las capturas reales
+  // esos bytes son siempre "00 00"; si algun dia llegan con otro valor no
+  // se puede saber si son parte del numero de legajo u otra informacion
+  // (research.md §5.20), asi que el legajo se reporta como no confiable.
+  const fixture = loadFixture('legajo-multibyte-9999.json');
+  const raw = hexToBuffer(fixture.registros[0].hex);
+  raw[2] = 0x01;
+  const record = parseFichadaRecord(raw);
+  assert.equal(record.legajo, null);
+  // El resto del registro sigue decodificando igual (campos independientes).
+  assert.equal(record.anomaly, false);
+  assert.notEqual(record.fecha, null);
+});
+
 test('records: parseFichadaRecord decodifica fecha y hora completas (año/mes/día/hora/minuto/segundo), sin ambigüedad (research.md §5.16)', () => {
   const fixture = loadFixture('fecha-hora-completa-2026-07-06.json');
   for (const { hex, fechaReal, horaReal, nota } of fixture.registros) {

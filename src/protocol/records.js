@@ -24,10 +24,19 @@ const VERIFICATION_METHOD_LABELS = {
 // que tarjeta no tenia legajo confiable, basada en un valor que en
 // realidad pertenecia a un registro colgante distinto, no a la fichada
 // por tarjeta misma — retractada, ver research.md §5.11).
-// research.md §5.15: el campo es un entero de 4 bytes little-endian, no
-// 1 byte — una fichada de prueba real con legajo 9999 (0x270F) trajo
-// legajoRaw "0F 27 00 00"; leer solo el primer byte daba 15, descartando
-// el resto del campo.
+// research.md §5.15 (corregido 2026-07-16, ver §5.20): el legajo es un
+// entero little-endian de (al menos) 2 bytes — una fichada de prueba real
+// con legajo 9999 (0x270F) trajo legajoRaw "0F 27 00 00"; leer solo el
+// primer byte daba 15. Una version anterior leia los 4 bytes completos
+// como legajo, pero NO hay evidencia de que los bytes 2-3 sean parte del
+// numero: en todas las capturas reales (incluidos los lotes paginados de
+// 53 y 173) esos bytes son siempre "00 00", asi que 2 y 4 bytes son
+// indistinguibles con los datos disponibles, y podrian codificar otra
+// cosa aun no identificada. Se lee lo confirmado (2 bytes) y los bytes
+// 2-3 se tratan como chequeo de plausibilidad: si algun dia llegan
+// distintos de cero, no se puede saber si son parte del legajo u otra
+// informacion, y el legajo se reporta como no confiable (null); el valor
+// crudo completo queda siempre en rawHex.
 
 function hexField(buffer, start, end) {
   return buffer.subarray(start, end).toString('hex').toUpperCase();
@@ -165,9 +174,13 @@ export function parseFichadaRecord(buffer) {
   // research.md §5.9/§5.11: legajo se decodifica igual para los tres
   // metodos (huella, rostro, tarjeta) — confirmado contra dos fichadas
   // reales por tarjeta en control_fichada.csv.
-  // research.md §5.15: entero de 4 bytes little-endian, no solo el
-  // primer byte (ver comentario arriba).
-  const legajo = buffer.readUInt32LE(0);
+  // research.md §5.15/§5.20: entero little-endian de 2 bytes (lo unico
+  // confirmado); los bytes 2-3 del campo, siempre "00 00" en todas las
+  // capturas reales, tienen significado desconocido — si llegan con otro
+  // valor, el legajo deja de ser confiable y se reporta null (ver
+  // comentario arriba).
+  const legajoFieldUpperBytesZero = buffer[2] === 0x00 && buffer[3] === 0x00;
+  const legajo = legajoFieldUpperBytesZero ? buffer.readUInt16LE(0) : null;
   const { fecha, hora } = decodeFechaHora(buffer);
 
   return {

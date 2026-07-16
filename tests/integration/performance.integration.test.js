@@ -14,7 +14,7 @@ import {
   buildPendingDetailCommand,
   buildPendingDetailContinuationCommand,
   buildCloseOperationCommand,
-  MAX_RECORDS_PER_PAGE,
+  MAX_PAGE_BYTES,
 } from '../../src/protocol/commands.js';
 import { ACK_SIZE } from '../../src/protocol/framing.js';
 import { RECORD_SIZE } from '../../src/protocol/records.js';
@@ -40,11 +40,13 @@ function withTempOutputDir(fn) {
   }
 }
 
-// Reproduce la paginacion real de 0xA4 (research.md §5.18): para
-// declaredPendingCount > MAX_RECORDS_PER_PAGE, produccion divide la
-// descarga en varias llamadas 0xA4 en vez de una sola. Este guion arma esa
-// misma secuencia dinamicamente para que el mock siga sincronizado con
-// src/protocol/client.js sin importar cuantas fichadas se simulen.
+// Reproduce la paginacion real de 0xA4 (research.md §5.19): el stream
+// continuo de registros mide declaredPendingCount*20 y se entrega en paginas
+// de a lo sumo MAX_PAGE_BYTES, sin alinear las fronteras a registros; cada
+// respuesta trae ademas 4 bytes de cierre que no son parte del stream. Este
+// guion arma esa misma secuencia dinamicamente para que el mock siga
+// sincronizado con src/protocol/client.js sin importar cuantas fichadas se
+// simulen.
 function startReducedSessionServer(declaredPendingCount) {
   return new Promise((resolve) => {
     const server = createServer((socket) => {
@@ -62,33 +64,38 @@ function startReducedSessionServer(declaredPendingCount) {
         },
       ];
 
+      // Stream continuo re-encuadrado (research.md §5.9/§5.19): arranca con
+      // el legajo del primer registro (el viejo "header") y mide exactamente
+      // declaredPendingCount*20. REGISTRO_REAL viene en el encuadre viejo
+      // (termina con el legajo del registro siguiente), asi que anteponer un
+      // legajo y truncar al total da un stream valido de N fichadas.
+      const streamCompleto = Buffer.concat([
+        Buffer.from('01000000', 'hex'),
+        ...Array(declaredPendingCount).fill(REGISTRO_REAL),
+      ]).subarray(0, declaredPendingCount * RECORD_SIZE);
+      const BLOQUE_CIERRE = Buffer.from('ba910000', 'hex');
+
       let seq = 3;
-      let remaining = declaredPendingCount;
+      let deliveredBytes = 0;
       let pageIndex = 0;
-      while (remaining > 0) {
+      while (deliveredBytes < streamCompleto.length) {
         const isFirstPage = pageIndex === 0;
-        const pageCount = Math.min(remaining, MAX_RECORDS_PER_PAGE);
-        const hasMorePages = remaining > pageCount;
-        // research.md §5.18 "CORRECCION 2": el equipo no trunca un stream
-        // fijo. La 1ra pagina entrega EXACTO lo pedido; las paginas de
-        // continuacion entregan SIEMPRE 4 bytes MAS de lo pedido (por eso
-        // el comando de continuacion pide 4 menos). Ver src/protocol/client.js.
-        const bytesNecesarios = pageCount * RECORD_SIZE + (hasMorePages ? 4 : 0);
-        const byteLenComando = isFirstPage ? bytesNecesarios : bytesNecesarios - 4;
+        // research.md §5.19: byteLen = min(bytesRestantes, MAX_PAGE_BYTES),
+        // sin alinear a registros; la respuesta trae byteLen + 4 bytes de
+        // cierre (que no son parte del stream). Ver src/protocol/client.js.
+        const byteLen = Math.min(streamCompleto.length - deliveredBytes, MAX_PAGE_BYTES);
         const detailCmd = isFirstPage
-          ? buildPendingDetailCommand(seq, declaredPendingCount, byteLenComando)
-          : buildPendingDetailContinuationCommand(seq, pageIndex, byteLenComando);
-        const respondParts = [ackFor(seq), Buffer.from([0x55, 0xaa])];
-        if (isFirstPage) {
-          respondParts.push(Buffer.from('01000000', 'hex'));
-        }
-        respondParts.push(...Array(pageCount).fill(REGISTRO_REAL));
-        if (hasMorePages) {
-          respondParts.push(Buffer.from('01000000', 'hex'));
-        }
+          ? buildPendingDetailCommand(seq, declaredPendingCount, byteLen)
+          : buildPendingDetailContinuationCommand(seq, pageIndex, byteLen);
+        const respondParts = [
+          ackFor(seq),
+          Buffer.from([0x55, 0xaa]),
+          streamCompleto.subarray(deliveredBytes, deliveredBytes + byteLen),
+          BLOQUE_CIERRE,
+        ];
         steps.push({ expect: detailCmd, respond: Buffer.concat(respondParts) });
 
-        remaining -= pageCount;
+        deliveredBytes += byteLen;
         pageIndex += 1;
         seq += 1;
       }
