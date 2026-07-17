@@ -77,9 +77,10 @@ test('flujo feliz: generar semilla y luego backfill mes-1 extiende la secuencia'
   assert.equal(res.status, 200);
   l = await lista();
   assert.deepEqual(l.periodos, [anterior, semilla], 'secuencia contigua sin huecos');
-  // La nueva frontera hacia atrás es mes-2; hacia adelante mes+1 es futuro (excluido).
+  // La nueva frontera hacia atrás es mes-2; hacia adelante mes+1, aunque es
+  // futuro, sigue siendo generable (sin tope superior, corrección 2026-07-17).
   assert.ok(l.generables.includes(periodoAnterior(anterior)));
-  assert.ok(!l.generables.includes(periodoSiguiente(semilla)), 'mes+1 futuro no es generable');
+  assert.ok(l.generables.includes(periodoSiguiente(semilla)), 'mes+1 futuro es generable');
 });
 
 // T015 (US2) — impedir saltos y validar backfill; la secuencia queda intacta.
@@ -94,10 +95,14 @@ test('saltar un mes hacia atrás es rechazado y no altera la secuencia', async (
   assert.deepEqual(l1.periodos, l0.periodos, 'la secuencia no cambió');
 });
 
-test('generar un mes futuro (mes+1 posterior al actual) es rechazado', async () => {
-  const semilla = mesActual();
-  const futuro = periodoSiguiente(semilla); // posterior al mes actual
-  const res = await generar(futuro);
-  assert.equal(res.status, 409);
-  assert.equal((await res.json()).error.codigo, 'PERIODO_FUTURO');
+// Corrección 2026-07-17: ya no hay tope de mes futuro (research.md D4); un
+// período futuro contiguo se genera igual que cualquier otro.
+test('generar un mes futuro contiguo (max+1) ya no es rechazado', async () => {
+  const l0 = await lista();
+  const max = l0.periodos[l0.periodos.length - 1];
+  const futuroContiguo = periodoSiguiente(max);
+  const res = await generar(futuroContiguo);
+  assert.equal(res.status, 200);
+  const l1 = await lista();
+  assert.deepEqual(l1.periodos, [...l0.periodos, futuroContiguo], 'la secuencia se extiende hacia adelante sin tope');
 });

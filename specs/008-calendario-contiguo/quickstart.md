@@ -38,7 +38,7 @@ Con un repositorio **vacío** (sin calendarios):
 3. **Rechazo de salto hacia adelante** — intentar generar mes+2 (dejaría hueco):
    ```bash
    curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:4173/api/calendarios/<mes+2>/generar
-   # Espera: 409 con codigo PERIODO_NO_CONTIGUO (o PERIODO_FUTURO si mes+2 > mesActual).
+   # Espera: 409 con codigo PERIODO_NO_CONTIGUO (sea o no futuro; ya no hay tope de mes futuro).
    ```
 4. **Backfill hacia atrás** — generar mes−1 (contiguo):
    ```bash
@@ -61,10 +61,12 @@ Con al menos un mes generado (p. ej. el semilla):
 3. **No-contiguo sin acción**: intentar navegar dos meses más allá del extremo. El control de
    navegación en la dirección no generable está **deshabilitado**: no se puede aterrizar en un
    mes vacío no generable (US3/FR-007).
-4. **Futuro bloqueado**: si el mes siguiente al último generado es posterior al mes actual, el
-   control "mes siguiente" está deshabilitado desde el último generado (FR-004).
-5. **Mensaje de no-contiguo**: si por algún camino se llega a un mes vacío no generable, el
+4. **Mensaje de no-contiguo**: si por algún camino se llega a un mes vacío no generable, el
    estado vacío no ofrece "Generar" y explica qué período debe generarse primero (US2 scenario 2).
+
+> Nota (2026-07-17): el mes siguiente al último generado se puede generar aunque sea posterior
+> al mes calendario actual — ya no hay tope de futuro (FR-004 retractado, research.md D4). El
+> control "mes siguiente" solo se deshabilita cuando el destino no es contiguo.
 
 ## Tests automatizados
 

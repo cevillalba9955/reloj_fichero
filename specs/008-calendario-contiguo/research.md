@@ -58,7 +58,12 @@ CLARIFICATION` de la Technical Context.
      actual, **sin** regenerar (evita recálculos sorpresa; 008 agrega meses, no regenera).
   3. **Guarda de contigüidad** (FR-002/FR-003): si no es adyacente a la secuencia → 409
      `PERIODO_NO_CONTIGUO`, con mensaje que identifica el período que debe generarse primero.
-  4. **Guarda de futuro** (FR-004): si es posterior a `mesActual` → 409 `PERIODO_FUTURO`.
+  4. ~~**Guarda de futuro** (FR-004): si es posterior a `mesActual` → 409 `PERIODO_FUTURO`.~~
+     **RETRACTADO (2026-07-17)**: se pidió explícitamente permitir generar períodos futuros
+     manteniendo la contigüidad. Se sacó esta guarda de `POST /generar` y el tope de
+     `calcularFronteraGenerable` (`src/web/view-model.js`); `mesActual` queda solo para el
+     semilla (D2) y para marcar "hoy" en la grilla (feature 007), ya no acota `generables`. El
+     código de error `PERIODO_FUTURO` se eliminó (ya no tiene ningún emisor).
   5. Éxito: `service.generarCalendario(periodo)` (feature 004) y devuelve la
      `VistaCalendarioMes` recién generada (misma forma que `GET`/`reclasificar`, para refrescar
      la UI sin segundo request).
@@ -66,8 +71,10 @@ CLARIFICATION` de la Technical Context.
   error específicos permiten tests de contrato precisos y mensajes claros en la UI. 409 (Conflict)
   expresa "el estado actual no permite esta generación".
 - **Alternativas**:
-  - Un único código `PERIODO_NO_GENERABLE`: rechazada — pierde la distinción contiguo/futuro que
-    la UI necesita para el mensaje (US2 scenario 2 vs US3 scenario 2).
+  - Un único código `PERIODO_NO_GENERABLE`: rechazada en su momento — perdía la distinción
+    contiguo/futuro que la UI necesitaba para el mensaje (US2 vs US3). Con la retracción de
+    FR-004 (2026-07-17) esa distinción ya no existe (solo queda `PERIODO_NO_CONTIGUO`), así que
+    esta alternativa quedó sin objeto, no descartada por el motivo original.
   - Regenerar si ya existe: rechazada para 008 — introduce efectos de recálculo no pedidos;
     idempotencia "mostrar y no duplicar" es lo que pide FR-010.
 
@@ -99,10 +106,10 @@ CLARIFICATION` de la Technical Context.
 
 - **Decisión**:
   - *Backend primero* (Principio IV): tests de contrato para `GET` (incluye `generables`,
-    `mesActual`) y `POST /generar` (idempotente; 409 no-contiguo; 409 futuro; 200 al generar el
-    frontera; 400 formato); test de integración del flujo de contigüidad (generar máx+1, luego el
-    siguiente; intentar saltear → rechazo; backfill mín-1). Unit del helper de períodos (cruce de
-    año, validación).
+    `mesActual`) y `POST /generar` (idempotente; 409 no-contiguo, incluido un futuro no
+    contiguo; 200 al generar el frontera, incluido un futuro contiguo; 400 formato); test de
+    integración del flujo de contigüidad (generar máx+1, luego el siguiente; intentar saltear →
+    rechazo; backfill mín-1). Unit del helper de períodos (cruce de año, validación).
   - *Frontend*: tests de componente de `NavegacionMes` (deshabilitado según flags) y
     `EstadoVacio` (botón visible solo si generable; mensaje de no-contiguo).
 - **Rationale**: La invariante (FR-008) y las guardas son correctness-critical; su cobertura vive
@@ -111,5 +118,6 @@ CLARIFICATION` de la Technical Context.
 ## Puntos abiertos
 
 Ninguno bloqueante. La spec no dejó `NEEDS CLARIFICATION`; las suposiciones (mes semilla = mes
-actual; backfill sin tope inferior; tope superior = mes actual) están documentadas en la spec y
+actual; backfill sin tope inferior; ~~tope superior = mes actual~~ retractado 2026-07-17, sin
+tope superior) están documentadas en la spec y
 se implementan según D2/D4.

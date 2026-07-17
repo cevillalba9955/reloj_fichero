@@ -77,22 +77,6 @@ test('"siguiente" deshabilitado más allá de la frontera generable', () => {
   expect(onIr).not.toHaveBeenCalled();
 });
 
-test('"siguiente" deshabilitado cuando el mes+1 sería futuro (no está en generables)', () => {
-  const onIr = vi.fn();
-  // max = mesActual: el backend no incluye max+1 en generables → siguiente
-  // deshabilitado desde el último generado.
-  render(
-    <NavegacionMes
-      periodo="202607"
-      mesActual="202607"
-      periodos={['202606', '202607']}
-      generables={['202605']}
-      onIr={onIr}
-    />,
-  );
-  expect(screen.getByLabelText('Mes siguiente')).toBeDisabled();
-});
-
 test('"anterior" deshabilitado en el borde de backfill (min-1)', () => {
   const onIr = vi.fn();
   // Parados en 202605 (frontera de backfill): 202604 no es alcanzable.

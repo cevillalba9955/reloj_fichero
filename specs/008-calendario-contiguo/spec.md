@@ -24,16 +24,15 @@ entrega valor por sí solo: convierte a la pantalla en la única herramienta nec
 extender el calendario institucional.
 
 **Independent Test**: se puede probar completo abriendo la aplicación con al menos un mes
-generado, navegando al mes inmediatamente siguiente (aún no generado y no posterior al mes
-calendario actual), presionando "Generar calendario" y verificando que el mes queda generado,
-persistido y mostrado como vista activa.
+generado, navegando al mes inmediatamente siguiente (aún no generado), presionando "Generar
+calendario" y verificando que el mes queda generado, persistido y mostrado como vista activa.
 
 **Acceptance Scenarios**:
 
 1. **Given** que el último mes generado es el `YYYYMM` más alto de la secuencia y el mes
-   inmediatamente siguiente no está generado y no es posterior al mes calendario actual,
-   **When** el usuario navega a ese mes siguiente, **Then** la pantalla muestra el estado
-   "mes sin generar" con una acción visible para generar el calendario de ese período.
+   inmediatamente siguiente no está generado, **When** el usuario navega a ese mes siguiente,
+   **Then** la pantalla muestra el estado "mes sin generar" con una acción visible para generar
+   el calendario de ese período.
 2. **Given** el estado "mes sin generar" de un período contiguo generable, **When** el usuario
    confirma la generación, **Then** el sistema genera y persiste el calendario de ese período a
    través del dominio y la pantalla pasa a mostrar la grilla del mes recién generado.
@@ -98,10 +97,7 @@ seguir avanzando queda deshabilitado.
 1. **Given** que el usuario está en un mes sin generar que es el primer mes generable hacia
    adelante, **When** observa el control "mes siguiente", **Then** ese control está
    deshabilitado (no puede avanzar a un mes no contiguo que quedaría inalcanzable).
-2. **Given** que el mes inmediatamente siguiente al último generado es posterior al mes
-   calendario actual, **When** el usuario está en el último mes generado, **Then** el control
-   "mes siguiente" está deshabilitado (no se generan meses futuros más allá del mes actual).
-3. **Given** que el usuario está en el primer mes generable hacia atrás (anterior al más
+2. **Given** que el usuario está en el primer mes generable hacia atrás (anterior al más
    antiguo generado), **When** observa el control "mes anterior", **Then** ese control está
    deshabilitado.
 
@@ -112,9 +108,6 @@ seguir avanzando queda deshabilitado.
 - **No existe ningún calendario generado**: la secuencia está vacía. El único período generable
   es el mes calendario actual (período semilla); no se ofrece generar meses arbitrarios sin un
   ancla. Una vez generado el semilla, aplican las reglas de contigüidad normales.
-- **El mes contiguo hacia adelante es futuro**: si el mes inmediatamente posterior a la
-  secuencia es posterior al mes calendario actual, ese período NO es generable; la secuencia no
-  puede crecer más allá del mes actual hasta que el tiempo avance.
 - **La generación falla** (error del dominio/persistencia): el período queda sin generar, la
   secuencia no cambia (no se crea un hueco ni un mes a medias) y el usuario ve un mensaje de
   error con la posibilidad de reintentar.
@@ -124,6 +117,9 @@ seguir avanzando queda deshabilitado.
 - **Backfill hacia atrás con la secuencia anclada**: generar el mes anterior al más antiguo es
   válido siempre que sea inmediatamente contiguo; no hay tope inferior de antigüedad definido
   por esta feature.
+- **Avance hacia un mes futuro**: generar el mes inmediatamente posterior a la secuencia es
+  válido siempre que sea contiguo, sea o no posterior al mes calendario actual; no hay tope
+  superior definido por esta feature (corrección 2026-07-17, ver research.md D4).
 
 ## Requirements *(mandatory)*
 
@@ -131,15 +127,18 @@ seguir avanzando queda deshabilitado.
 
 - **FR-001**: El sistema DEBE ofrecer, dentro del estado "mes sin generar" de la pantalla
   principal, una acción para generar el calendario del período mostrado, visible únicamente
-  cuando ese período es generable según las reglas de contigüidad (FR-002/FR-004/FR-005).
+  cuando ese período es generable según las reglas de contigüidad (FR-002/FR-005).
 - **FR-002**: El sistema DEBE habilitar la generación de un período solo si ese período es el
   inmediatamente anterior (mes − 1) o el inmediatamente posterior (mes + 1) a la secuencia
   contigua de meses ya generados.
 - **FR-003**: El sistema NO DEBE permitir generar un período que dejaría un hueco respecto de la
   secuencia generada (períodos no contiguos); en ese caso no ofrece acción de generación y
   muestra un mensaje que identifica el período contiguo que debe generarse primero.
-- **FR-004**: El sistema NO DEBE permitir generar un período posterior al mes calendario actual;
-  la secuencia solo puede extenderse hacia adelante hasta el mes actual inclusive.
+- ~~**FR-004**: El sistema NO DEBE permitir generar un período posterior al mes calendario
+  actual; la secuencia solo puede extenderse hacia adelante hasta el mes actual inclusive.~~
+  **RETRACTADO (2026-07-17)**: no hay tope superior de mes futuro; la única guarda hacia
+  adelante es la contigüidad de FR-002/FR-003 (ver research.md D4). El código de error
+  `PERIODO_FUTURO` que este requisito motivaba fue eliminado de `contracts/web-api.md`.
 - **FR-005**: Cuando no existe ningún calendario generado, el único período generable DEBE ser
   el mes calendario actual (período semilla).
 - **FR-006**: Tras una generación exitosa, el nuevo período DEBE quedar persistido a través del
@@ -165,9 +164,9 @@ seguir avanzando queda deshabilitado.
 - **Secuencia contigua generada**: rango de períodos generados sin huecos, caracterizado por su
   extremo más antiguo (mín) y su extremo más reciente (máx). Es la invariante central de la
   feature.
-- **Frontera generable**: conjunto de períodos habilitados para generar en un momento dado —
-  el inmediatamente anterior al mín y el inmediatamente posterior al máx (este último acotado
-  por el mes calendario actual); o el período semilla (mes actual) cuando la secuencia está
+- **Frontera generable**: conjunto de períodos habilitados para generar en un momento dado — el
+  inmediatamente anterior al mín y el inmediatamente posterior al máx (sin tope superior de mes
+  futuro, corrección 2026-07-17); o el período semilla (mes actual) cuando la secuencia está
   vacía.
 
 ## Success Criteria *(mandatory)*
@@ -186,16 +185,17 @@ seguir avanzando queda deshabilitado.
 
 ## Assumptions
 
-- El "mes calendario actual" se interpreta según la fecha local de la aplicación; el tope de
-  generación hacia adelante es ese mes inclusive (derivado del requisito de no generar meses
-  futuros).
+- El "mes calendario actual" se interpreta según la fecha local del servidor; se usa como
+  período semilla y para marcar "hoy" en la grilla, pero no acota la generación hacia adelante
+  (retractado 2026-07-17, ver FR-004).
 - La generación de un mes reutiliza el mecanismo de generación del dominio de presentismo
   (feature 004) y la pantalla/estados existentes de la feature 007; esta feature agrega las
   reglas de contigüidad y la acción en la IU, no un nuevo motor de cálculo.
 - Cuando no hay ningún calendario, el período semilla por defecto es el mes calendario actual;
   no se contempla en esta feature elegir un mes semilla arbitrario.
-- Se permite extender la secuencia hacia atrás (meses anteriores al más antiguo) siempre que sea
-  contiguo; no se define en esta feature un límite inferior de antigüedad.
+- Se permite extender la secuencia hacia atrás (meses anteriores al más antiguo) y hacia
+  adelante (meses posteriores al más reciente, incluidos los futuros) siempre que sea contiguo;
+  no se define en esta feature un límite inferior de antigüedad ni un tope superior de futuro.
 - La invariante de contigüidad aplica a la secuencia gestionada por la aplicación; se asume que
   los datos preexistentes de meses generados ya forman (o se tratarán como) una secuencia sin
   huecos.

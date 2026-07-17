@@ -65,7 +65,9 @@ export function registrarRutas(router, ctx) {
   // POST /api/calendarios/:periodo/generar — genera el calendario del período
   // aplicando la regla de contigüidad (feature 008). Fuente de verdad de la
   // invariante (FR-008); la UI solo renderiza la frontera generable.
-  // Orden: formato → ya-generado (idempotente) → futuro → no-contiguo → generar.
+  // Orden: formato → ya-generado (idempotente) → no-contiguo → generar. Sin
+  // tope de mes futuro (corrección 2026-07-17, ver research.md D4): un
+  // período futuro es generable igual que cualquier otro si es contiguo.
   router.add('POST', '/api/calendarios/:periodo/generar', async ({ params }) => {
     const { periodo } = params;
     validarPeriodo(periodo); // 400 PERIODO_INVALIDO
@@ -78,11 +80,6 @@ export function registrarRutas(router, ctx) {
     }
 
     const mesActual = mesActualPeriodo();
-
-    // Guarda de futuro (FR-004): no se generan meses posteriores al actual.
-    if (periodo > mesActual) {
-      throw new ApiError(409, 'PERIODO_FUTURO', `${periodo} es posterior al mes actual ${mesActual}`);
-    }
 
     // Guarda de contigüidad (FR-002/FR-003): solo la frontera generable.
     const generables = calcularFronteraGenerable({ periodos, mesActual });

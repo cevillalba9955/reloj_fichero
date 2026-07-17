@@ -24,10 +24,13 @@ contigüidad sin recomputarla.
 
 ### Frontera generable (derivada, no persistida)
 
-- Conjunto de 0..2 períodos habilitados para generar **ahora**:
+- Conjunto de períodos habilitados para generar **ahora**:
   - lista vacía → `{ mesActual }` (semilla, FR-005).
-  - si no → `{ periodoAnterior(min) }` ∪ (`{ periodoSiguiente(max) }` **si** `periodoSiguiente(max) ≤ mesActual`).
-- `mesActual` = `"YYYYMM"` derivado del reloj del **servidor**.
+  - si no → `{ periodoAnterior(min), periodoSiguiente(max) }`, sin tope superior de mes futuro
+    (corrección 2026-07-17, ver research.md D4 — antes excluía `periodoSiguiente(max)` cuando
+    era posterior a `mesActual`).
+- `mesActual` = `"YYYYMM"` derivado del reloj del **servidor**; se usa como semilla y para marcar
+  "hoy", ya no para acotar la frontera generable.
 - Se recalcula en cada `GET /api/calendarios`; nunca se persiste.
 
 ## Helpers de dominio (puros, nuevos)
@@ -58,7 +61,7 @@ Forma devuelta (campos nuevos en **negrita**):
 Reglas:
 - `generables` está ordenado ascendentemente y no contiene períodos ya presentes en `periodos`.
 - Con `periodos` vacío: `generables === [mesActual]`, `ultimo === null`.
-- Nunca incluye un período posterior a `mesActual`.
+- Puede incluir un período posterior a `mesActual` (sin tope superior, corrección 2026-07-17).
 
 ### Vista de un mes — `VistaCalendarioMes` (sin cambios)
 
@@ -70,9 +73,12 @@ La respuesta de `GET /api/calendarios/:periodo` y de `POST /:periodo/generar` es
 ```text
 no-generado ──[POST /generar, período ∈ generables]──▶ generado
 no-generado ──[POST /generar, no contiguo]───────────▶ (rechazo 409 PERIODO_NO_CONTIGUO)
-no-generado ──[POST /generar, futuro > mesActual]────▶ (rechazo 409 PERIODO_FUTURO)
 generado    ──[POST /generar]────────────────────────▶ generado (idempotente, 200, sin regenerar)
 ```
+
+> Hasta el 2026-07-17 existía una tercera transición de rechazo (`futuro > mesActual` → 409
+> `PERIODO_FUTURO`, FR-004). Se retractó: un período futuro sigue la primera o segunda transición
+> según sea o no contiguo, igual que cualquier otro período (research.md D4).
 
 Al pasar a `generado`, `max` (o `min`) de la secuencia se corre en un mes y la frontera generable
 se recalcula en el siguiente `GET`.

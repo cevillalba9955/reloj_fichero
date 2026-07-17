@@ -36,20 +36,18 @@ export function mesActualPeriodo(now = new Date()) {
   return `${String(now.getFullYear()).padStart(4, '0')}${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
-// Calcula la frontera generable (feature 008): los 0..2 períodos habilitados
-// para generar ahora, garantizando contigüidad y sin superar el mes actual.
+// Calcula la frontera generable (feature 008): los períodos habilitados para
+// generar ahora, garantizando contigüidad (sin tope de mes futuro: corrección
+// 2026-07-17, ver research.md D4).
 // - Sin períodos: solo el mes semilla (mesActual) (FR-005).
-// - Con períodos: min-1 siempre (backfill), y max+1 solo si no es futuro (FR-004).
+// - Con períodos: min-1 (backfill) y max+1 siempre (FR-002/FR-003).
 // `periodos` puede venir en cualquier orden; se usan su mínimo y máximo.
 export function calcularFronteraGenerable({ periodos = [], mesActual }) {
   if (periodos.length === 0) return [mesActual];
   const ordenados = [...periodos].sort();
   const min = ordenados[0];
   const max = ordenados[ordenados.length - 1];
-  const generables = [periodoAnterior(min)];
-  const siguiente = periodoSiguiente(max);
-  if (siguiente <= mesActual) generables.push(siguiente);
-  return generables.sort();
+  return [periodoAnterior(min), periodoSiguiente(max)].sort();
 }
 
 // La leyenda: una clave por distinción visual (FR-006). Texto legible garantiza

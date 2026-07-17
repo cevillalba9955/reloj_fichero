@@ -67,13 +67,9 @@ test('GET /api/calendarios expone mesActual y generables contiguos', async () =>
   const max = body.periodos[body.periodos.length - 1];
   // Backfill: min-1 siempre está entre los generables.
   assert.ok(body.generables.includes(periodoAnterior(min)), 'incluye min-1 (backfill)');
-  // Frontera hacia adelante: max+1 solo si no es futuro respecto de mesActual.
-  const siguiente = periodoSiguiente(max);
-  assert.equal(
-    body.generables.includes(siguiente),
-    siguiente <= body.mesActual,
-    'incluye max+1 solo si no es futuro',
-  );
+  // Frontera hacia adelante: max+1 siempre está entre los generables, incluso
+  // si es futuro respecto de mesActual (sin tope superior, corrección 2026-07-17).
+  assert.ok(body.generables.includes(periodoSiguiente(max)), 'incluye max+1');
   // Ningún generable ya está generado.
   for (const g of body.generables) {
     assert.ok(!body.periodos.includes(g), `generable ${g} no está ya generado`);
@@ -205,7 +201,7 @@ test('POST /generar sobre un período ya generado → 200 idempotente (sin dupli
   }
 });
 
-// T014 (US2) — guardas de contigüidad y de futuro.
+// T014 (US2) — guarda de contigüidad.
 test('POST /generar sobre un período no contiguo → 409 PERIODO_NO_CONTIGUO', async () => {
   const semilla = mesActual();
   const s = await crearServidorConPeriodos([semilla]);
@@ -224,15 +220,34 @@ test('POST /generar sobre un período no contiguo → 409 PERIODO_NO_CONTIGUO', 
   }
 });
 
-test('POST /generar sobre un período futuro → 409 PERIODO_FUTURO', async () => {
+// Corrección 2026-07-17: ya no hay tope de mes futuro (research.md D4). Un
+// período futuro sigue sujeto a la MISMA guarda de contigüidad que cualquier
+// otro: se rechaza si deja un hueco, se genera si es la frontera inmediata.
+test('POST /generar sobre un período futuro no contiguo → sigue siendo 409 PERIODO_NO_CONTIGUO (no un tope de futuro)', async () => {
   const semilla = mesActual();
   const s = await crearServidorConPeriodos([semilla]);
   try {
-    const futuro = periodoSiguiente(periodoSiguiente(semilla)); // mesActual+2
-    const res = await fetch(`${s.base}/api/calendarios/${futuro}/generar`, { method: 'POST' });
+    const futuroNoContiguo = periodoSiguiente(periodoSiguiente(semilla)); // mesActual+2, salteando +1
+    const res = await fetch(`${s.base}/api/calendarios/${futuroNoContiguo}/generar`, { method: 'POST' });
     assert.equal(res.status, 409);
     const body = await res.json();
-    assert.equal(body.error.codigo, 'PERIODO_FUTURO');
+    assert.equal(body.error.codigo, 'PERIODO_NO_CONTIGUO');
+  } finally {
+    s.close();
+  }
+});
+
+test('POST /generar sobre el período futuro inmediato (max+1, contiguo) → 200, ya no hay tope superior', async () => {
+  const semilla = mesActual();
+  const s = await crearServidorConPeriodos([semilla]);
+  try {
+    const futuroContiguo = periodoSiguiente(semilla); // mesActual+1
+    const res = await fetch(`${s.base}/api/calendarios/${futuroContiguo}/generar`, { method: 'POST' });
+    assert.equal(res.status, 200);
+    const v = await res.json();
+    assert.equal(v.periodo, futuroContiguo);
+    const lista = await (await fetch(`${s.base}/api/calendarios`)).json();
+    assert.ok(lista.periodos.includes(futuroContiguo));
   } finally {
     s.close();
   }
