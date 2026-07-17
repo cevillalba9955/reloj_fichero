@@ -38,8 +38,8 @@
           },
           "metodo": {
             "type": ["string", "null"],
-            "enum": ["huella", "tarjeta", "rostro", null],
-            "description": "Metodo de verificacion (research.md §5.6): 'tarjeta' y 'rostro' confirmados por comparacion directa contra el software oficial; 'huella' es una formula fuerte sin confirmacion independiente propia todavia. null si el codigo crudo (verificationMethodCode) no coincide con ninguno de los tres valores observados."
+            "enum": ["huella", "clave", "tarjeta", "rostro", null],
+            "description": "Metodo de verificacion (research.md §5.6, §5.21): 'tarjeta' y 'rostro' confirmados por comparacion directa contra el software oficial; 'clave' confirmado contra el equipo real (§5.21); 'huella' es una formula fuerte sin confirmacion independiente propia todavia. null si el codigo crudo (verificationMethodCode) no coincide con ninguno de los cuatro valores observados."
           },
           "rawHex": { "type": "string", "pattern": "^[0-9A-Fa-f]{40}$", "description": "20 bytes ya re-encuadrados (research.md §5.9): [legajo(0-3)][segundo/hora-minuto(4-11)][tipo(12-15)][metodo(16-19)], no el orden original del payload de 0xA4" },
           "recordTypeConstant": { "type": "string", "pattern": "^[0-9A-Fa-f]{8}$", "description": "No es un valor fijo entre sesiones (research.md §5.8); se expone crudo para diagnostico, ver tambien 'anomaly' si el registro lo trae" },

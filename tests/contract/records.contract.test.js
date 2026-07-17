@@ -84,6 +84,18 @@ test('records: parseFichadaRecord decodifica el registro real por tarjeta (verif
   assert.equal(typeof record.legajo, 'number');
 });
 
+test('records: parseFichadaRecord decodifica el registro real por clave (verificationMethodCode 0x20, confirmado 2026-07-17 contra el equipo real, research.md §5.21)', () => {
+  const fixture = loadFixture('registro-real-clave-2026-07-17.json');
+  const { hex, legajoReal, fechaReal, horaReal, metodoReal } = fixture.registros[0];
+  const record = parseFichadaRecord(hexToBuffer(hex));
+
+  assert.equal(record.verificationMethodCode, '00000020');
+  assert.equal(record.metodo, metodoReal);
+  assert.equal(record.legajo, legajoReal);
+  assert.equal(record.fecha, fechaReal);
+  assert.equal(record.hora, horaReal);
+});
+
 test('records: parseFichadaRecord decodifica hora (segundo/minuto/hora) contra research/control_fichada.csv', () => {
   const fixture = loadFixture('siete-registros-control-fichada.json');
   // El timestamp/metodo/tipo de la fila i viven en el propio registro viejo

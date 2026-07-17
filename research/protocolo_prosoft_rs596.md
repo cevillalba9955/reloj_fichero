@@ -243,7 +243,7 @@ la sección anterior para un segundo valor independiente:
 | Código | Método | Confirmación |
 |---|---|---|
 | `0x10` | huella (fp) | hipótesis por fórmula, sin confirmar de forma independiente |
-| `0x20` | clave (pwd) | nunca observado en ninguna captura — no se expone como hipótesis en el código |
+| `0x20` | clave (pwd) | ✅ **confirmado** contra el equipo real (ver §5.21, 2026-07-17) |
 | `0x30` | tarjeta (idcard) | ✅ **confirmado** contra el software oficial |
 | `0x40` | rostro (face) | ✅ **confirmado** contra el software oficial |
 
@@ -1051,6 +1051,32 @@ son parte del número u otra cosa) y el valor crudo completo queda como
 siempre en `rawHex` para investigarlo. Ningún resultado ya confirmado
 cambia (todos los legajos reales entran en 2 bytes).
 `contracts/output-schema.json` (feature 001) acota `legajo` a `0..65535`.
+
+### 5.21 CONFIRMACIÓN ✅: `verificationMethodCode 0x20` = clave (pwd) (2026-07-17)
+
+Sesión real `output/fichadas-192.168.1.78-2026-07-17T10_55_22.397Z.json`
+(descarga contra `192.168.1.78`, 199 pendientes) trajo un registro con
+`verificationMethodCode = 00000020`, código nunca antes observado en
+ninguna captura:
+
+```
+rawHex:  01 00 00 00 01 00 00 1F F9 71 10 2E 00 00 00 01 00 00 00 20
+legajo:  1 (Cesar Villalba, identidad ya confirmada en §5.9/§6.1)
+fecha:   2026-07-16
+hora:    16:11:31
+```
+
+El usuario verificó contra el equipo real que esa marcación fue **por
+clave**. Esto confirma, para un cuarto valor independiente, la fórmula de
+§5.6 (`EnrollDataType` numerado 1-4 × `0x10`): `fp=0x10, pwd=0x20,
+idcard=0x30, face=0x40`. Con esto los cuatro métodos de verificación del
+protocolo quedan confirmados (huella sigue apoyada solo en la fórmula, sin
+una fichada real por huella comparada de forma independiente contra el
+software oficial — ver §5.6).
+
+**Corrección aplicada:** `src/protocol/records.js` agrega `'00000020':
+'clave'` a `VERIFICATION_METHOD_LABELS`; `contracts/output-schema.json`
+(feature 001) suma `"clave"` al enum de `metodo`.
 
 ---
 

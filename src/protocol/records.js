@@ -2,16 +2,16 @@ export const RECORD_SIZE = 20;
 
 const CONFIRMED_RECORD_TYPE = '00000001';
 
-// Confirmados comparando fichadas reales contra el software oficial
-// (research.md §5.6): "0x40" rostro, "0x30" tarjeta confirmados por
-// comparacion directa. "0x10" huella es una formula fuerte (coincide con
-// el orden de EnrollDataType del bloque de identificacion) pero sin una
-// fichada real por huella comparada de forma independiente contra el
-// software oficial todavia. "0x20" (clave) nunca se observo en ninguna
-// captura real, por lo que no se lista (Constitucion, Principio III: no
-// se inventan valores sin evidencia).
+// Confirmados comparando fichadas reales contra el equipo/software oficial
+// (research.md §5.6, §5.21): "0x40" rostro y "0x30" tarjeta confirmados por
+// comparacion directa contra el software oficial; "0x20" clave confirmado
+// contra el equipo real (§5.21, 2026-07-17). "0x10" huella es una formula
+// fuerte (coincide con el orden de EnrollDataType del bloque de
+// identificacion) pero sin una fichada real por huella comparada de forma
+// independiente todavia.
 const VERIFICATION_METHOD_LABELS = {
   '00000010': 'huella',
+  '00000020': 'clave',
   '00000030': 'tarjeta',
   '00000040': 'rostro',
 };
