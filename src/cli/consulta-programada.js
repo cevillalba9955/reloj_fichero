@@ -1,5 +1,6 @@
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
+import { createServer } from 'node:http';
 import { startService } from '../service/consulta-programada-service.js';
 import { createLocalFileActiveEmployeesProvider } from '../roster/local-file-active-employees-provider.js';
 import { readOracleRosterConfig, ConfiguracionPadronInvalidaError } from '../db/oracle-roster-config.js';
@@ -59,6 +60,7 @@ export function parseCliArgs(argv, env = process.env) {
         'entrada-hora': { type: 'string' },
         'entrada-duracion': { type: 'string' },
         'fichadas-archive-dir': { type: 'string' },
+        'control-port': { type: 'string' },
         'full-handshake': { type: 'boolean', default: false },
       },
       strict: true,
@@ -108,6 +110,19 @@ export function parseCliArgs(argv, env = process.env) {
   const entradaDuracion = parseEntero('--entrada-duracion / FICHADAS_ENTRADA_DURACION', pick(values['entrada-duracion'], env.FICHADAS_ENTRADA_DURACION, '30'));
   if (entradaDuracion < 0) throw new InvalidArgsError(`--entrada-duracion / FICHADAS_ENTRADA_DURACION invalido: "${entradaDuracion}" (debe ser >= 0)`);
 
+  // feature 010 (US4): puerto del servidor de control HTTP local (127.0.0.1).
+  // OPT-IN: sin --control-port ni FICHADAS_CONTROL_PORT, el servidor de control
+  // no se levanta (una instalacion sin la pagina web no cambia su superficie de
+  // red, contracts/control-api.md).
+  const controlPortRaw = pick(values['control-port'], env.FICHADAS_CONTROL_PORT, undefined);
+  let controlPort = null;
+  if (controlPortRaw !== undefined) {
+    controlPort = parseEntero('--control-port / FICHADAS_CONTROL_PORT', controlPortRaw);
+    if (controlPort <= 0) {
+      throw new InvalidArgsError(`--control-port / FICHADAS_CONTROL_PORT invalido: "${controlPort}" (debe ser > 0)`);
+    }
+  }
+
   return {
     host,
     port,
@@ -120,6 +135,7 @@ export function parseCliArgs(argv, env = process.env) {
     timeoutMs,
     tickIntervalMs,
     statusIntervalMs,
+    controlPort,
     fullHandshake: values['full-handshake'] || parseBooleano(env.FICHADAS_FULL_HANDSHAKE),
     checkpoints: {
       entrada: {
@@ -177,6 +193,41 @@ export function createFichadasSink({ archiveDir, now = () => new Date() }) {
   };
 }
 
+// feature 010 (US4, research.md §4): servidor de control HTTP local del
+// servicio de fichadas. Atado EXCLUSIVAMENTE a 127.0.0.1 (nunca a una interfaz
+// externa): es el canal por el que el proceso web (rs956-web.service) pide un
+// ciclo fuera de horario al UNICO dueño de la conexion al reloj (Principio
+// III). Una sola ruta: POST /tick → { resultado: "ok"|"omitido"|"error",
+// fichadasNuevas, detail } (contracts/control-api.md). Un ciclo con error del
+// reloj sigue siendo HTTP 200: el POST /tick en si se ejecuto; la API web es
+// la que lo traduce a 502 hacia el frontend.
+export function crearServidorControl({ tick, port, host = '127.0.0.1' }) {
+  const server = createServer(async (req, res) => {
+    const pathname = new URL(req.url, 'http://localhost').pathname;
+    if (req.method !== 'POST' || pathname !== '/tick') {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: { codigo: 'NO_ENCONTRADO', mensaje: 'Solo POST /tick' } }));
+      return;
+    }
+    try {
+      const ciclo = await tick();
+      const body = {
+        resultado: ciclo?.resultado === 'success' ? 'ok' : ciclo?.resultado ?? 'error',
+        fichadasNuevas: ciclo?.fichadasNuevas ?? 0,
+        detail: ciclo?.detail ?? null,
+      };
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(body));
+    } catch (err) {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ resultado: 'error', fichadasNuevas: 0, detail: err.message }));
+    }
+  });
+  return new Promise((resolve) => {
+    server.listen(port, host, () => resolve(server));
+  });
+}
+
 function formatEstadoResumen(state) {
   const lineas = [`Fecha del servicio: ${state.fechaServicio}`];
   for (const cp of state.checkpoints) {
@@ -226,6 +277,15 @@ export function runService(
     persistirFichadas: sink,
   });
 
+  // feature 010 (US4): control local opcional (solo si se configuro el puerto).
+  let controlServer = null;
+  if (options.controlPort) {
+    crearServidorControl({ tick: handle.tick, port: options.controlPort }).then((srv) => {
+      controlServer = srv;
+      print(`Control local del servicio (POST /tick) en http://127.0.0.1:${options.controlPort}`);
+    });
+  }
+
   const origenPadron = options.padron === 'oracle'
     ? 'RRHH/Oracle (variables RRHH_ORACLE_*)'
     : options.rosterConfigPath;
@@ -245,6 +305,7 @@ export function runService(
   function shutdown(signal) {
     print(`\nRecibida ${signal}: deteniendo el servicio...`);
     clearInterval(statusTimer);
+    controlServer?.close();
     handle.stop();
     print('Servicio detenido (una sesion en curso, si la hubiera, termina por si sola).');
     onShutdown?.();

@@ -5,7 +5,9 @@ de producción en un servidor Linux, con **persistencia de fichadas** (feature 0
 archivo por período que consume el cálculo de presentismo (feature 004).
 
 Cubre también el despliegue de la **interfaz web de presentismo** (frontend + API, features 007 +
-008) como servicio systemd aparte — ver [§8](#8-despliegue-de-la-interfaz-web-frontend--api).
+008 + 010) como servicio systemd aparte — ver [§8](#8-despliegue-de-la-interfaz-web-frontend--api) —
+y el **canal de control local** entre ambos procesos que usa la página "Fichadas de hoy" para la
+consulta manual al reloj (feature 010) — ver [§8.7](#87-consulta-manual-al-reloj-feature-010-canal-de-control-local).
 
 Convenciones por defecto (ajustables): usuario de sistema `rs956`, instalación en `/opt/rs956`,
 Node en `/usr/bin/node`. Referencias: [spec 005](../specs/005-servicio-despliegue-linux/spec.md),
@@ -201,7 +203,54 @@ server {
 }
 ```
 
-### 8.6 Actualización
+### 8.7 Consulta manual al reloj (feature 010): canal de control local
+
+La página **"Fichadas de hoy"** permite disparar una consulta de fichadas nuevas al reloj sin
+esperar el ciclo programado. Como `rs956-web.service` y `rs956-fichadas.service` son **procesos
+separados** y el proceso de fichadas es el **único dueño** de la conexión TCP al reloj
+(Constitución, Principio III), el web nunca abre esa conexión: le pide un ciclo al servicio de
+fichadas por un **servidor de control HTTP local**, atado exclusivamente a `127.0.0.1`.
+
+Flujo: `navegador → POST /api/fichadas-hoy/consultar-reloj (rs956-web) → POST /tick
+(127.0.0.1:5006, rs956-fichadas) → scheduler.tick({ forzarConsulta: true }) → reloj`. La consulta
+manual funciona **en cualquier momento** (no depende de la ventana de checkpoint del ciclo
+programado). El tick persiste las fichadas en `data/presentismo/fichadas/<periodo>.json`
+**antes** de responder, así que la vista devuelta ya las incluye. El single-flight del scheduler
+(feature 002) evita dos sesiones concurrentes.
+
+Configurar en `.env` (ambos procesos leen el mismo archivo):
+
+```dotenv
+# Proceso de fichadas: levanta el control local en este puerto (loopback).
+# Si NO se define, el servidor de control no se levanta (opt-in).
+FICHADAS_CONTROL_PORT=5006
+
+# Proceso web: adónde pedir el tick (default http://127.0.0.1:5006).
+FICHADAS_CONTROL_URL=http://127.0.0.1:5006
+```
+
+Reiniciar ambos servicios tras el cambio y verificar:
+
+```bash
+sudo systemctl restart rs956-fichadas.service rs956-web.service
+curl -s -X POST http://127.0.0.1:5006/tick                              # control local directo
+curl -s -X POST http://localhost:4173/api/fichadas-hoy/consultar-reloj  # vía la API web
+```
+
+Con el servicio de fichadas caído (o sin `FICHADAS_CONTROL_PORT`), la API web responde
+`502 ERROR_CONSULTANDO_RELOJ` y la página conserva los datos ya mostrados. El puerto de control
+**no debe exponerse** fuera del host (no abrirlo en el firewall ni proxyearlo).
+
+Además, la página necesita que el contexto web lea el **snapshot del padrón**
+(`PRESENTISMO_PADRON_FILE`, default `./data/presentismo/padron.json`) para los empleados
+esperados y sus nombres, y el archivo de fichadas del período (`PRESENTISMO_FICHADAS_DIR`) —
+misma configuración `PRESENTISMO_*` de §3.
+
+Referencias: [research §4](../specs/010-fichadas-hoy/research.md),
+[contrato control-api](../specs/010-fichadas-hoy/contracts/control-api.md),
+[contrato web-api 010](../specs/010-fichadas-hoy/contracts/web-api.md).
+
+### 8.8 Actualización
 
 ```bash
 sudo -u rs956 git -C /opt/rs956 pull

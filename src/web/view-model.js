@@ -1,5 +1,6 @@
 import { parsePeriodo, periodoAnterior, periodoSiguiente } from '../presentismo/domain/calendario-mes.js';
 import { recortar, Tramo } from '../presentismo/domain/periodo-liquidacion.js';
+import { formatHoraMinuto } from '../presentismo/domain/tiempo.js';
 
 // feature 007 — Armado de las proyecciones de presentación (view-models) que la
 // API entrega al frontend. Deriva todo del dominio de presentismo (feature 004);
@@ -79,6 +80,47 @@ function periodoActivoDe(calendario, anio, mes) {
     hasta: fechas[fechas.length - 1],
   };
   return { periodoActivo, fechasActivas: new Set(fechas) };
+}
+
+// feature 010 — FilaFichadaHoy (data-model.md): proyección por empleado del día
+// en curso. Horas SIEMPRE en 'HH:MM' hacia el cliente (nunca minutos crudos);
+// la corrección vigente de entrada/salida prevalece sobre la fichada real
+// (FR-009). `horasTrabajadas` en minutos, mismo formato que `totalDiario` de
+// 004. Sin datos biométricos ni rawHex (Principio V, FR-015).
+export function construirFilaFichadaHoy({ legajo, nombre = null, jornada = null, situacion, anomalias = [] }) {
+  const correccion = jornada?.correccionVigente ? jornada.correccion : null;
+  const entradaMin = correccion?.entradaCorregida ?? jornada?.entrada?.hora ?? null;
+  const salidaMin = correccion?.salidaCorregida ?? jornada?.salida?.hora ?? null;
+  return {
+    legajo,
+    nombre,
+    entrada: entradaMin != null ? formatHoraMinuto(entradaMin) : null,
+    salida: salidaMin != null ? formatHoraMinuto(salidaMin) : null,
+    horasTrabajadas: jornada?.totalDiario ?? 0,
+    situacion,
+    correccionVigente: Boolean(jornada?.correccionVigente),
+    pausas: (jornada?.pausas ?? [])
+      .filter((p) => p.vigente !== false)
+      .map((p) => ({
+        desde: formatHoraMinuto(p.desde),
+        hasta: formatHoraMinuto(p.hasta),
+        tipo: p.tipo ?? 'intermedia',
+        motivo: p.motivo,
+      })),
+    anomalias,
+  };
+}
+
+// feature 010 — VistaFichadasHoy (data-model.md): lo que devuelve
+// GET /api/fichadas-hoy. `filas` es la salida de service.calcularHoy con el
+// `nombre` del padrón ya mezclado por el handler.
+export function construirVistaFichadasHoy({ fecha, periodo, diaClasificacion, filas = [] }) {
+  return {
+    fecha,
+    periodo,
+    diaClasificacion,
+    empleados: filas.map(construirFilaFichadaHoy),
+  };
 }
 
 // Construye la VistaCalendarioMes. `periodos` es la lista de YYYYMM generados

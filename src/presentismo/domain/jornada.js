@@ -130,11 +130,59 @@ export function calcularJornadaAuto({ clasificacion, fichadas = [], params }) {
   };
 }
 
-// Aplica ajustes manuales (US3) sobre el resultado automático: pausas
-// intermedias (descuento) y corrección manual (prevalece). Devuelve un nuevo
-// objeto de jornada con totalDiario final, descuentoPausas, correccionVigente y
-// requiereRevision (FR-028/029/038/039). Función pura.
-export function aplicarAjustes(auto, { correccion = null, pausas = [] } = {}) {
+// Aplica ajustes manuales (US3 de 004 + US2 de 010) sobre el resultado
+// automático: pausas intermedias (descuento) y corrección manual (prevalece).
+// Una corrección de entrada/salida (feature 010) recalcula las horas efectivas
+// con las MISMAS funciones del cálculo automático y deriva el total de ellas;
+// un valorCorregido explícito sigue prevaleciendo como override del total
+// (compat 004). Devuelve un nuevo objeto de jornada con totalDiario final,
+// descuentoPausas, correccionVigente y requiereRevision (FR-028/029/038/039).
+// `params` (modalidad) solo es necesario cuando la corrección trae
+// entrada/salida. Función pura.
+export function aplicarAjustes(auto, { correccion = null, pausas = [], params = null } = {}) {
+  const corrigeHorario =
+    correccion && (correccion.entradaCorregida != null || correccion.salidaCorregida != null);
+
+  if (corrigeHorario) {
+    const entradaEfectiva =
+      correccion.entradaCorregida != null
+        ? params
+          ? horaEfectivaEntrada(correccion.entradaCorregida, params)
+          : correccion.entradaCorregida
+        : auto.entradaEfectiva;
+    const salidaEfectiva =
+      correccion.salidaCorregida != null
+        ? params
+          ? horaEfectivaSalida(correccion.salidaCorregida, params)
+          : correccion.salidaCorregida
+        : auto.salidaEfectiva;
+
+    const descuento = descuentoPausas(pausas, entradaEfectiva, salidaEfectiva);
+    // Total derivado: solo con ambas puntas definidas (misma regla que el auto,
+    // acotado a la jornada esperada); si falta una, la jornada sigue incompleta.
+    let totalDerivado = 0;
+    if (entradaEfectiva != null && salidaEfectiva != null) {
+      const bruto = Math.max(0, salidaEfectiva - entradaEfectiva);
+      totalDerivado = Math.max(
+        0,
+        (params ? clamp(bruto, 0, params.jornadaEsperada) : bruto) - descuento,
+      );
+    }
+    const requiereRevision =
+      correccion.valorCalculado != null && correccion.valorCalculado !== auto.totalDiario;
+    return {
+      ...auto,
+      entradaEfectiva,
+      salidaEfectiva,
+      descuentoPausas: descuento,
+      totalDiario: correccion.valorCorregido != null ? correccion.valorCorregido : totalDerivado,
+      correccionVigente: true,
+      correccion,
+      pausas,
+      requiereRevision,
+    };
+  }
+
   // Pausas: solo descuentan si hay horario efectivo (Laborable con entrada y
   // salida). En Feriado/Incompleta/Sin fichadas, descuento = 0 (FR-039).
   const descuento = descuentoPausas(pausas, auto.entradaEfectiva, auto.salidaEfectiva);

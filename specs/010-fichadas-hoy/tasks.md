@@ -26,7 +26,7 @@ plan.md § Project Structure.
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Documentar las variables de entorno nuevas en `.env.example`:
+- [X] T001 [P] Documentar las variables de entorno nuevas en `.env.example`:
   `FICHADAS_CONTROL_PORT` (proceso `rs956-fichadas.service`, servidor de control HTTP
   local, default `5006`) y `FICHADAS_CONTROL_URL` (proceso `rs956-web.service`, default
   `http://127.0.0.1:5006`) — research.md §4
@@ -40,29 +40,29 @@ padrón, base de la que dependen las 4 historias.
 
 **⚠️ CRITICAL**: ninguna historia de usuario puede completarse sin esta fase.
 
-- [ ] T002 [P] Tests unitarios de `calcularSituacionHoy` (fixtures de calibración
+- [X] T002 [P] Tests unitarios de `calcularSituacionHoy` (fixtures de calibración
   derivados de los Acceptance Scenarios de la Historia 1 del spec: `ESPERANDO`,
   `PRESENTE`, `TARDE`, `AUSENTE`, jornada `Completa`, `Feriado cumplido`, `No aplica`,
   `ANOMALIA`) en `tests/unit/presentismo-situacion-dia.test.js` — DEBEN fallar antes de
   T003 (Principio IV)
-- [ ] T003 Implementar `SituacionDia` (enum) y
+- [X] T003 Implementar `SituacionDia` (enum) y
   `calcularSituacionHoy({ clasificacion, auto, ajustado, ahora, params })` en
   `src/presentismo/domain/situacion-dia.js` (research.md §1) — depende de T002
-- [ ] T004 [P] Extender `crearContextoWeb` en `src/web/wiring.js` para construir un
+- [X] T004 [P] Extender `crearContextoWeb` en `src/web/wiring.js` para construir un
   `ActiveEmployeesProvider` (adapter `local-file-active-employees-provider.js` sobre el
   snapshot del padrón ya usado por 004) y pasarlo, junto con un
   `EmployeeCategoryProvider` y un `FichadasProvider` sobre el archivo acumulativo del
   período (`archive-fichadas-provider.js`, ya existente), a
   `createCalcularPresentismoService` — hoy el contexto web no cablea ninguno de los
   tres (research.md §5)
-- [ ] T005 Agregar `calcularHoy(periodo, fecha, legajos)` a
+- [X] T005 Agregar `calcularHoy(periodo, fecha, legajos)` a
   `src/presentismo/service/calcular-presentismo-service.js`: por cada legajo, llama
   `calcularEmpleado`, ubica la jornada de `fecha` en `resumen.jornadas`, y aplica
   `calcularSituacionHoy` — depende de T003, T004
-- [ ] T006 [P] Agregar `construirVistaFichadasHoy({ fecha, diaClasificacion, filas })`
+- [X] T006 [P] Agregar `construirVistaFichadasHoy({ fecha, diaClasificacion, filas })`
   y `construirFilaFichadaHoy(...)` a `src/web/view-model.js`, produciendo la forma de
   `VistaFichadasHoy`/`FilaFichadaHoy` de data-model.md — depende de T005
-- [ ] T007 Crear `src/web/api/fichadas-hoy-handlers.js` con un `registrarRutas(router,
+- [X] T007 Crear `src/web/api/fichadas-hoy-handlers.js` con un `registrarRutas(router,
   ctx)` vacío y registrarlo desde `src/web/server.js` (mismo patrón que
   `calendario-handlers.js`) — depende de T006
 
@@ -82,35 +82,35 @@ necesitar ninguna acción de escritura.
 
 ### Tests for User Story 1
 
-- [ ] T008 [P] [US1] Test de contrato para `GET /api/fichadas-hoy` (200 con la forma de
+- [X] T008 [P] [US1] Test de contrato para `GET /api/fichadas-hoy` (200 con la forma de
   `VistaFichadasHoy`, padrón vacío, legajo con anomalía) en
   `tests/contract/web-api-fichadas-hoy.test.js` — DEBE fallar antes de T010
-- [ ] T009 [P] [US1] Test de integración: fichadas ya en el archivo del período → `GET`
+- [X] T009 [P] [US1] Test de integración: fichadas ya en el archivo del período → `GET`
   refleja `ESPERANDO`/`PRESENTE`/`TARDE`/`AUSENTE`/`Completa`/`Feriado cumplido` por
   cada Acceptance Scenario de la Historia 1 en
   `tests/integration/fichadas-hoy.integration.test.js` — DEBE fallar antes de T010
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Implementar el handler `GET /api/fichadas-hoy` en
+- [X] T010 [US1] Implementar el handler `GET /api/fichadas-hoy` en
   `src/web/api/fichadas-hoy-handlers.js` (usa `ctx.activeEmployeesProvider` +
   `service.calcularHoy` + `construirVistaFichadasHoy`) — depende de T007; hace pasar
   T008/T009
-- [ ] T011 [P] [US1] Crear `frontend/src/api/fichadas-hoy-client.js` con
+- [X] T011 [P] [US1] Crear `frontend/src/api/fichadas-hoy-client.js` con
   `obtenerFichadasHoy()` (mismo patrón que `calendario-client.js`)
-- [ ] T012 [P] [US1] Crear `frontend/src/components/TablaFichadasHoy.jsx` (fila por
+- [X] T012 [P] [US1] Crear `frontend/src/components/TablaFichadasHoy.jsx` (fila por
   empleado: legajo, nombre, entrada, salida, horas trabajadas, situación con
   distinción visual por clave, mismo criterio de accesibilidad que `Leyenda.jsx`)
-- [ ] T013 [US1] Crear `frontend/src/components/PaginaFichadasHoy.jsx`: carga al
+- [X] T013 [US1] Crear `frontend/src/components/PaginaFichadasHoy.jsx`: carga al
   montar vía `fichadas-hoy-client`, estados cargando/con-datos/error, renderiza
   `TablaFichadasHoy` — depende de T011, T012
-- [ ] T014 [US1] Agregar navegación simple (dos pestañas, sin librería de ruteo nueva)
+- [X] T014 [US1] Agregar navegación simple (dos pestañas, sin librería de ruteo nueva)
   en `frontend/src/App.jsx` para alternar entre "Calendario" y "Fichadas de hoy",
   montando `PaginaFichadasHoy` — depende de T013
-- [ ] T015 [P] [US1] Tests de componente para `TablaFichadasHoy` (situación correcta
+- [X] T015 [P] [US1] Tests de componente para `TablaFichadasHoy` (situación correcta
   por fila, sin datos personales de más) en
   `frontend/src/components/TablaFichadasHoy.test.jsx`
-- [ ] T016 [P] [US1] Test de componente para `PaginaFichadasHoy` (carga, error,
+- [X] T016 [P] [US1] Test de componente para `PaginaFichadasHoy` (carga, error,
   reintento) en `frontend/src/components/PaginaFichadasHoy.test.jsx`
 
 **Checkpoint**: US1 entrega la página de solo lectura, completa y demostrable.
@@ -129,40 +129,40 @@ con 400 y nada se persiste.
 
 ### Tests for User Story 2
 
-- [ ] T017 [P] [US2] Tests unitarios de `crearCorreccion`/`aplicarAjustes` extendidos
+- [X] T017 [P] [US2] Tests unitarios de `crearCorreccion`/`aplicarAjustes` extendidos
   para aceptar `entradaCorregida`/`salidaCorregida` (recomputa entrada/salida efectiva
   y el total) en `tests/unit/presentismo-correccion.test.js` y
   `tests/unit/presentismo-jornada.test.js` — DEBEN fallar antes de T020/T021
-- [ ] T018 [P] [US2] Test de contrato para `POST /api/fichadas-hoy/correcciones` (400
+- [X] T018 [P] [US2] Test de contrato para `POST /api/fichadas-hoy/correcciones` (400
   sin motivo, 400 formato de hora inválido, 409 sin categoría, 200 fila recalculada)
   en `tests/contract/web-api-fichadas-hoy.test.js` — DEBE fallar antes de T023
-- [ ] T019 [P] [US2] Test de integración: la corrección persiste con autor/motivo/valor
+- [X] T019 [P] [US2] Test de integración: la corrección persiste con autor/motivo/valor
   anterior-nuevo y prevalece frente a una fichada real posterior del mismo campo (spec,
   edge case) en `tests/integration/fichadas-hoy.integration.test.js` — DEBE fallar
   antes de T023
 
 ### Implementation for User Story 2
 
-- [ ] T020 [US2] Extender `crearCorreccion` en `src/presentismo/domain/correccion.js`
+- [X] T020 [US2] Extender `crearCorreccion` en `src/presentismo/domain/correccion.js`
   para aceptar `entradaCorregida`/`salidaCorregida` (minutos-del-día) — depende de T017
-- [ ] T021 [US2] Extender `aplicarAjustes` en `src/presentismo/domain/jornada.js` para
+- [X] T021 [US2] Extender `aplicarAjustes` en `src/presentismo/domain/jornada.js` para
   recalcular `entradaEfectiva`/`salidaEfectiva` y el total a partir de la corrección de
   entrada/salida, cuando estén presentes — depende de T020
-- [ ] T022 [US2] Extender `cargarCorreccion` en
+- [X] T022 [US2] Extender `cargarCorreccion` en
   `src/presentismo/service/calcular-presentismo-service.js` para aceptar
   entrada/salida en `'HH:MM'` (parseadas con `tiempo.js`) — depende de T021
-- [ ] T023 [US2] Implementar el handler `POST /api/fichadas-hoy/correcciones` en
+- [X] T023 [US2] Implementar el handler `POST /api/fichadas-hoy/correcciones` en
   `src/web/api/fichadas-hoy-handlers.js` (validación y códigos de `ApiError` por
   contracts/web-api.md) — depende de T022; hace pasar T018/T019
-- [ ] T024 [P] [US2] Agregar `corregir(legajo, { fecha, entrada, salida, autor,
+- [X] T024 [P] [US2] Agregar `corregir(legajo, { fecha, entrada, salida, autor,
   motivo })` a `frontend/src/api/fichadas-hoy-client.js`
-- [ ] T025 [US2] Crear `frontend/src/components/FormularioCorreccion.jsx` (campos
+- [X] T025 [US2] Crear `frontend/src/components/FormularioCorreccion.jsx` (campos
   entrada/salida + motivo obligatorio; deshabilita "Guardar" sin motivo) — depende de
   T024
-- [ ] T026 [US2] Integrar `FormularioCorreccion` en `TablaFichadasHoy`/
+- [X] T026 [US2] Integrar `FormularioCorreccion` en `TablaFichadasHoy`/
   `PaginaFichadasHoy` (abrir por fila, refrescar la fila tras guardar) — depende de
   T025, T013
-- [ ] T027 [P] [US2] Tests de componente para `FormularioCorreccion` (rechazo sin
+- [X] T027 [P] [US2] Tests de componente para `FormularioCorreccion` (rechazo sin
   motivo, envío exitoso) en `frontend/src/components/FormularioCorreccion.test.jsx`
 
 **Checkpoint**: US1 y US2 funcionan de forma independiente y en conjunto.
@@ -180,43 +180,43 @@ ambos con motivo obligatorio, y el efecto se refleja en horas trabajadas y situa
 
 ### Tests for User Story 3
 
-- [ ] T028 [P] [US3] Tests unitarios del campo `tipo` en Pausa (`descuentoPausas` sin
+- [X] T028 [P] [US3] Tests unitarios del campo `tipo` en Pausa (`descuentoPausas` sin
   cambios de comportamiento; `retiro_anticipado` con `hasta = cierreOficial`) en
   `tests/unit/presentismo-pausa.test.js` — DEBEN fallar antes de T032
-- [ ] T029 [P] [US3] Tests unitarios: `calcularSituacionHoy` con una pausa vigente
+- [X] T029 [P] [US3] Tests unitarios: `calcularSituacionHoy` con una pausa vigente
   `tipo: 'retiro_anticipado'` para el día → `RETIRO_ANTICIPADO` (extiende
   `tests/unit/presentismo-situacion-dia.test.js` de T002) — DEBEN fallar antes de T033
-- [ ] T030 [P] [US3] Tests de contrato para `POST /api/fichadas-hoy/pausas` y `POST
+- [X] T030 [P] [US3] Tests de contrato para `POST /api/fichadas-hoy/pausas` y `POST
   /api/fichadas-hoy/retiros-anticipados` (400 sin motivo, 400 `desde >= hasta` / hora
   posterior al cierre, 200) en `tests/contract/web-api-fichadas-hoy.test.js` — DEBEN
   fallar antes de T035
-- [ ] T031 [P] [US3] Test de integración: la pausa descuenta horas dentro de la
+- [X] T031 [P] [US3] Test de integración: la pausa descuenta horas dentro de la
   jornada efectiva; el retiro anticipado marca la situación y no duplica una salida
   real fichada después (spec, edge case) en
   `tests/integration/fichadas-hoy.integration.test.js` — DEBE fallar antes de T035
 
 ### Implementation for User Story 3
 
-- [ ] T032 [US3] Agregar el campo `tipo: 'intermedia' | 'retiro_anticipado'` (default
+- [X] T032 [US3] Agregar el campo `tipo: 'intermedia' | 'retiro_anticipado'` (default
   `'intermedia'`) a la forma de Pausa en `src/presentismo/domain/pausa.js` y su paso a
   través en `src/presentismo/adapters/file-presentismo-repository.js` — depende de T028
-- [ ] T033 [US3] Extender `calcularSituacionHoy` para priorizar `RETIRO_ANTICIPADO`
+- [X] T033 [US3] Extender `calcularSituacionHoy` para priorizar `RETIRO_ANTICIPADO`
   cuando exista una pausa vigente con `tipo: 'retiro_anticipado'` para el día — depende
   de T029, T032
-- [ ] T034 [US3] Agregar `cargarRetiroAnticipado({ periodo, legajo, fecha, hora, autor,
+- [X] T034 [US3] Agregar `cargarRetiroAnticipado({ periodo, legajo, fecha, hora, autor,
   motivo })` a `calcular-presentismo-service.js`: deriva `hasta` del `cierreOficial` de
   la modalidad del empleado ese día y delega en `cargarPausa` con `tipo:
   'retiro_anticipado'` — depende de T033
-- [ ] T035 [US3] Implementar los handlers `POST /api/fichadas-hoy/pausas` y `POST
+- [X] T035 [US3] Implementar los handlers `POST /api/fichadas-hoy/pausas` y `POST
   /api/fichadas-hoy/retiros-anticipados` en `fichadas-hoy-handlers.js` — depende de
   T034; hace pasar T030/T031
-- [ ] T036 [P] [US3] Agregar `agregarPausa(...)` y `registrarRetiroAnticipado(...)` a
+- [X] T036 [P] [US3] Agregar `agregarPausa(...)` y `registrarRetiroAnticipado(...)` a
   `frontend/src/api/fichadas-hoy-client.js`
-- [ ] T037 [US3] Crear `frontend/src/components/FormularioPausaRetiro.jsx` (dos modos:
+- [X] T037 [US3] Crear `frontend/src/components/FormularioPausaRetiro.jsx` (dos modos:
   pausa intermedia / retiro anticipado; motivo obligatorio en ambos) — depende de T036
-- [ ] T038 [US3] Integrar `FormularioPausaRetiro` en `PaginaFichadasHoy`/
+- [X] T038 [US3] Integrar `FormularioPausaRetiro` en `PaginaFichadasHoy`/
   `TablaFichadasHoy` — depende de T037, T013
-- [ ] T039 [P] [US3] Tests de componente para `FormularioPausaRetiro` en
+- [X] T039 [P] [US3] Tests de componente para `FormularioPausaRetiro` en
   `frontend/src/components/FormularioPausaRetiro.test.jsx`
 
 **Checkpoint**: US1, US2 y US3 funcionan de forma independiente.
@@ -240,17 +240,17 @@ nuevo dentro del proceso de fichadas.
 
 ### Tests for User Story 4
 
-- [ ] T040 [P] [US4] Test unitario: `startService()` expone `tick()` en el handle
+- [X] T040 [P] [US4] Test unitario: `startService()` expone `tick()` en el handle
   devuelto (hoy solo `{ getState, stop }`) en
   `tests/unit/consulta-programada-service.test.js` — DEBE fallar antes de T044
-- [ ] T041 [P] [US4] Test de contrato para `POST /tick` del servidor de control (200
+- [X] T041 [P] [US4] Test de contrato para `POST /tick` del servidor de control (200
   con la forma `{ resultado, fichadasNuevas, detail }`) en
   `tests/contract/control-api.test.js` (contracts/control-api.md) — DEBE fallar antes
   de T045
-- [ ] T042 [P] [US4] Test de contrato para `POST /api/fichadas-hoy/consultar-reloj`
+- [X] T042 [P] [US4] Test de contrato para `POST /api/fichadas-hoy/consultar-reloj`
   (200 con vista actualizada, 502 si el control local no responde) en
   `tests/contract/web-api-fichadas-hoy.test.js` — DEBE fallar antes de T047
-- [ ] T043 [P] [US4] Test de integración: servidor de control caído → 502 sin alterar
+- [X] T043 [P] [US4] Test de integración: servidor de control caído → 502 sin alterar
   la vista existente; servidor de control con 2 fichadas nuevas → vista actualizada;
   dos consultas en paralelo → single-flight (una `"ok"`/`"omitido"`, la otra
   `"omitido"`) en `tests/integration/fichadas-hoy.integration.test.js` — DEBE fallar
@@ -258,27 +258,27 @@ nuevo dentro del proceso de fichadas.
 
 ### Implementation for User Story 4
 
-- [ ] T044 [US4] Exponer `tick` en el handle devuelto por `startService()` en
+- [X] T044 [US4] Exponer `tick` en el handle devuelto por `startService()` en
   `src/service/consulta-programada-service.js` — depende de T040
-- [ ] T045 [US4] Agregar un servidor de control HTTP local (`node:http`, atado a
+- [X] T045 [US4] Agregar un servidor de control HTTP local (`node:http`, atado a
   `127.0.0.1`, puerto `FICHADAS_CONTROL_PORT`; si la variable no está seteada, no se
   levanta) con `POST /tick` en `src/cli/consulta-programada.js` — depende de T044; hace
   pasar T041
-- [ ] T046 [P] [US4] Crear `src/presentismo/service/consultar-reloj-cliente.js`:
+- [X] T046 [P] [US4] Crear `src/presentismo/service/consultar-reloj-cliente.js`:
   `fetch` `POST` a `FICHADAS_CONTROL_URL` + `/tick`, mapeando errores de conexión a un
   resultado tipado (`{ ok: false, motivo }`) — depende de T045
-- [ ] T047 [US4] Implementar el handler `POST /api/fichadas-hoy/consultar-reloj` en
+- [X] T047 [US4] Implementar el handler `POST /api/fichadas-hoy/consultar-reloj` en
   `fichadas-hoy-handlers.js`, usando `consultar-reloj-cliente.js` y traduciendo
   `resultado: "error"` o fallo de conexión a `502 ERROR_CONSULTANDO_RELOJ` — depende de
   T046; hace pasar T042/T043
-- [ ] T048 [P] [US4] Agregar `consultarReloj()` a
+- [X] T048 [P] [US4] Agregar `consultarReloj()` a
   `frontend/src/api/fichadas-hoy-client.js`
-- [ ] T049 [US4] Crear `frontend/src/components/BotonConsultarReloj.jsx` (dispara la
+- [X] T049 [US4] Crear `frontend/src/components/BotonConsultarReloj.jsx` (dispara la
   consulta, se deshabilita mientras está en curso, muestra el error sin perder la
   tabla) — depende de T048
-- [ ] T050 [US4] Integrar `BotonConsultarReloj` en `PaginaFichadasHoy` (refresca la
+- [X] T050 [US4] Integrar `BotonConsultarReloj` en `PaginaFichadasHoy` (refresca la
   vista tras una consulta exitosa) — depende de T049, T013
-- [ ] T051 [P] [US4] Test de componente para `BotonConsultarReloj` (estado en curso,
+- [X] T051 [P] [US4] Test de componente para `BotonConsultarReloj` (estado en curso,
   error visible, éxito refresca la tabla) en
   `frontend/src/components/BotonConsultarReloj.test.jsx`
 
@@ -288,14 +288,14 @@ nuevo dentro del proceso de fichadas.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T052 [P] Actualizar `docs/` (o el README relevante de despliegue) con el flujo de
+- [X] T052 [P] Actualizar `docs/` (o el README relevante de despliegue) con el flujo de
   dos procesos + control local de la Historia 4 (research.md §4)
-- [ ] T053 Ejecutar manualmente los 4 escenarios de `quickstart.md` de punta a punta y
+- [X] T053 Ejecutar manualmente los 4 escenarios de `quickstart.md` de punta a punta y
   registrar el resultado (incluida la verificación de auditoría transversal)
-- [ ] T054 Revisar que los eventos NDJSON `correccion_alta`/`pausa_alta` (Principio V)
+- [X] T054 Revisar que los eventos NDJSON `correccion_alta`/`pausa_alta` (Principio V)
   cubran los campos nuevos (entrada/salida corregidas, `tipo` de pausa) sin datos
   biométricos, en `src/presentismo/service/calcular-presentismo-service.js`
-- [ ] T055 [P] Revisar `specs/010-fichadas-hoy/checklists/requirements.md`: confirmar
+- [X] T055 [P] Revisar `specs/010-fichadas-hoy/checklists/requirements.md`: confirmar
   que ningún supuesto documentado en Assumptions quedó invalidado por el diseño final
   (en particular, el hallazgo de research.md §4 sobre procesos separados)
 

@@ -14,9 +14,12 @@ instalación que no use esta feature no cambia su superficie de red).
 
 ## `POST /tick`
 
-Sin body. Llama a `scheduler.tick()` (mismo método que ya usa el temporizador interno
-de 5 min; respeta el single-flight `consultaEnCurso` de 002 — si ya hay una consulta en
-curso, se comporta igual que un tick del temporizador que encuentra el lock tomado).
+Sin body. Llama a `scheduler.tick({ forzarConsulta: true })` (mismo método que ya usa
+el temporizador interno de 5 min, con una diferencia: al ser un disparo explícito del
+administrador, **consulta al reloj en cualquier momento**, aunque ninguna ventana de
+checkpoint esté abierta — el chequeo de ventana solo aplica al ciclo programado).
+Respeta el single-flight `consultaEnCurso` de 002: si ya hay una consulta en curso, se
+comporta igual que un tick del temporizador que encuentra el lock tomado (`"omitido"`).
 
 - **200**
   ```json

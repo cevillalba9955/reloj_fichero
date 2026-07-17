@@ -55,7 +55,12 @@ export function createScheduler({
   // `await`: si se hiciera despues de awaitear la evaluacion de checkpoints,
   // dos ticks solapados podrian pasar ambos el chequeo antes de que
   // cualquiera de los dos marque `consultaEnCurso = true` (race condition).
-  async function tick() {
+  //
+  // feature 010: `forzarConsulta` saltea el chequeo de ventana abierta (la
+  // consulta manual del administrador puede dispararse en cualquier momento)
+  // pero respeta EXACTAMENTE el mismo single-flight — nunca dos sesiones TCP
+  // concurrentes. El temporizador interno sigue llamando tick() sin opciones.
+  async function tick({ forzarConsulta = false } = {}) {
     if (consultaEnCurso) {
       registrar({ resultado: 'omitido', fichadasNuevas: 0, duracionMs: 0, detail: 'consulta ya en curso' });
       return;
@@ -67,7 +72,7 @@ export function createScheduler({
       await evaluarCheckpoints(inicio);
 
       const hayCheckpointAbierto = checkpoints.some((cp) => cp.estaAbierto());
-      if (!hayCheckpointAbierto) {
+      if (!hayCheckpointAbierto && !forzarConsulta) {
         registrar({ resultado: 'omitido', fichadasNuevas: 0, duracionMs: 0 });
         return;
       }

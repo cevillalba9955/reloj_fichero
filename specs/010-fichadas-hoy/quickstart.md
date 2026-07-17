@@ -78,3 +78,32 @@ de prueba en el puerto de control reemplaza al proceso real (ver
   (`data/presentismo/<periodo>.json`) y confirmar que cada corrección/pausa/retiro
   tiene `autor`, `motivo`, `fechaHora` y (para correcciones) el valor anterior y
   nuevo — sin excepciones sin justificación (SC-005 del spec).
+
+## Resultado de ejecución (T053 — 2026-07-16)
+
+Ejecutado de punta a punta el 2026-07-16 (período 202607) sobre el servidor web
+real (`crearApp`), el servicio de fichadas real (`startService` +
+`crearServidorControl`, `POST /tick` en loopback) y un mock del reloj RS956 a
+nivel de protocolo (guion de handshake/0xB4/0xA4/0x81 con payload desfasado,
+mismo patrón que los tests de la feature 002). **11/11 pasos PASS**:
+
+| Escenario | Resultado |
+|-----------|-----------|
+| 1 — Ver estado del día (PRESENTE / ESPERANDO-AUSENTE) | PASS |
+| 2 — Corrección con motivo → 200 y fila recalculada | PASS |
+| 2 — Corrección sin motivo → 400, nada persiste | PASS |
+| 2 — Fichada real posterior no pisa la corrección | PASS |
+| 3 — Pausa descuenta dentro de la jornada efectiva | PASS |
+| 3 — Retiro anticipado → `RETIRO_ANTICIPADO` | PASS |
+| 3 — Retiro sin motivo → 400 | PASS |
+| 4 — Consulta manual trae 2 fichadas y la vista las refleja | PASS |
+| 4 — Dos consultas en paralelo → single-flight | PASS |
+| 4 — Servicio caído → 502, datos previos intactos | PASS |
+| Auditoría transversal (autor/motivo/fechaHora/valores) | PASS |
+
+Nota operativa: la consulta manual usa `scheduler.tick({ forzarConsulta: true })`
+y abre sesión contra el reloj **en cualquier momento**, aunque ninguna ventana de
+checkpoint esté abierta (el chequeo de ventana solo aplica al ciclo programado).
+Reejecutado el guion completo con el servicio a las 15:00 (fuera de la ventana
+07:00–07:30): 11/11 PASS, incluida la entrega de las 2 fichadas nuevas por la
+consulta manual.
