@@ -120,9 +120,19 @@ export function startService(options) {
     };
   }
 
+  // feature 010 (US4): dispara un ciclo bajo demanda y devuelve su resultado —
+  // misma forma que getUltimoCiclo(). Lo consume el servidor de control HTTP
+  // local (POST /tick, research.md §4). Es un disparo explícito del
+  // administrador: consulta al reloj en cualquier momento (forzarConsulta
+  // saltea la ventana de checkpoint), respetando el single-flight de 002.
+  async function tick() {
+    await scheduler.tick({ forzarConsulta: true });
+    return scheduler.getUltimoCiclo();
+  }
+
   function stop() {
     scheduler.stop();
   }
 
-  return { getState, stop };
+  return { getState, tick, stop };
 }

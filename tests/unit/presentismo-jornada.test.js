@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { calcularJornadaAuto, EstadoJornada } from '../../src/presentismo/domain/jornada.js';
+import { calcularJornadaAuto, aplicarAjustes, EstadoJornada } from '../../src/presentismo/domain/jornada.js';
+import { crearCorreccion } from '../../src/presentismo/domain/correccion.js';
 import { Clasificacion } from '../../src/presentismo/domain/calendario-mes.js';
 
 // Parámetros mensuales por defecto: 07:00–16:00, margen 30/30, jornada 540.
@@ -129,4 +130,81 @@ test('US4 detalle: motivo de incompletitud disponible', () => {
   const r = calc(Clasificacion.LABORABLE, [422]); // solo entrada
   assert.equal(r.estado, EstadoJornada.INCOMPLETA);
   assert.equal(r.motivo, 'sin salida');
+});
+
+// ---- feature 010 (US2): aplicarAjustes con corrección de entrada/salida ----
+
+function correccionDe(campos) {
+  return crearCorreccion({
+    periodo: '202607', legajo: 1, fecha: '2026-07-16', motivo: 'ajuste autorizado', ...campos,
+  });
+}
+
+test('corrección de entrada recalcula entrada efectiva y el total (FR-003/FR-005)', () => {
+  // Entrada real 08:10 (fuera de margen) + salida 15:58 → auto 7:50.
+  const auto = calc(Clasificacion.LABORABLE, [490, 958]);
+  assert.equal(auto.totalDiario, 470);
+  // Corregida a 07:05 (dentro de margen) → efectiva 07:00, total 9:00.
+  const ajustada = aplicarAjustes(auto, {
+    correccion: correccionDe({ entradaCorregida: 425, valorCalculado: 470 }),
+    params: PARAMS,
+  });
+  assert.equal(ajustada.entradaEfectiva, 420);
+  assert.equal(ajustada.salidaEfectiva, 960);
+  assert.equal(ajustada.totalDiario, 540);
+  assert.equal(ajustada.correccionVigente, true);
+  assert.equal(ajustada.requiereRevision, false, 'el auto no cambió desde el snapshot');
+});
+
+test('corrección de salida sobre jornada incompleta deriva el total', () => {
+  // Solo entrada 07:05 → auto 0 (sin salida).
+  const auto = calc(Clasificacion.LABORABLE, [425]);
+  assert.equal(auto.totalDiario, 0);
+  const ajustada = aplicarAjustes(auto, {
+    correccion: correccionDe({ salidaCorregida: 958, valorCalculado: 0 }),
+    params: PARAMS,
+  });
+  assert.equal(ajustada.salidaEfectiva, 960, 'la salida corregida respeta el margen de cierre');
+  assert.equal(ajustada.totalDiario, 540);
+});
+
+test('corrección de entrada y salida sin fichadas reconstruye la jornada', () => {
+  const auto = calc(Clasificacion.LABORABLE, []);
+  assert.equal(auto.estado, EstadoJornada.SIN_FICHADAS);
+  const ajustada = aplicarAjustes(auto, {
+    correccion: correccionDe({ entradaCorregida: 425, salidaCorregida: 958, valorCalculado: 0 }),
+    params: PARAMS,
+  });
+  assert.equal(ajustada.totalDiario, 540);
+});
+
+test('solo entrada corregida, sin salida real ni corregida → total sigue en 0', () => {
+  const auto = calc(Clasificacion.LABORABLE, []);
+  const ajustada = aplicarAjustes(auto, {
+    correccion: correccionDe({ entradaCorregida: 425, valorCalculado: 0 }),
+    params: PARAMS,
+  });
+  assert.equal(ajustada.entradaEfectiva, 420);
+  assert.equal(ajustada.totalDiario, 0, 'la jornada sigue incompleta');
+});
+
+test('las pausas vigentes se descuentan del total derivado de la corrección', () => {
+  const auto = calc(Clasificacion.LABORABLE, [425]);
+  const ajustada = aplicarAjustes(auto, {
+    correccion: correccionDe({ salidaCorregida: 958, valorCalculado: 0 }),
+    pausas: [{ desde: 720, hasta: 780, vigente: true }], // 12:00–13:00
+    params: PARAMS,
+  });
+  assert.equal(ajustada.totalDiario, 480);
+  assert.equal(ajustada.descuentoPausas, 60);
+});
+
+test('valorCorregido explícito prevalece sobre el total derivado (compat 004)', () => {
+  const auto = calc(Clasificacion.LABORABLE, [490, 958]);
+  const ajustada = aplicarAjustes(auto, {
+    correccion: correccionDe({ entradaCorregida: 425, valorCorregido: 600, valorCalculado: 470 }),
+    params: PARAMS,
+  });
+  assert.equal(ajustada.entradaEfectiva, 420, 'la entrada efectiva se recalcula igual');
+  assert.equal(ajustada.totalDiario, 600, 'el override de total manda');
 });

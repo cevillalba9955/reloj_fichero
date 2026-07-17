@@ -51,6 +51,57 @@ test('requiereRevision cuando el auto por debajo cambió (FR-029)', () => {
   assert.equal(ajustada.totalDiario, 480, 'la corrección sigue prevaleciendo');
 });
 
+// ---- feature 010 (US2): corrección a nivel de entrada/salida ----
+
+test('crearCorreccion acepta entrada/salida corregidas (minutos-del-día) y deriva camposCorregidos', () => {
+  const soloEntrada = crearCorreccion({
+    periodo: '202607', legajo: 1, fecha: '2026-07-16',
+    entradaCorregida: 425, motivo: 'fichada de entrada perdida',
+  });
+  assert.equal(soloEntrada.entradaCorregida, 425);
+  assert.equal(soloEntrada.salidaCorregida, null);
+  assert.equal(soloEntrada.valorCorregido, null);
+  assert.deepEqual(soloEntrada.camposCorregidos, ['entrada']);
+
+  const ambas = crearCorreccion({
+    periodo: '202607', legajo: 1, fecha: '2026-07-16',
+    entradaCorregida: 425, salidaCorregida: 958, motivo: 'reloj sin conexión',
+  });
+  assert.deepEqual(ambas.camposCorregidos, ['entrada', 'salida']);
+
+  const soloTotal = crearCorreccion({
+    periodo: '202607', legajo: 1, fecha: '2026-07-16',
+    valorCorregido: 540, motivo: 'ajuste de total',
+  });
+  assert.deepEqual(soloTotal.camposCorregidos, ['horas'], 'compat 004');
+  assert.equal(soloTotal.entradaCorregida, null);
+});
+
+test('crearCorreccion exige al menos un valor a corregir', () => {
+  assert.throws(
+    () => crearCorreccion({ periodo: '202607', legajo: 1, fecha: '2026-07-16', motivo: 'x' }),
+    /corregir/,
+  );
+});
+
+test('crearCorreccion valida el rango de minutos de entrada/salida', () => {
+  assert.throws(
+    () => crearCorreccion({ periodo: '202607', legajo: 1, fecha: '2026-07-16', entradaCorregida: 1500, motivo: 'x' }),
+    /minutos/,
+  );
+  assert.throws(
+    () => crearCorreccion({ periodo: '202607', legajo: 1, fecha: '2026-07-16', salidaCorregida: -5, motivo: 'x' }),
+    /minutos/,
+  );
+});
+
+test('la corrección de entrada/salida también exige motivo (FR-004)', () => {
+  assert.throws(
+    () => crearCorreccion({ periodo: '202607', legajo: 1, fecha: '2026-07-16', entradaCorregida: 425, motivo: '  ' }),
+    /motivo/,
+  );
+});
+
 test('la corrección puede exceder la jornada esperada (FR-024)', () => {
   const auto = calcularJornadaAuto({ clasificacion: Clasificacion.LABORABLE, fichadas: [{ id: 'a', hora: 425 }, { id: 'b', hora: 958 }], params: PARAMS });
   const correccion = crearCorreccion({ periodo: '202607', legajo: 1, fecha: '2026-07-10', valorCalculado: 540, valorCorregido: 600, motivo: 'hora extra acordada' });

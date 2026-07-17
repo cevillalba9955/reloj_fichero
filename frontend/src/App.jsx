@@ -6,18 +6,22 @@ import EstadoVacio from './components/EstadoVacio.jsx';
 import EncabezadoPeriodo from './components/EncabezadoPeriodo.jsx';
 import NavegacionMes from './components/NavegacionMes.jsx';
 import DialogoConfirmarReclasificar from './components/DialogoConfirmarReclasificar.jsx';
+import PaginaFichadasHoy from './components/PaginaFichadasHoy.jsx';
 
 // feature 007 — Pantalla principal. Orquesta la carga del último mes generado,
 // los estados (cargando / con datos / vacío global / vacío de un mes / error),
 // la navegación entre meses (US4) y la reclasificación con confirmación (US3).
 // El único acceso a datos es el cliente `/api` (Principio I).
+// feature 010 — se agrega una navegación mínima de dos pestañas (sin librería
+// de ruteo) para alternar entre el calendario y la página "Fichadas de hoy".
 
 // Instancia única a nivel de módulo: un default de parámetro se reevalúa en
 // cada render, y una referencia nueva de `cliente` en cada render invalida
 // useCallback/useEffect en cascada y dispara un loop infinito de fetch.
 const clientePorDefecto = crearClienteCalendario();
 
-export default function App({ cliente = clientePorDefecto }) {
+export default function App({ cliente = clientePorDefecto, clienteFichadas = undefined }) {
+  const [pestania, setPestania] = useState('calendario');
   const [estado, setEstado] = useState({ tipo: 'cargando' });
   const [ultimo, setUltimo] = useState(null);
   const [periodos, setPeriodos] = useState([]);
@@ -106,8 +110,26 @@ export default function App({ cliente = clientePorDefecto }) {
   return (
     <main className="app">
       <header className="app-header">
-        <h1>Calendario de presentismo</h1>
-        {periodoMostrado && ultimo && (
+        <h1>Presentismo</h1>
+        <nav className="pestanias" aria-label="Secciones">
+          <button
+            type="button"
+            className={pestania === 'calendario' ? 'pestania activa' : 'pestania'}
+            aria-pressed={pestania === 'calendario'}
+            onClick={() => setPestania('calendario')}
+          >
+            Calendario
+          </button>
+          <button
+            type="button"
+            className={pestania === 'fichadas-hoy' ? 'pestania activa' : 'pestania'}
+            aria-pressed={pestania === 'fichadas-hoy'}
+            onClick={() => setPestania('fichadas-hoy')}
+          >
+            Fichadas de hoy
+          </button>
+        </nav>
+        {pestania === 'calendario' && periodoMostrado && ultimo && (
           <NavegacionMes
             periodo={periodoMostrado}
             mesActual={mesActual}
@@ -118,6 +140,10 @@ export default function App({ cliente = clientePorDefecto }) {
         )}
       </header>
 
+      {pestania === 'fichadas-hoy' && <PaginaFichadasHoy cliente={clienteFichadas} />}
+
+      {pestania === 'calendario' && (
+      <>
       {aviso && (
         <p className="aviso" role="alert">
           {aviso}
@@ -172,6 +198,8 @@ export default function App({ cliente = clientePorDefecto }) {
           onConfirmar={confirmarReclasificacion}
           onCancelar={() => setDialogo(null)}
         />
+      )}
+      </>
       )}
     </main>
   );

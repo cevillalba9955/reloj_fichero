@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { descuentoPausas } from '../../src/presentismo/domain/pausa.js';
+import { descuentoPausas, TipoPausa, normalizarTipoPausa } from '../../src/presentismo/domain/pausa.js';
 import { calcularJornadaAuto, aplicarAjustes, EstadoJornada } from '../../src/presentismo/domain/jornada.js';
 import { Clasificacion } from '../../src/presentismo/domain/calendario-mes.js';
 
@@ -76,4 +76,32 @@ test('pausa no vigente no descuenta', () => {
   const ajustada = aplicarAjustes(completa(), { pausas: [{ desde: 720, hasta: 780, vigente: false }] });
   assert.equal(ajustada.descuentoPausas, 0);
   assert.equal(ajustada.totalDiario, 540);
+});
+
+// ---- feature 010 (US3): campo `tipo` de la Pausa ----
+
+test('normalizarTipoPausa: default intermedia, valida el catálogo', () => {
+  assert.equal(normalizarTipoPausa(undefined), TipoPausa.INTERMEDIA);
+  assert.equal(normalizarTipoPausa(null), TipoPausa.INTERMEDIA);
+  assert.equal(normalizarTipoPausa('intermedia'), TipoPausa.INTERMEDIA);
+  assert.equal(normalizarTipoPausa('retiro_anticipado'), TipoPausa.RETIRO_ANTICIPADO);
+  assert.throws(() => normalizarTipoPausa('almuerzo'), /tipo/);
+});
+
+test('descuentoPausas no distingue tipo: un retiro anticipado descuenta como cualquier pausa', () => {
+  // Retiro 14:30 → cierre 16:00 sobre horario efectivo 07:00–16:00 = 90 min.
+  const pausas = [{ desde: 870, hasta: 960, vigente: true, tipo: TipoPausa.RETIRO_ANTICIPADO }];
+  assert.equal(descuentoPausas(pausas, 420, 960), 90);
+
+  // Mezcla de tipos: comportamiento idéntico al de 004 (sin cambios).
+  const mezcla = [
+    { desde: 720, hasta: 780, vigente: true, tipo: TipoPausa.INTERMEDIA }, // 60
+    { desde: 870, hasta: 960, vigente: true, tipo: TipoPausa.RETIRO_ANTICIPADO }, // 90
+  ];
+  assert.equal(descuentoPausas(mezcla, 420, 960), 150);
+});
+
+test('una pausa sin tipo (persistida por 004) sigue descontando igual (retrocompat)', () => {
+  const ajustada = aplicarAjustes(completa(), { pausas: [{ desde: 720, hasta: 780, vigente: true }] });
+  assert.equal(ajustada.descuentoPausas, 60);
 });
