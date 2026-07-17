@@ -7,18 +7,35 @@ import { createSessionLogger } from '../logging/session-logger.js';
 
 export class InvalidArgsError extends Error {}
 
-// contracts/cli-contract.md: --host obligatorio, resto con default.
-export function parseCliArgs(argv) {
+// Precedencia de configuración: argumento CLI explícito > variable de entorno
+// FICHADAS_* > default. Mismo helper que src/cli/consulta-programada.js, para
+// que el `.env` (cargado con `npm start`, que usa --env-file-if-exists) le
+// sirva a este CLI igual que al servicio programado.
+function pick(cliValue, envValue, def) {
+  if (cliValue !== undefined) return cliValue;
+  if (envValue !== undefined && envValue !== '') return envValue;
+  return def;
+}
+
+function parseBooleano(envValue) {
+  return envValue === 'true' || envValue === '1';
+}
+
+// contracts/cli-contract.md: --host obligatorio (o FICHADAS_HOST), resto con
+// default o su variable FICHADAS_* equivalente.
+export function parseCliArgs(argv, env = process.env) {
   let values;
   try {
+    // Sin `default` en parseArgs: un valor no provisto queda `undefined`, para
+    // poder distinguir "no lo pasaron por CLI" y caer al env/default (pick()).
     ({ values } = parseArgs({
       args: argv,
       options: {
         host: { type: 'string' },
-        port: { type: 'string', default: '5005' },
-        'output-dir': { type: 'string', default: './output' },
-        'log-dir': { type: 'string', default: './logs' },
-        'timeout-ms': { type: 'string', default: '5000' },
+        port: { type: 'string' },
+        'output-dir': { type: 'string' },
+        'log-dir': { type: 'string' },
+        'timeout-ms': { type: 'string' },
         'full-handshake': { type: 'boolean', default: false },
       },
       strict: true,
@@ -27,26 +44,33 @@ export function parseCliArgs(argv) {
     throw new InvalidArgsError(err.message);
   }
 
-  if (!values.host) {
-    throw new InvalidArgsError('Falta --host (IP del reloj RS596). Uso: --host <ip> [--port 5005] [--output-dir ./output] [--log-dir ./logs] [--timeout-ms 5000]');
+  const host = pick(values.host, env.FICHADAS_HOST, undefined);
+  if (!host) {
+    throw new InvalidArgsError(
+      'Falta la IP del reloj RS596: pasala por --host <ip> o por la variable de entorno FICHADAS_HOST. ' +
+      'Uso: --host <ip> [--port 5005] [--output-dir ./output] [--log-dir ./logs] [--timeout-ms 5000]. ' +
+      'Cualquiera de estos tambien se puede fijar por FICHADAS_* en el .env.'
+    );
   }
 
-  const port = Number(values.port);
-  const timeoutMs = Number(values['timeout-ms']);
+  const portRaw = pick(values.port, env.FICHADAS_PORT, '5005');
+  const timeoutMsRaw = pick(values['timeout-ms'], env.FICHADAS_TIMEOUT_MS, '5000');
+  const port = Number(portRaw);
+  const timeoutMs = Number(timeoutMsRaw);
   if (!Number.isInteger(port) || port <= 0) {
-    throw new InvalidArgsError(`--port invalido: "${values.port}"`);
+    throw new InvalidArgsError(`--port / FICHADAS_PORT invalido: "${portRaw}"`);
   }
   if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
-    throw new InvalidArgsError(`--timeout-ms invalido: "${values['timeout-ms']}"`);
+    throw new InvalidArgsError(`--timeout-ms / FICHADAS_TIMEOUT_MS invalido: "${timeoutMsRaw}"`);
   }
 
   return {
-    host: values.host,
+    host,
     port,
-    outputDir: values['output-dir'],
-    logDir: values['log-dir'],
+    outputDir: pick(values['output-dir'], env.FICHADAS_OUTPUT_DIR, './output'),
+    logDir: pick(values['log-dir'], env.FICHADAS_LOG_DIR, './logs'),
     timeoutMs,
-    fullHandshake: values['full-handshake'],
+    fullHandshake: values['full-handshake'] || parseBooleano(env.FICHADAS_FULL_HANDSHAKE),
   };
 }
 

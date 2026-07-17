@@ -18,12 +18,16 @@ function withTempDirs(fn) {
   }
 }
 
-test('parseCliArgs: exige --host', () => {
-  assert.throws(() => parseCliArgs([]), InvalidArgsError);
+// Los tests pasan `env` explícito (normalmente `{}`) para ser herméticos: la
+// resolución CLI > FICHADAS_* > default no debe depender del entorno real
+// (mismo criterio que tests/unit/consulta-programada-cli.test.js).
+
+test('parseCliArgs: exige --host (ni --host ni FICHADAS_HOST)', () => {
+  assert.throws(() => parseCliArgs([], {}), InvalidArgsError);
 });
 
 test('parseCliArgs: aplica defaults de contracts/cli-contract.md', () => {
-  const options = parseCliArgs(['--host', '192.168.1.50']);
+  const options = parseCliArgs(['--host', '192.168.1.50'], {});
   assert.equal(options.host, '192.168.1.50');
   assert.equal(options.port, 5005);
   assert.equal(options.outputDir, './output');
@@ -33,12 +37,39 @@ test('parseCliArgs: aplica defaults de contracts/cli-contract.md', () => {
 });
 
 test('parseCliArgs: --full-handshake activa la secuencia completa de 0x13 (FR-002)', () => {
-  const options = parseCliArgs(['--host', '192.168.1.50', '--full-handshake']);
+  const options = parseCliArgs(['--host', '192.168.1.50', '--full-handshake'], {});
   assert.equal(options.fullHandshake, true);
 });
 
 test('parseCliArgs: rechaza --port no numerico', () => {
-  assert.throws(() => parseCliArgs(['--host', '1.2.3.4', '--port', 'abc']), InvalidArgsError);
+  assert.throws(() => parseCliArgs(['--host', '1.2.3.4', '--port', 'abc'], {}), InvalidArgsError);
+});
+
+// ---- Configuración por variables de entorno FICHADAS_* (.env, npm start) ----
+
+test('parseCliArgs: toma host y parametros desde FICHADAS_* cuando no se pasan por CLI', () => {
+  const env = {
+    FICHADAS_HOST: '10.0.0.5',
+    FICHADAS_PORT: '6000',
+    FICHADAS_OUTPUT_DIR: './otro-output',
+    FICHADAS_LOG_DIR: './otros-logs',
+    FICHADAS_TIMEOUT_MS: '8000',
+    FICHADAS_FULL_HANDSHAKE: 'true',
+  };
+  const options = parseCliArgs([], env);
+  assert.equal(options.host, '10.0.0.5');
+  assert.equal(options.port, 6000);
+  assert.equal(options.outputDir, './otro-output');
+  assert.equal(options.logDir, './otros-logs');
+  assert.equal(options.timeoutMs, 8000);
+  assert.equal(options.fullHandshake, true);
+});
+
+test('parseCliArgs: el argumento CLI tiene precedencia sobre FICHADAS_*', () => {
+  const env = { FICHADAS_HOST: '10.0.0.5', FICHADAS_PORT: '6000' };
+  const options = parseCliArgs(['--host', '192.168.1.82', '--port', '7000'], env);
+  assert.equal(options.host, '192.168.1.82');
+  assert.equal(options.port, 7000);
 });
 
 test('runAndReport: caso 0 fichadas pendientes -> exit 0, exporta records: [] y lo informa en consola', async () => {

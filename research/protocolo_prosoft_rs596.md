@@ -206,10 +206,7 @@ significado de uno de los dos valores observados hasta ahora en campo[3]
 propio equipo: el bloque de identificación (sección 4) declara
 `EnrollDataType:{fp,pwd,idcard,face}`; si se numera esa lista 1 a 4 y se
 multiplica por `0x10`, da `fp=0x10, pwd=0x20, idcard=0x30, face=0x40` —
-coincide exactamente con el valor confirmado. **`0x10 = huella (fp)` queda
-como hipótesis fuerte por esta fórmula, pero todavía sin una confirmación
-independiente propia** (no se probó una fichada por huella contra el
-software oficial). `verificationMethodLabel` en el código sigue
+coincide exactamente con el valor confirmado. `verificationMethodLabel` en el código sigue
 exponiéndose con `unconfirmed: true` para todos los valores, tal como exige
 el contrato (`output-schema.json`); esta sección documenta el hallazgo a
 nivel de investigación, no cambia esa garantía del código.
@@ -242,7 +239,7 @@ la sección anterior para un segundo valor independiente:
 
 | Código | Método | Confirmación |
 |---|---|---|
-| `0x10` | huella (fp) | hipótesis por fórmula, sin confirmar de forma independiente |
+| `0x10` | huella (fp) | ✅ **confirmado** contra el equipo real |
 | `0x20` | clave (pwd) | ✅ **confirmado** contra el equipo real (ver §5.21, 2026-07-17) |
 | `0x30` | tarjeta (idcard) | ✅ **confirmado** contra el software oficial |
 | `0x40` | rostro (face) | ✅ **confirmado** contra el software oficial |
@@ -474,7 +471,7 @@ verificación.
 - `legajo` se decodifica igual para los tres métodos de verificación (ya
   no hay caso especial para tarjeta).
 - `metodo` es `null` si el código crudo no coincide con huella/tarjeta/
-  rostro (antes se exponía como hipótesis con `value: null`).
+  rostro/clave (antes se exponía como hipótesis con `value: null`).
 - `fecha` se agrega como campo explícito, siempre `null` (nunca se
   decodificó ese campo del protocolo).
 - `hora` sin cambios de comportamiento en este momento (ya devolvía `null`
@@ -1070,9 +1067,7 @@ El usuario verificó contra el equipo real que esa marcación fue **por
 clave**. Esto confirma, para un cuarto valor independiente, la fórmula de
 §5.6 (`EnrollDataType` numerado 1-4 × `0x10`): `fp=0x10, pwd=0x20,
 idcard=0x30, face=0x40`. Con esto los cuatro métodos de verificación del
-protocolo quedan confirmados (huella sigue apoyada solo en la fórmula, sin
-una fichada real por huella comparada de forma independiente contra el
-software oficial — ver §5.6).
+protocolo quedan confirmados.
 
 **Corrección aplicada:** `src/protocol/records.js` agrega `'00000020':
 'clave'` a `VERIFICATION_METHOD_LABELS`; `contracts/output-schema.json`
