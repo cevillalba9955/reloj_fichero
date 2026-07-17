@@ -39,6 +39,25 @@ function clienteMock(over = {}) {
   };
 }
 
+// feature 010: "Fichadas de hoy" es la pestaña inicial, así que se monta (y
+// fetchea) en todos estos tests aunque solo ejerciten el calendario. Un mock
+// dedicado la mantiene hermética y fuera del conteo de fetches del calendario.
+function clienteFichadasMock(over = {}) {
+  return {
+    obtenerFichadasHoy: vi.fn().mockResolvedValue({
+      fecha: '2026-07-17',
+      periodo: '202607',
+      diaClasificacion: 'Laborable',
+      empleados: [],
+    }),
+    ...over,
+  };
+}
+
+function irACalendario() {
+  fireEvent.click(screen.getByText('Calendario'));
+}
+
 test('sin prop "cliente" (uso real, como main.jsx) no entra en loop infinito de fetch', async () => {
   // Regresión: `cliente = crearClienteCalendario()` como default de parámetro
   // se reevaluaba en cada render, invalidando useCallback/useEffect en cascada
@@ -52,7 +71,8 @@ test('sin prop "cliente" (uso real, como main.jsx) no entra en loop infinito de 
   });
   vi.stubGlobal('fetch', fetchMock);
 
-  render(<App />);
+  render(<App clienteFichadas={clienteFichadasMock()} />);
+  irACalendario();
   await screen.findByRole('grid');
 
   // Deja pasar un ciclo de microtasks/efectos extra: si hubiera loop, la
@@ -67,13 +87,15 @@ test('sin ningún calendario muestra el estado vacío global', async () => {
   const cliente = clienteMock({
     listarCalendarios: vi.fn().mockResolvedValue({ periodos: [], ultimo: null }),
   });
-  render(<App cliente={cliente} />);
+  render(<App cliente={cliente} clienteFichadas={clienteFichadasMock()} />);
+  irACalendario();
   expect(await screen.findByText(/Aún no se generó ningún calendario/)).toBeInTheDocument();
 });
 
 test('carga y muestra el último mes generado', async () => {
   const cliente = clienteMock();
-  render(<App cliente={cliente} />);
+  render(<App cliente={cliente} clienteFichadas={clienteFichadasMock()} />);
+  irACalendario();
   expect(await screen.findByRole('grid')).toBeInTheDocument();
   expect(cliente.obtenerCalendario).toHaveBeenCalledWith('202607');
   expect(screen.getByText('Julio 2026')).toBeInTheDocument();
@@ -83,7 +105,8 @@ test('un fallo al iniciar muestra error con reintento', async () => {
   const cliente = clienteMock({
     listarCalendarios: vi.fn().mockRejectedValue(new Error('boom')),
   });
-  render(<App cliente={cliente} />);
+  render(<App cliente={cliente} clienteFichadas={clienteFichadasMock()} />);
+  irACalendario();
   expect(await screen.findByText(/Ocurrió un error/)).toBeInTheDocument();
   expect(screen.getByText('Reintentar')).toBeInTheDocument();
 });
@@ -95,7 +118,8 @@ test('reclasificar: cancelar no llama a la API; confirmar sí y refresca la gril
   const cliente = clienteMock({
     reclasificar: vi.fn().mockResolvedValue(vistaFeriado),
   });
-  render(<App cliente={cliente} />);
+  render(<App cliente={cliente} clienteFichadas={clienteFichadasMock()} />);
+  irACalendario();
   await screen.findByRole('grid');
 
   // Iniciar reclasificación → abre el diálogo; cancelar → sin POST.

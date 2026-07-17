@@ -21,7 +21,7 @@ import PaginaFichadasHoy from './components/PaginaFichadasHoy.jsx';
 const clientePorDefecto = crearClienteCalendario();
 
 export default function App({ cliente = clientePorDefecto, clienteFichadas = undefined }) {
-  const [pestania, setPestania] = useState('calendario');
+  const [pestania, setPestania] = useState('fichadas-hoy');
   const [estado, setEstado] = useState({ tipo: 'cargando' });
   const [ultimo, setUltimo] = useState(null);
   const [periodos, setPeriodos] = useState([]);
