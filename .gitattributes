@@ -1,0 +1,3 @@
+# Los scripts de shell deben llegar al servidor Linux con LF (un shebang con
+# CRLF rompe la ejecución). El resto sigue la autodetección de git.
+*.sh text eol=lf

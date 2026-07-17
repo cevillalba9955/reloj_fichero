@@ -13,6 +13,31 @@ Convenciones por defecto (ajustables): usuario de sistema `rs956`, instalación 
 Node en `/usr/bin/node`. Referencias: [spec 005](../specs/005-servicio-despliegue-linux/spec.md),
 [contrato systemd](../specs/005-servicio-despliegue-linux/contracts/systemd-deployment.md).
 
+## 0. Instalación automatizada (scripts)
+
+Los pasos §1–§5 y §8.1–8.4 están automatizados en dos scripts idempotentes (se pueden
+re-ejecutar sin romper una instalación existente). Con el clone en `/opt/rs956`:
+
+```bash
+sudo deploy/instalar.sh              # instalación completa + verificación
+sudo deploy/actualizar.sh            # actualización (§7 + §8.8): pull, deps, rebuild, restart
+# Ambos aceptan --sin-web para desplegar solo el servicio de fichadas.
+```
+
+Queda manual (el script lo detecta y avisa):
+
+- **Editar `.env`** con la IP real del reloj (`FICHADAS_HOST`) y demás valores de §3. En la
+  primera corrida, si no existe, el script lo crea desde la plantilla y se detiene para que lo
+  edites; re-ejecutarlo después.
+- **El snapshot del padrón** (`data/presentismo/padron.json`): generarlo con
+  `sincronizar-padron` (requiere Oracle, §3) o copiarlo desde otra máquina. Su ausencia no
+  frena la instalación.
+- **El canal de control de la consulta manual al reloj** (§8.7): definir
+  `FICHADAS_CONTROL_PORT=5006` en `.env` y reiniciar ambos servicios.
+
+Las secciones siguientes documentan el paso a paso manual — sirven como referencia de lo que
+hacen los scripts y para troubleshooting.
+
 ## 1. Prerrequisitos
 
 - **Linux con systemd** (Ubuntu/Debian/RHEL).
@@ -131,6 +156,9 @@ Tras el reinicio, el servicio vuelve a consultar en las ventanas del nuevo día 
 del día previo siguen en su archivo por período (ya persistidas — no se pierden).
 
 ## 7. Actualización / rollback
+
+> Automatizado: `sudo deploy/actualizar.sh` hace esto y el rebuild del frontend (§8.8) en un
+> solo paso, incluida la re-copia de los units si cambiaron.
 
 ```bash
 # Actualizar código y dependencias:
@@ -264,6 +292,8 @@ Referencias: [research §4](../specs/010-fichadas-hoy/research.md),
 
 ### 8.8 Actualización
 
+> Automatizado: `sudo deploy/actualizar.sh` cubre también esta sección.
+
 ```bash
 sudo -u rs956 git -C /opt/rs956 pull
 sudo -u rs956 npm --prefix /opt/rs956 ci --omit=dev          # deps del backend
@@ -284,5 +314,9 @@ sudo systemctl restart rs956-web.service
 - **Node**: mínimo 20.12 (por `--env-file-if-exists`).
 
 ## 10. Permisos de archivos
- sudo chown -R rs956:rs956 /opt/rs956
- 
+
+Toda la instalación debe pertenecer al usuario del servicio (lo hace `deploy/instalar.sh`):
+
+```bash
+sudo chown -R rs956:rs956 /opt/rs956
+```
