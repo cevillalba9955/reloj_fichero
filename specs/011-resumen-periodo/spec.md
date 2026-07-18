@@ -8,6 +8,27 @@
 
 **Input**: User description: "pantalla resumen-periodo, muestra resumen fichadas de cada empleado en el periodo seleccionado, indicando total horas trabajadas, ausencias, llegadas tardes, etc. al seleccionar un empleado se abre dialog con detalle de fichadas."
 
+## Clarifications
+
+### Session 2026-07-18
+
+- Q: Para un período pasado, ¿qué empleados deben aparecer en el resumen,
+  dado que el padrón local es una foto del presente? → A: El universo
+  histórico completo llegará con el cierre de período (feature futura del
+  Principio VI), que persistirá el padrón activo del período junto con sus
+  cálculos de asistencia. Esta pantalla calcula en vivo sobre el padrón
+  vigente; cuando el cierre exista, los períodos cerrados se leerán de ese
+  registro.
+- Q: Cuando un día tiene una corrección manual vigente, ¿cómo afecta a los
+  contadores de ausencias y llegadas tarde? → A: La corrección prevalece:
+  los contadores se calculan sobre el dato ajustado (una entrada corregida a
+  horario válido no cuenta como llegada tarde; un día con horas corregidas
+  no cuenta como ausencia).
+- Q: ¿Las jornadas incompletas (entrada sin salida) merecen su propio
+  contador en el resumen? → A: Sí: se agrega "jornadas incompletas" como
+  indicador propio de la fila (señala días que requieren revisión antes de
+  liquidar).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Ver el resumen del período por empleado (Priority: P1)
@@ -15,8 +36,9 @@
 Un administrador abre la página "Resumen del Período", elige un período de
 liquidación (por defecto el más reciente disponible) y ve, para cada empleado
 esperado en ese período, una fila con sus indicadores acumulados: total de
-horas trabajadas, cantidad de jornadas completas, ausencias, llegadas tarde,
-retiros anticipados y cantidad de correcciones manuales aplicadas.
+horas trabajadas, cantidad de jornadas completas, jornadas incompletas,
+ausencias, llegadas tarde, retiros anticipados y cantidad de correcciones
+manuales aplicadas.
 
 **Why this priority**: Es el valor central de la funcionalidad: hoy el estado
 acumulado de un período solo puede reconstruirse día por día desde la pantalla
@@ -33,8 +55,8 @@ funcionalidad.
 1. **Given** un período con fichadas cargadas para varios empleados, **When**
    el administrador abre la página y selecciona ese período, **Then** ve una
    fila por empleado esperado con legajo, nombre, total de horas trabajadas,
-   jornadas completas, ausencias, llegadas tarde, retiros anticipados y
-   correcciones aplicadas.
+   jornadas completas, jornadas incompletas, ausencias, llegadas tarde,
+   retiros anticipados y correcciones aplicadas.
 2. **Given** un empleado con un día `Laborable` sin fichadas ni corrección en
    el período, **When** se muestra el resumen, **Then** ese día cuenta como
    una ausencia en su fila.
@@ -45,10 +67,18 @@ funcionalidad.
    horas de un día, **When** se muestra el resumen, **Then** el total de horas
    refleja el valor corregido (no el calculado automáticamente) y la fila
    indica que tiene correcciones.
-5. **Given** un empleado sin categoría de presentismo configurada (anomalía),
+5. **Given** un empleado que llegó tarde pero cuya entrada fue corregida a un
+   horario dentro del margen, **When** se muestra el resumen, **Then** ese
+   día NO cuenta como llegada tarde (la corrección prevalece sobre la
+   fichada original); análogamente, un día sin fichadas con horas corregidas
+   no cuenta como ausencia.
+6. **Given** un empleado con entrada fichada y sin salida en un día vencido,
+   **When** se muestra el resumen, **Then** ese día cuenta como jornada
+   incompleta en su fila.
+7. **Given** un empleado sin categoría de presentismo configurada (anomalía),
    **When** se muestra el resumen, **Then** su fila aparece señalada como
    anomalía, sin acumulados calculados como si fueran normales.
-6. **Given** un período sin calendario generado, **When** el administrador
+8. **Given** un período sin calendario generado, **When** el administrador
    intenta seleccionarlo, **Then** el sistema no lo ofrece entre los períodos
    disponibles.
 
@@ -136,18 +166,21 @@ ambos y verificar que la tabla refleja los acumulados de cada uno.
 
 - **FR-001**: El sistema MUST mostrar, para el período seleccionado, una fila
   por empleado esperado con: legajo, nombre, total de horas trabajadas,
-  cantidad de jornadas completas, cantidad de ausencias, cantidad de llegadas
-  tarde, cantidad de retiros anticipados y cantidad de correcciones manuales
-  vigentes.
+  cantidad de jornadas completas, cantidad de jornadas incompletas, cantidad
+  de ausencias, cantidad de llegadas tarde, cantidad de retiros anticipados y
+  cantidad de correcciones manuales vigentes.
 - **FR-002**: El sistema MUST ofrecer como períodos seleccionables únicamente
   los períodos con calendario generado, seleccionando por defecto el más
   reciente.
 - **FR-003**: El sistema MUST calcular los acumulados a partir de las mismas
   reglas de jornada, calendario y ajustes del dominio de presentismo
-  (feature 004): una ausencia es un día `Laborable` vencido sin fichadas ni
-  corrección; una llegada tarde es una entrada real fuera del margen de
-  tolerancia; el total de horas respeta correcciones vigentes y descuento de
-  pausas.
+  (feature 004), con la corrección manual vigente prevaleciendo sobre la
+  fichada original en TODOS los contadores: una ausencia es un día
+  `Laborable` vencido sin fichadas ni corrección; una llegada tarde es una
+  entrada efectiva (corregida si hay corrección, real si no) fuera del margen
+  de tolerancia; una jornada incompleta es un día vencido con entrada
+  efectiva sin salida efectiva; el total de horas respeta correcciones
+  vigentes y descuento de pausas.
 - **FR-004**: El sistema MUST abrir, al seleccionar un empleado del resumen,
   un diálogo modal con el detalle día por día del período: fecha,
   clasificación del día, entrada, salida, pausas (con su tipo), horas del día
@@ -172,14 +205,21 @@ ambos y verificar que la tabla refleja los acumulados de cada uno.
   pantalla de fichadas diarias (feature 010).
 - **FR-011**: El sistema MUST NOT mostrar datos biométricos crudos (templates
   de huella, imágenes) en la página ni en el diálogo de detalle.
+- **FR-012**: El sistema MUST calcular el resumen en vivo sobre el padrón
+  vigente y los datos operativos del período (archivos por período de 004).
+  Cuando exista el cierre de período (feature futura del Principio VI de la
+  constitución), los períodos cerrados MUST leerse del registro de cierre
+  (que persistirá el padrón activo del período y sus cálculos), sin
+  recalcular en vivo; esta feature no implementa ese cierre.
 
 ### Key Entities
 
 - **Resumen de Período por Empleado**: proyección calculada (no persistida)
   con los acumulados del período de un legajo: horas totales, jornadas
-  completas, ausencias, llegadas tarde, retiros anticipados, correcciones
-  vigentes; derivada del resumen de jornadas ya calculado por el dominio de
-  presentismo (feature 004).
+  completas, jornadas incompletas, ausencias, llegadas tarde, retiros
+  anticipados, correcciones vigentes; derivada del resumen de jornadas ya
+  calculado por el dominio de presentismo (feature 004), con la corrección
+  vigente prevaleciendo en todos los contadores.
 - **Detalle de Jornada**: proyección por día del período para un legajo:
   fecha, clasificación, entrada/salida efectivas, pausas con tipo, horas del
   día, estado de la jornada y marca de corrección; misma fuente de cálculo
@@ -189,7 +229,9 @@ ambos y verificar que la tabla refleja los acumulados de cada uno.
   y acotar el cálculo.
 - **Empleado esperado del período**: legajo y nombre del padrón de RRHH
   (feature 003), de solo lectura, con su categoría de presentismo
-  (feature 004).
+  (feature 004). En esta primera versión el universo es el padrón vigente al
+  momento de consultar; el universo histórico exacto de cada período llegará
+  con el registro de cierre de período (feature futura, ver FR-012).
 
 ## Success Criteria *(mandatory)*
 
@@ -211,17 +253,20 @@ ambos y verificar que la tabla refleja los acumulados de cada uno.
 ## Assumptions
 
 - Los indicadores del "etc." del pedido se concretan en el conjunto: total de
-  horas trabajadas, jornadas completas, ausencias, llegadas tarde, retiros
-  anticipados y correcciones vigentes — los estados que el dominio de
-  presentismo (004) ya calcula por jornada. Indicadores adicionales (p. ej.
-  horas extra) quedan fuera de alcance hasta que el dominio los defina.
+  horas trabajadas, jornadas completas, jornadas incompletas, ausencias,
+  llegadas tarde, retiros anticipados y correcciones vigentes — los estados
+  que el dominio de presentismo (004) ya calcula por jornada. Indicadores
+  adicionales (p. ej. horas extra) quedan fuera de alcance hasta que el
+  dominio los defina.
 - La pantalla es de solo consulta: las correcciones, pausas y retiros se
   gestionan desde la pantalla de fichadas diarias (feature 010), que ya cubre
   el día en curso y días previos del período abierto. Evita duplicar flujos
   de edición y auditoría.
 - "Llegada tarde" se define retrospectivamente igual que la situación `TARDE`
-  de la feature 010: entrada real fuera del margen de tolerancia de apertura
-  de la modalidad vigente ese día.
+  de la feature 010: entrada efectiva fuera del margen de tolerancia de
+  apertura de la modalidad vigente ese día, donde la entrada efectiva es la
+  corregida si hay corrección vigente, o la fichada real si no (la corrección
+  prevalece, ver Clarifications).
 - El período se selecciona a nivel de mes (`YYYYMM`), consistente con el
   calendario de 004/008; para empleados de modalidad quincenal el detalle
   diario permite distinguir los tramos, sin un selector propio de quincena en
