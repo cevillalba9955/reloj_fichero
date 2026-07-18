@@ -1,6 +1,6 @@
 # Implementation Plan: Página "Fichadas de Hoy"
 
-**Branch**: `010-fichadas-hoy` | **Date**: 2026-07-16 | **Spec**: [spec.md](spec.md)
+**Branch**: `010-fichadas-hoy` | **Date**: 2026-07-16 (iteración 2: 2026-07-18) | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `/specs/010-fichadas-hoy/spec.md`
 
@@ -233,6 +233,92 @@ igual que 007/008). La feature **extiende** el dominio y servicio de presentismo
 suma componentes nuevos al frontend siguiendo el patrón de cliente HTTP + componentes
 de presentación ya usado en 007/008. No se crean nuevos módulos de nivel superior ni
 nuevas capas de persistencia.
+
+## Iteración 2 — Navegación de días previos, columnas de pausa y modales (2026-07-18)
+
+Delta incremental sobre la implementación ya entregada (T053), derivado de las
+clarificaciones del 2026-07-18 en spec.md (US5, FR-016/FR-017/FR-018, y las
+extensiones de FR-001/FR-003/FR-006/FR-007/FR-008).
+
+### Resumen del delta
+
+1. **Navegación a días previos (US5, FR-016/FR-017)** — research.md §6. El backend ya
+   acepta `fecha` en el GET y en los tres POST de edición; el trabajo real es:
+   (a) un predicado único de navegabilidad `fechaNavegable(fecha, { hoy, periodos })`
+   — `fecha <= hoy` y período con calendario generado (`repo.listarPeriodos()`), la
+   materialización operativa de "período de liquidación abierto" mientras el cierre de
+   período (Principio VI, nivel Oracle) no exista; (b) validarlo en el GET
+   (`400 FECHA_FUERA_DE_RANGO`) y en los POST de corrección/pausa/retiro; (c) exponer
+   `navegacion { anterior, siguiente, esHoy }` en la `VistaFichadasHoy` para que la UI
+   no re-derive la regla; (d) UI de navegación «día anterior / día siguiente» en el
+   encabezado de la página, ocultando «Consultar reloj» cuando `esHoy` es `false`.
+2. **Columnas de pausa (FR-001 extendido)** — research.md §7. Sin cambio de API:
+   `pausas[]` ya viaja en la fila. La tabla agrega columnas «Inicio pausa» /
+   «Fin pausa» con la primera pausa vigente `tipo: 'intermedia'` por `desde` (+`+N` si
+   hay más), derivada en el componente; retiros anticipados excluidos de estas
+   columnas.
+3. **Formularios modales (FR-018)** — research.md §8. Nuevo componente de presentación
+   `Dialogo.jsx` (patrón div+backdrop de `DialogoConfirmarReclasificar` de 007:
+   `role="dialog"`, `aria-modal`, Escape y click en backdrop = cancelar);
+   `PaginaFichadasHoy` envuelve `FormularioCorreccion` y `FormularioPausaRetiro` en
+   él, sin cambiar la lógica interna de los formularios.
+
+### Archivos afectados (delta)
+
+```text
+src/web/
+├── view-model.js                    # + navegacion { anterior, siguiente, esHoy }
+│                                     # en construirVistaFichadasHoy; helper
+│                                     # fechaNavegable(fecha, { hoy, periodos })
+└── api/
+    └── fichadas-hoy-handlers.js     # + validación FECHA_FUERA_DE_RANGO en GET y en
+                                      # POST correcciones/pausas/retiros-anticipados
+                                      # (ctx.repo.listarPeriodos ya disponible)
+
+frontend/src/
+├── api/
+│   └── fichadas-hoy-client.js       # obtenerFichadasHoy(fecha?) — query ?fecha=
+└── components/
+    ├── Dialogo.jsx                  # NUEVO — modal reutilizable (research.md §8)
+    ├── NavegacionDia.jsx            # NUEVO — flechas anterior/siguiente + fecha
+    ├── PaginaFichadasHoy.jsx        # estado fecha seleccionada; carga por fecha;
+    │                                 # botón consultar-reloj solo si esHoy;
+    │                                 # formularios dentro de Dialogo
+    └── TablaFichadasHoy.jsx         # + columnas Inicio/Fin pausa (+N)
+
+tests (delta):
+├── tests/unit/…                     # fechaNavegable (bordes: hoy, mañana, período
+│                                     # sin calendario, primer día navegable)
+├── tests/contract/web-api-fichadas-hoy.test.js   # + ?fecha= oficial, 400
+│                                     # FECHA_FUERA_DE_RANGO en GET y POSTs, navegacion
+├── tests/integration/fichadas-hoy.integration.test.js  # + editar un día previo
+└── frontend/src/components/*.test.jsx  # Dialogo, NavegacionDia, columnas de pausa,
+                                      # formularios en modal (quickstart Esc. 5–6)
+```
+
+Sin cambios en `src/presentismo/` (dominio y servicio ya calculan cualquier fecha del
+período), sin cambios de persistencia, sin cambios en el servicio de fichadas ni en el
+control HTTP local.
+
+### Constitution Check (iteración 2)
+
+- **I — Componentes**: `Dialogo` y `NavegacionDia` son presentación pura; la regla de
+  navegabilidad vive en el servidor y llega como datos (`navegacion`). **Cumple**.
+- **II — Oracle aislado / III — Protocolo RS956**: sin cambios de superficie (la
+  iteración no toca Oracle, el reloj ni el proceso de fichadas). **Cumple** (N/A).
+- **IV — Test-First en capas críticas**: la validación de fecha protege el dato de
+  presentismo que alimenta liquidación (impide editar períodos no abiertos) → tests
+  de `fechaNavegable` y del contrato `FECHA_FUERA_DE_RANGO` primero; la UI (modales,
+  columnas) sigue el criterio flexible con tests de componentes. **Cumple**.
+- **V — Observabilidad y datos sensibles**: sin datos nuevos expuestos (la navegación
+  reutiliza la misma vista); la auditoría de ediciones sobre días previos ya registra
+  fecha del día corregido + autor/motivo (mecanismo de 004 sin cambios). **Cumple**.
+- **VI — Persistencia por niveles**: sin cambios; el predicado de navegabilidad queda
+  preparado para incorporar el estado "cerrado" cuando el cierre de período se
+  implemente, en un único punto. **Cumple**.
+
+**Resultado del gate (iteración 2)**: PASA. Sin violaciones; `Complexity Tracking`
+sigue vacío.
 
 ## Complexity Tracking
 

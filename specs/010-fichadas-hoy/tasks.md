@@ -301,6 +301,160 @@ nuevo dentro del proceso de fichadas.
 
 ---
 
+# Iteración 2 — Navegación de días previos, columnas de pausa y modales (2026-07-18)
+
+Delta incremental sobre la implementación ya entregada (T001–T055), derivado de las
+clarificaciones del 2026-07-18 (spec.md § Clarifications; plan.md § Iteración 2;
+research.md §6–§8). Historias afectadas: **US5** (nueva, navegación), **US1**
+(extensión: columnas de pausa, FR-001) y **US2/US3** (extensión: formularios modales,
+FR-018).
+
+## Phase 8: Foundational iteración 2 (Blocking Prerequisites)
+
+**Purpose**: el predicado único de navegabilidad de fechas, del que dependen el GET,
+los POST de edición y el bloque `navegacion` de la vista.
+
+- [ ] T056 [P] Tests unitarios de `fechaNavegable(fecha, { hoy, periodos })` (bordes:
+  hoy navegable, mañana no, día de período con calendario navegable, día de período
+  sin calendario no, primer día del período más antiguo con calendario) en
+  `tests/unit/web-view-model.test.js` (o archivo nuevo
+  `tests/unit/fecha-navegable.test.js` si el view-model no tiene test propio) — DEBEN
+  fallar antes de T057 (Principio IV: protege el dato que alimenta liquidación)
+- [ ] T057 Implementar `fechaNavegable(fecha, { hoy, periodos })` y el cálculo del
+  bloque `navegacion { anterior, siguiente, esHoy }` en `src/web/view-model.js`,
+  incorporándolo a `construirVistaFichadasHoy` (data-model.md, research.md §6) —
+  depende de T056
+
+**Checkpoint**: la regla "período de liquidación abierto" vive en un único punto,
+lista para extenderse con "y no cerrado" cuando exista el cierre de período.
+
+---
+
+## Phase 9: User Story 5 - Navegar a días previos dentro del período abierto (Priority: P3)
+
+**Goal**: un administrador navega a días anteriores dentro del período de liquidación
+abierto con las mismas acciones que el día actual (salvo consultar el reloj); nunca a
+días futuros ni a períodos sin calendario.
+
+**Independent Test**: con calendario generado y fichadas de días previos,
+`GET /api/fichadas-hoy?fecha=<día previo>` devuelve la vista de ese día con
+`esHoy: false`; un `POST` de corrección sobre esa fecha guarda y audita igual que hoy;
+una fecha futura o de período sin calendario devuelve 400 `FECHA_FUERA_DE_RANGO`
+(quickstart.md, Escenario 5).
+
+### Tests for User Story 5
+
+- [ ] T058 [P] [US5] Tests de contrato del GET con fecha: `?fecha=` de día previo
+  navegable → 200 con `navegacion` coherente (`esHoy: false`); fecha futura → 400
+  `FECHA_FUERA_DE_RANGO`; fecha de período sin calendario → 400
+  `FECHA_FUERA_DE_RANGO`; sin `?fecha=` → 200 con `esHoy: true` y `siguiente: null`,
+  en `tests/contract/web-api-fichadas-hoy.test.js` — DEBEN fallar antes de T060
+- [ ] T059 [P] [US5] Tests de contrato de los POST con fecha fuera de rango:
+  `POST /correcciones`, `POST /pausas` y `POST /retiros-anticipados` con fecha futura
+  o de período sin calendario → 400 `FECHA_FUERA_DE_RANGO` (antes de cualquier otra
+  validación de negocio), en `tests/contract/web-api-fichadas-hoy.test.js` — DEBEN
+  fallar antes de T061
+- [ ] T060 [P] [US5] Test de integración: corregir un horario de un día previo
+  navegable → 200, la corrección persiste con la fecha del día corregido y
+  autor/motivo (auditoría igual que hoy), en
+  `tests/integration/fichadas-hoy.integration.test.js` — DEBE fallar antes de T061
+
+### Implementation for User Story 5
+
+- [ ] T061 [US5] Validar `fechaNavegable` en `src/web/api/fichadas-hoy-handlers.js`:
+  en el GET (tras `validarFecha`) y en los tres POST de edición (tras
+  `validarFechaCuerpo`), lanzando `ApiError(400, 'FECHA_FUERA_DE_RANGO', ...)`;
+  `vistaHoy` pasa `periodos` (de `ctx.repo.listarPeriodos()`) al view-model para el
+  bloque `navegacion` — depende de T057; hace pasar T058/T059/T060
+- [ ] T062 [P] [US5] Extender `obtenerFichadasHoy(fecha?)` en
+  `frontend/src/api/fichadas-hoy-client.js` para agregar `?fecha=` cuando se pasa una
+  fecha (sin fecha: comportamiento actual)
+- [ ] T063 [P] [US5] Crear `frontend/src/components/NavegacionDia.jsx`: fecha visible
+  + botones «Día anterior» / «Día siguiente», habilitados según
+  `navegacion.anterior`/`navegacion.siguiente` (null = deshabilitado); componente de
+  presentación puro (Principio I)
+- [ ] T064 [US5] Integrar la navegación en
+  `frontend/src/components/PaginaFichadasHoy.jsx`: estado de fecha seleccionada,
+  `cargar(fecha)` vía el cliente extendido, montar `NavegacionDia` en el encabezado, y
+  mostrar `BotonConsultarReloj` solo cuando `navegacion.esHoy` — depende de T062, T063
+- [ ] T065 [P] [US5] Tests de componente: `NavegacionDia` (botones
+  habilitados/deshabilitados según `navegacion`) en
+  `frontend/src/components/NavegacionDia.test.jsx`, y en
+  `frontend/src/components/PaginaFichadasHoy.test.jsx` los casos "navegar al día
+  anterior recarga la vista de esa fecha" y "el botón de consultar reloj no aparece
+  cuando esHoy es false"
+
+**Checkpoint**: US5 completa — la página navega días previos con edición y bloquea
+futuro/períodos sin calendario (quickstart.md, Escenario 5).
+
+---
+
+## Phase 10: Extensión US1 - Columnas de pausa en la tabla (FR-001)
+
+**Goal**: la tabla muestra «Inicio pausa» / «Fin pausa» con la pausa intermedia
+principal del día por empleado, sin cambio de API (research.md §7).
+
+**Independent Test**: con un empleado con una y con dos pausas intermedias, la tabla
+muestra la primera por `desde` (con `+N` si hay más) y `—` en filas sin pausa; los
+retiros anticipados no aparecen en esas columnas (quickstart.md, Escenario 6, pasos
+1–3).
+
+- [ ] T066 [P] [US1] Tests de componente de las columnas de pausa: fila sin pausas →
+  `—`/`—`; una pausa intermedia → sus horas; dos pausas intermedias → la primera por
+  `desde` + indicador `+1`; fila con solo retiro anticipado → `—` (no se muestra en
+  estas columnas), en `frontend/src/components/TablaFichadasHoy.test.jsx` — DEBEN
+  fallar antes de T067
+- [ ] T067 [US1] Agregar las columnas «Inicio pausa» / «Fin pausa» a
+  `frontend/src/components/TablaFichadasHoy.jsx`, derivando la pausa principal de
+  `fila.pausas[]` (primera vigente `tipo: 'intermedia'` ordenada por `desde`; `+N`
+  para las adicionales) — depende de T066
+
+**Checkpoint**: la tabla refleja las pausas sin tocar backend ni API.
+
+---
+
+## Phase 11: Extensión US2/US3 - Formularios de edición como modales (FR-018)
+
+**Goal**: corrección, pausa y retiro anticipado se abren como diálogo modal, con el
+patrón div+backdrop ya probado en 007 (research.md §8).
+
+**Independent Test**: al hacer click en «Corregir» o «Pausa / Retiro», el formulario
+aparece como modal (`role="dialog"`, `aria-modal`); Escape o click en el backdrop lo
+cierra sin efecto; el flujo de guardado sigue funcionando igual (quickstart.md,
+Escenario 6, paso 4).
+
+- [ ] T068 [P] [US2] Tests de componente de `Dialogo`: renderiza contenido con
+  `role="dialog"` y `aria-modal="true"`, cierra con Escape y con click en el backdrop
+  (llamando `onCerrar`), no cierra con click dentro del contenido, en
+  `frontend/src/components/Dialogo.test.jsx` — DEBEN fallar antes de T069
+- [ ] T069 [US2] Crear `frontend/src/components/Dialogo.jsx` (backdrop + contenedor
+  `role="dialog"`/`aria-modal="true"`/etiqueta accesible, cierre por Escape y click en
+  backdrop; foco inicial dentro del diálogo) siguiendo el patrón de
+  `DialogoConfirmarReclasificar.jsx` — depende de T068
+- [ ] T070 [US2] Envolver `FormularioCorreccion` y `FormularioPausaRetiro` en
+  `Dialogo` desde `frontend/src/components/PaginaFichadasHoy.jsx` (cancelar = cerrar
+  el diálogo, sin efecto; los formularios no cambian su lógica interna) — depende de
+  T069
+- [ ] T071 [P] [US3] Ajustar los tests de página existentes para el nuevo patrón modal
+  (los formularios se encuentran dentro de un `role="dialog"`) en
+  `frontend/src/components/PaginaFichadasHoy.test.jsx`,
+  `FormularioCorreccion.test.jsx` y `FormularioPausaRetiro.test.jsx` según haga falta
+  — depende de T070
+
+**Checkpoint**: toda la edición de la página pasa por modales consistentes.
+
+---
+
+## Phase 12: Polish iteración 2
+
+- [ ] T072 Ejecutar manualmente los Escenarios 5 y 6 de `quickstart.md` de punta a
+  punta y registrar el resultado en el propio `quickstart.md` (mismo formato que la
+  tabla de T053)
+- [ ] T073 [P] Correr las suites completas (backend `node --test` y frontend
+  `npx vitest run`) confirmando que la iteración 2 no rompe nada de T001–T055
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -313,6 +467,15 @@ nuevo dentro del proceso de fichadas.
   de integrar la UI de las siguientes (el backend de cada historia sí es independiente
   entre sí).
 - **Polish (Phase 7)**: depende de las historias que se decida entregar.
+- **Foundational iteración 2 (Phase 8)**: sin dependencias nuevas (la iteración 1 ya
+  está entregada) — BLOQUEA la Phase 9 (US5). No bloquea las Phases 10 y 11.
+- **US5 (Phase 9)**: depende de Phase 8.
+- **Extensión columnas de pausa (Phase 10)** y **modales (Phase 11)**: independientes
+  entre sí y de US5 — solo tocan frontend ya existente. Las tres phases 9/10/11
+  convergen en `PaginaFichadasHoy.jsx`/`TablaFichadasHoy.jsx` y en
+  `PaginaFichadasHoy.test.jsx`: si se trabajan en paralelo, coordinar la integración
+  (T064, T067, T070, T071) en serie.
+- **Polish iteración 2 (Phase 12)**: depende de Phases 9–11.
 
 ### User Story Dependencies
 
@@ -385,3 +548,16 @@ Con más de una persona, tras completar Foundational: una persona en US1 (la que
 integra `PaginaFichadasHoy`), y en paralelo otras en el *backend* de US2/US3/US4 (no
 dependen entre sí ni de la UI de US1) — la integración de cada formulario/botón en la
 página queda como último paso de cada historia, una vez que T013 (US1) esté disponible.
+
+### Iteración 2 (MVP y entrega incremental)
+
+1. Phase 8 (fechaNavegable) + Phase 9 (US5) → validar con el Escenario 5 de
+   quickstart.md → **entregable por sí solo** (navegación con edición de días previos).
+2. Phase 10 (columnas de pausa) → validar con el Escenario 6 pasos 1–3 → entregable.
+3. Phase 11 (modales) → validar con el Escenario 6 paso 4 → entregable.
+4. Phase 12 cierra la iteración (quickstart 5–6 registrados + suites completas).
+
+Las tres entregas (US5, columnas, modales) son independientes; el orden sugerido
+prioriza US5 por ser la única con superficie de backend. En paralelo: T056/T058/T059/
+T060 (tests), y las Phases 10 y 11 completas pueden avanzar mientras se implementa la
+Phase 9, coordinando en serie solo los toques a `PaginaFichadasHoy.jsx` y sus tests.

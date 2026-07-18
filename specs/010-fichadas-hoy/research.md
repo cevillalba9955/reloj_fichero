@@ -168,3 +168,105 @@ el snapshot local, igual que hace el CLI de 004.
 - *Consultar Oracle directo desde el handler web para el nombre*: rechazada — violaría
   Principio II (todo acceso a Oracle pasa por `src/db/`) y duplicaría el snapshot ya
   mantenido por 004; el snapshot ya se sincroniza vía `sincronizar-padron` (CLI de 004).
+
+---
+
+Las secciones §6–§8 corresponden a la **iteración 2** (clarificaciones del
+2026-07-18: navegación a días previos, columnas de pausa, formularios modales).
+
+## §6. Navegación a días previos y "período de liquidación abierto"
+
+**Hallazgo**: el backend ya acepta la fecha como parámetro en toda la superficie de la
+feature — `GET /api/fichadas-hoy?fecha=` existe (hoy documentado como "solo
+pruebas/soporte") y los tres `POST` de corrección/pausa/retiro ya reciben `fecha` en el
+body sin restringirla al día actual. Lo que falta no es capacidad de cálculo sino
+**validación de rango** y **UI de navegación**.
+
+**Hallazgo 2**: el "cierre de período de liquidación" (escritura en Oracle al cierre,
+Principio VI de la constitución) **todavía no está implementado** en el código — no hay
+ningún estado "cerrado" persistido por período. La definición operativa de "período
+abierto" debe construirse con lo que existe hoy.
+
+**Decisión**:
+
+1. `GET /api/fichadas-hoy?fecha=YYYY-MM-DD` pasa a ser **parte oficial del contrato**
+   (deja de ser "solo pruebas").
+2. Se define un único predicado de navegabilidad, centralizado en un helper del lado
+   web (`fechaNavegable(fecha, { hoy, periodos })`):
+   - `fecha <= hoy` (nunca días futuros, FR-017), y
+   - `periodoDe(fecha)` ∈ `repo.listarPeriodos()` (el período tiene calendario
+     generado).
+   Como hoy ningún período se marca cerrado, "período con calendario generado" es la
+   materialización operativa de "período de liquidación abierto". Cuando el cierre de
+   período exista (feature futura del Principio VI), la condición "y no cerrado" se
+   agrega **solo en este helper**, sin tocar handlers ni UI.
+3. La `VistaFichadasHoy` incorpora un bloque `navegacion` calculado por el servidor
+   (`{ anterior, siguiente, esHoy }`, data-model.md): la UI no re-deriva la regla de
+   qué días son navegables — pide la vista de la fecha que el servidor le ofreció.
+4. Los tres `POST` de corrección/pausa/retiro validan el mismo predicado sobre la
+   `fecha` del body (**400** `FECHA_FUERA_DE_RANGO` si es futura o de un período sin
+   calendario). `POST /consultar-reloj` no cambia: siempre opera sobre el día actual,
+   y la UI solo ofrece el botón cuando `navegacion.esHoy` (FR-008, US5 escenario 3).
+
+**Alternativas consideradas**:
+- *Selector de fecha libre (datepicker)*: rechazada — el caso de uso es retroceder
+  pocos días para corregir olvidos; flechas «día anterior / día siguiente» + la fecha
+  visible cubren el flujo con menos superficie de validación. El límite duro lo pone
+  igual el servidor.
+- *Derivar la regla de navegabilidad en el frontend (pedir `/api/calendarios` y
+  calcular)*: rechazada — duplicaría la regla en dos capas; cuando exista el cierre de
+  período habría que tocar ambas. El servidor ya conoce `listarPeriodos()` al armar la
+  vista.
+- *Endpoint nuevo `/api/fichadas-dia/{fecha}`*: rechazada — es el mismo recurso con la
+  misma forma; un parámetro de query sobre el endpoint existente evita duplicar
+  handler, cliente y tests de contrato.
+
+## §7. Columnas de pausa en la tabla (pausa principal)
+
+**Hallazgo**: `FilaFichadaHoy.pausas[]` ya viaja al frontend con
+`{ desde, hasta, tipo, motivo }` por cada pausa vigente. No hace falta ningún cambio
+de API ni de persistencia para mostrar columnas de pausa.
+
+**Decisión**: la selección de la "pausa principal" es una **regla de presentación** y
+vive en el componente de tabla (frontend), no en el backend:
+
+- Pausa principal = la primera pausa vigente con `tipo: 'intermedia'` ordenada por
+  `desde` (criterio determinista y simple). Los retiros anticipados **no** se muestran
+  en estas columnas (ya tienen su propia situación `RETIRO_ANTICIPADO`).
+- La tabla agrega dos columnas fijas «Inicio pausa» / «Fin pausa» con la pausa
+  principal, o `—` si no hay. Si hay más de una pausa intermedia, la celda agrega un
+  indicador `+N` (N = pausas intermedias adicionales); el detalle completo se ve en el
+  modal de pausa/retiro de la fila. Todas las pausas siguen descontando horas
+  trabajadas (eso no cambia: es cálculo de dominio de 004).
+
+**Alternativas consideradas**:
+- *Que el backend proyecte `pausaPrincipal` en la fila*: rechazada — agregaría campos
+  a la API para algo que el cliente ya puede derivar de `pausas[]`; la regla es
+  puramente visual y no participa de ningún cálculo de horas.
+- *Columnas dinámicas por cada pausa*: rechazada en la clarificación del spec (ancho
+  de tabla variable, peor legibilidad).
+- *Elegir como principal la pausa de mayor duración*: rechazada — el orden temporal es
+  más predecible para el operador (la pausa del mediodía aparece siempre igual) y no
+  cambia con altas posteriores de pausas cortas.
+
+## §8. Formularios de edición como diálogos modales
+
+**Decisión**: se introduce un componente de presentación reutilizable `Dialogo.jsx`
+(frontend) que replica el patrón ya existente de `DialogoConfirmarReclasificar.jsx`
+(feature 007): backdrop + contenedor con `role="dialog"` y `aria-modal="true"`,
+etiqueta accesible, cierre por tecla Escape y por click en el backdrop (equivalente a
+Cancelar — no produce efecto alguno, igual que 007). `FormularioCorreccion` y
+`FormularioPausaRetiro` no cambian su lógica interna (validación de motivo, estados de
+envío/error): `PaginaFichadasHoy` los renderiza dentro de `Dialogo` en lugar de debajo
+de la tabla (FR-018). `DialogoConfirmarReclasificar` queda como está (ya es modal); se
+puede migrar a `Dialogo` en una limpieza futura, fuera de alcance.
+
+**Alternativas consideradas**:
+- *Elemento `<dialog>` nativo con `showModal()`*: rechazada — el soporte de
+  `HTMLDialogElement` en jsdom (entorno de los tests de Vitest del repo) es
+  incompleto/frágil, y el patrón div+backdrop ya está probado y testeado en 007;
+  introducir dos patrones de modal distintos en el mismo frontend va contra la
+  consistencia del Principio I.
+- *Librería de modales (react-modal, Radix)*: rechazada — el proyecto no usa
+  dependencias de UI externas (stack mínimo React+Vite); una dependencia nueva para
+  dos formularios no se justifica.

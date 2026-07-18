@@ -72,6 +72,37 @@ de prueba en el puerto de control reemplaza al proceso real (ver
 6. **Esperado**: **502** `ERROR_CONSULTANDO_RELOJ`, `GET /api/fichadas-hoy`
    inmediatamente después sigue devolviendo los datos previos sin corromperse.
 
+## Escenario 5 — Navegar a días previos y editar (US5, iteración 2)
+
+Requiere calendario generado para el mes actual y (para el paso 4) que exista al
+menos un mes anterior **sin** calendario generado.
+
+1. `GET /api/fichadas-hoy` → **Esperado**: la vista incluye
+   `navegacion: { anterior, siguiente, esHoy: true }`, con `siguiente: null` (no se
+   navega a futuro) y `anterior` apuntando al día previo navegable.
+2. `GET /api/fichadas-hoy?fecha=<navegacion.anterior>` → **Esperado**: **200**, vista
+   de ese día con `esHoy: false`; en la UI, el botón «Consultar reloj» no se muestra.
+3. `POST /api/fichadas-hoy/correcciones` con esa fecha previa, `entrada` y `motivo` →
+   **Esperado**: **200**, la fila refleja la corrección; el registro de auditoría
+   queda con la fecha del día corregido.
+4. `GET /api/fichadas-hoy?fecha=<día de un período sin calendario>` y
+   `GET /api/fichadas-hoy?fecha=<mañana>` → **Esperado**: **400**
+   `FECHA_FUERA_DE_RANGO` en ambos; ídem el `POST` de corrección con esas fechas.
+
+## Escenario 6 — Columnas de pausa y modales (iteración 2, UI)
+
+1. Con el legajo A con una pausa intermedia cargada (Escenario 3), abrir la página →
+   **Esperado**: la tabla muestra las columnas «Inicio pausa» / «Fin pausa» con esa
+   pausa; filas sin pausa muestran `—`.
+2. Agregar una segunda pausa intermedia al legajo A → **Esperado**: las columnas
+   siguen mostrando la primera pausa por `desde`, con indicador `+1`; las horas
+   trabajadas descuentan ambas.
+3. Registrar un retiro anticipado al legajo B → **Esperado**: las columnas de pausa
+   del legajo B no lo muestran (la situación `RETIRO_ANTICIPADO` ya lo refleja).
+4. Click en «Corregir» y en «Pausa / Retiro» → **Esperado**: cada formulario se abre
+   como diálogo modal (backdrop, `role="dialog"`, foco dentro); Escape o click en el
+   backdrop lo cierra sin efecto alguno (equivale a Cancelar).
+
 ## Verificación de auditoría (transversal a US2/US3)
 
 - Tras los escenarios 2 y 3, inspeccionar el archivo del período

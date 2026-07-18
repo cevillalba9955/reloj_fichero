@@ -9,16 +9,22 @@ ahora incluye `activeEmployeesProvider` y `scheduler` (research.md §4/§5) adem
 
 ## `GET /api/fichadas-hoy`
 
-Devuelve la `VistaFichadasHoy` del día actual del servidor (data-model.md).
+Devuelve la `VistaFichadasHoy` del día solicitado (data-model.md), incluido el bloque
+`navegacion { anterior, siguiente, esHoy }` calculado por el servidor.
+
+Parámetro opcional de query `?fecha=YYYY-MM-DD` — **parte oficial del contrato desde
+la iteración 2** (research.md §6): por defecto `hoyLocal()` del servidor (mismo helper
+que 007/008); una fecha explícita debe cumplir el predicado de navegabilidad
+(`fecha <= hoy` y período con calendario generado — "período de liquidación abierto",
+FR-016/FR-017).
 
 - **200** `VistaFichadasHoy`
+- **400** `FECHA_INVALIDA` si el formato no es `YYYY-MM-DD`.
+- **400** `FECHA_FUERA_DE_RANGO` si la fecha es futura o su período no tiene
+  calendario generado (período no abierto).
 - **500** `ERROR_CALCULANDO_FICHADAS_HOY` si el servicio falla al calcular algún
   empleado (no aborta toda la vista por un solo legajo con anomalía — eso se refleja
   como `anomalias` en su fila, no como error HTTP).
-
-Parámetro opcional de query `?fecha=YYYY-MM-DD` para pruebas/soporte (por defecto,
-`hoyLocal()` del servidor, mismo helper que 007/008); fuera de rango del mes actual no
-está soportado por esta feature (alcance: solo el día en curso, spec Assumptions).
 
 ## `POST /api/fichadas-hoy/correcciones`
 
@@ -108,6 +114,18 @@ el `/tick` respondiera; no hace falta un paso de importación separado).
 - **502** `ERROR_CONSULTANDO_RELOJ` si el `POST /tick` local falla (el servicio de
   fichadas no responde, está caído, o su ciclo terminó en error) — la vista existente
   no se ve afectada; el cliente conserva lo que ya tenía en pantalla (FR-010 del spec).
+
+## Validación de fecha en los POST de edición (iteración 2)
+
+`POST /correcciones`, `POST /pausas` y `POST /retiros-anticipados` aplican sobre la
+`fecha` del body el **mismo predicado de navegabilidad** que el `GET` (research.md
+§6): fecha futura o de un período sin calendario generado → **400**
+`FECHA_FUERA_DE_RANGO` (antes de cualquier validación de negocio). Esto habilita la
+edición de días previos dentro del período abierto (US5, FR-003/FR-006/FR-007) y
+bloquea en el servidor lo que la UI ya no ofrece.
+
+`POST /consultar-reloj` no acepta fecha: siempre opera sobre el día actual (FR-008);
+la UI solo muestra el botón cuando `navegacion.esHoy` es `true`.
 
 ## Notas comunes
 
