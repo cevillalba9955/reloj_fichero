@@ -99,7 +99,7 @@ test('Pausa / Retiro abre su formulario dentro de un diálogo modal', async () =
   render(<PaginaFichadasHoy cliente={cliente} />);
   await screen.findByRole('table');
 
-  fireEvent.click(screen.getByText('Pausa / Retiro'));
+  fireEvent.click(screen.getByText('Excepcion'));
   const dialogo = screen.getByRole('dialog');
   expect(dialogo).toHaveAttribute('aria-modal', 'true');
 });
