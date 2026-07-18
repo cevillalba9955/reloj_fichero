@@ -1,5 +1,5 @@
 import { ApiError } from './router.js';
-import { construirVistaFichadasHoy, construirFilaFichadaHoy, hoyLocal } from '../view-model.js';
+import { construirVistaFichadasHoy, construirFilaFichadaHoy, fechaNavegable, hoyLocal } from '../view-model.js';
 import { RosterNoDisponibleError } from '../../roster/active-employees-provider.js';
 import { parseHoraMinuto } from '../../presentismo/domain/tiempo.js';
 
@@ -53,6 +53,23 @@ function parseHoraOpcional(valor, campo, codigo) {
   }
 }
 
+// iteración 2 (US5, FR-016/FR-017) — La fecha debe ser navegable: no futura y
+// de un período con calendario generado ("período de liquidación abierto",
+// research.md §6). Aplica al GET y a los POST de edición; devuelve { hoy,
+// periodos } para reutilizarlos al armar el bloque `navegacion` de la vista.
+async function exigirFechaNavegable(ctx, fecha) {
+  const hoy = hoyLocal();
+  const periodos = await ctx.repo.listarPeriodos();
+  if (!fechaNavegable(fecha, { hoy, periodos })) {
+    throw new ApiError(
+      400,
+      'FECHA_FUERA_DE_RANGO',
+      `La fecha ${fecha} no es navegable: debe ser hoy o un día previo de un período de liquidación abierto`,
+    );
+  }
+  return { hoy, periodos };
+}
+
 // 409 EMPLEADO_SIN_CATEGORIA: no tiene sentido corregir/ajustar una jornada que
 // no se calcula (anomalía FR-014). Lanza 500 si el cálculo mismo falla.
 async function exigirCategoriaConfigurada(ctx, legajo, periodo) {
@@ -99,8 +116,9 @@ function conNombre(filas, nombres) {
   return filas.map((f) => ({ ...f, nombre: nombres.get(f.legajo) ?? null }));
 }
 
-// Arma la VistaFichadasHoy completa de una fecha.
-async function vistaHoy(ctx, fecha) {
+// Arma la VistaFichadasHoy completa de una fecha. `hoy`/`periodos` (de
+// exigirFechaNavegable) alimentan el bloque `navegacion` (iteración 2).
+async function vistaHoy(ctx, fecha, { hoy, periodos }) {
   const legajos = await legajosEsperados(ctx);
   const nombres = await nombresPorLegajo(ctx);
   let resultado;
@@ -115,6 +133,8 @@ async function vistaHoy(ctx, fecha) {
     periodo,
     diaClasificacion,
     filas: conNombre(filas, nombres),
+    hoy,
+    periodos,
   });
 }
 
@@ -138,7 +158,8 @@ export function registrarRutas(router, ctx) {
   router.add('GET', '/api/fichadas-hoy', async ({ query }) => {
     const fecha = query.fecha ?? hoyLocal();
     validarFecha(fecha);
-    return { status: 200, body: await vistaHoy(ctx, fecha) };
+    const rango = await exigirFechaNavegable(ctx, fecha);
+    return { status: 200, body: await vistaHoy(ctx, fecha, rango) };
   });
 
   // POST /api/fichadas-hoy/correcciones (US2) — corrige entrada/salida (HH:MM)
@@ -156,6 +177,7 @@ export function registrarRutas(router, ctx) {
       'CORRECCION_INVALIDA',
       'Nada que corregir: indicá entrada, salida o totalHoras',
     );
+    await exigirFechaNavegable(ctx, fecha);
 
     const periodo = periodoDe(fecha);
     await exigirCategoriaConfigurada(ctx, legajo, periodo);
@@ -188,6 +210,7 @@ export function registrarRutas(router, ctx) {
     const hastaMin = parseHoraOpcional(hasta, 'Hora "hasta"', 'PAUSA_INVALIDA');
     exigir(desdeMin != null && hastaMin != null, 'PAUSA_INVALIDA', 'Faltan "desde" y/o "hasta" (HH:MM)');
     exigir(desdeMin < hastaMin, 'PAUSA_INVALIDA', 'La pausa requiere desde < hasta');
+    await exigirFechaNavegable(ctx, fecha);
 
     const periodo = periodoDe(fecha);
     await exigirCategoriaConfigurada(ctx, legajo, periodo);
@@ -217,6 +240,7 @@ export function registrarRutas(router, ctx) {
     validarMotivo(motivo, 'RETIRO_INVALIDO');
     const horaMin = parseHoraOpcional(hora, 'Hora del retiro', 'RETIRO_INVALIDO');
     exigir(horaMin != null, 'RETIRO_INVALIDO', 'Falta la "hora" del retiro (HH:MM)');
+    await exigirFechaNavegable(ctx, fecha);
 
     const periodo = periodoDe(fecha);
     await exigirCategoriaConfigurada(ctx, legajo, periodo);
@@ -250,13 +274,16 @@ export function registrarRutas(router, ctx) {
         r.ok ? r.detail ?? 'el ciclo de consulta al reloj terminó en error' : r.motivo,
       );
     }
-    const fecha = hoyLocal();
+    // La consulta manual siempre opera sobre HOY (FR-008); no valida
+    // navegabilidad (si hoy no tiene calendario, la vista lo reflejará).
+    const hoy = hoyLocal();
+    const periodos = await ctx.repo.listarPeriodos();
     return {
       status: 200,
       body: {
         resultado: r.resultado,
         fichadasNuevas: r.fichadasNuevas,
-        vista: await vistaHoy(ctx, fecha),
+        vista: await vistaHoy(ctx, hoy, { hoy, periodos }),
       },
     };
   });

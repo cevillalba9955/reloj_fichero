@@ -109,14 +109,48 @@ export function construirFilaFichadaHoy({ legajo, nombre = null, jornada = null,
   };
 }
 
+// iteración 2 — Período 'YYYYMM' de una fecha 'YYYY-MM-DD'.
+function periodoDeFecha(fecha) {
+  return fecha.slice(0, 4) + fecha.slice(5, 7);
+}
+
+// Día vecino de una fecha ISO (delta en días, UTC para evitar saltos de DST).
+function diaVecino(fecha, delta) {
+  const [y, m, d] = fecha.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + delta)).toISOString().slice(0, 10);
+}
+
+// feature 010, iteración 2 (research.md §6) — Predicado ÚNICO de navegabilidad:
+// fecha <= hoy (nunca futuro, FR-017) y período con calendario generado (la
+// materialización operativa de "período de liquidación abierto" mientras el
+// cierre de período del Principio VI no exista; cuando exista, la condición
+// "y no cerrado" se agrega SOLO acá).
+export function fechaNavegable(fecha, { hoy, periodos = [] }) {
+  return fecha <= hoy && periodos.includes(periodoDeFecha(fecha));
+}
+
+// Bloque `navegacion` de la VistaFichadasHoy (data-model.md): la UI no
+// re-deriva la regla — navega solo a las fechas que el servidor le ofrece.
+export function construirNavegacion({ fecha, hoy, periodos = [] }) {
+  const anterior = diaVecino(fecha, -1);
+  const siguiente = diaVecino(fecha, 1);
+  return {
+    anterior: fechaNavegable(anterior, { hoy, periodos }) ? anterior : null,
+    siguiente: fechaNavegable(siguiente, { hoy, periodos }) ? siguiente : null,
+    esHoy: fecha === hoy,
+  };
+}
+
 // feature 010 — VistaFichadasHoy (data-model.md): lo que devuelve
 // GET /api/fichadas-hoy. `filas` es la salida de service.calcularHoy con el
-// `nombre` del padrón ya mezclado por el handler.
-export function construirVistaFichadasHoy({ fecha, periodo, diaClasificacion, filas = [] }) {
+// `nombre` del padrón ya mezclado por el handler. `hoy`/`periodos` alimentan
+// el bloque `navegacion` (iteración 2).
+export function construirVistaFichadasHoy({ fecha, periodo, diaClasificacion, filas = [], hoy = hoyLocal(), periodos = [] }) {
   return {
     fecha,
     periodo,
     diaClasificacion,
+    navegacion: construirNavegacion({ fecha, hoy, periodos }),
     empleados: filas.map(construirFilaFichadaHoy),
   };
 }

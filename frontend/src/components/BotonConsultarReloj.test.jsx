@@ -45,6 +45,8 @@ function vista(empleados) {
     fecha: '2026-07-16',
     periodo: '202607',
     diaClasificacion: 'Laborable',
+    // iteración 2: el botón de consultar reloj solo se muestra cuando esHoy.
+    navegacion: { anterior: '2026-07-15', siguiente: null, esHoy: true },
     empleados,
   };
 }

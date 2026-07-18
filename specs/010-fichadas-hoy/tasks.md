@@ -314,13 +314,13 @@ FR-018).
 **Purpose**: el predicado único de navegabilidad de fechas, del que dependen el GET,
 los POST de edición y el bloque `navegacion` de la vista.
 
-- [ ] T056 [P] Tests unitarios de `fechaNavegable(fecha, { hoy, periodos })` (bordes:
+- [X] T056 [P] Tests unitarios de `fechaNavegable(fecha, { hoy, periodos })` (bordes:
   hoy navegable, mañana no, día de período con calendario navegable, día de período
   sin calendario no, primer día del período más antiguo con calendario) en
   `tests/unit/web-view-model.test.js` (o archivo nuevo
   `tests/unit/fecha-navegable.test.js` si el view-model no tiene test propio) — DEBEN
   fallar antes de T057 (Principio IV: protege el dato que alimenta liquidación)
-- [ ] T057 Implementar `fechaNavegable(fecha, { hoy, periodos })` y el cálculo del
+- [X] T057 Implementar `fechaNavegable(fecha, { hoy, periodos })` y el cálculo del
   bloque `navegacion { anterior, siguiente, esHoy }` en `src/web/view-model.js`,
   incorporándolo a `construirVistaFichadasHoy` (data-model.md, research.md §6) —
   depende de T056
@@ -344,40 +344,40 @@ una fecha futura o de período sin calendario devuelve 400 `FECHA_FUERA_DE_RANGO
 
 ### Tests for User Story 5
 
-- [ ] T058 [P] [US5] Tests de contrato del GET con fecha: `?fecha=` de día previo
+- [X] T058 [P] [US5] Tests de contrato del GET con fecha: `?fecha=` de día previo
   navegable → 200 con `navegacion` coherente (`esHoy: false`); fecha futura → 400
   `FECHA_FUERA_DE_RANGO`; fecha de período sin calendario → 400
   `FECHA_FUERA_DE_RANGO`; sin `?fecha=` → 200 con `esHoy: true` y `siguiente: null`,
   en `tests/contract/web-api-fichadas-hoy.test.js` — DEBEN fallar antes de T060
-- [ ] T059 [P] [US5] Tests de contrato de los POST con fecha fuera de rango:
+- [X] T059 [P] [US5] Tests de contrato de los POST con fecha fuera de rango:
   `POST /correcciones`, `POST /pausas` y `POST /retiros-anticipados` con fecha futura
   o de período sin calendario → 400 `FECHA_FUERA_DE_RANGO` (antes de cualquier otra
   validación de negocio), en `tests/contract/web-api-fichadas-hoy.test.js` — DEBEN
   fallar antes de T061
-- [ ] T060 [P] [US5] Test de integración: corregir un horario de un día previo
+- [X] T060 [P] [US5] Test de integración: corregir un horario de un día previo
   navegable → 200, la corrección persiste con la fecha del día corregido y
   autor/motivo (auditoría igual que hoy), en
   `tests/integration/fichadas-hoy.integration.test.js` — DEBE fallar antes de T061
 
 ### Implementation for User Story 5
 
-- [ ] T061 [US5] Validar `fechaNavegable` en `src/web/api/fichadas-hoy-handlers.js`:
+- [X] T061 [US5] Validar `fechaNavegable` en `src/web/api/fichadas-hoy-handlers.js`:
   en el GET (tras `validarFecha`) y en los tres POST de edición (tras
   `validarFechaCuerpo`), lanzando `ApiError(400, 'FECHA_FUERA_DE_RANGO', ...)`;
   `vistaHoy` pasa `periodos` (de `ctx.repo.listarPeriodos()`) al view-model para el
   bloque `navegacion` — depende de T057; hace pasar T058/T059/T060
-- [ ] T062 [P] [US5] Extender `obtenerFichadasHoy(fecha?)` en
+- [X] T062 [P] [US5] Extender `obtenerFichadasHoy(fecha?)` en
   `frontend/src/api/fichadas-hoy-client.js` para agregar `?fecha=` cuando se pasa una
   fecha (sin fecha: comportamiento actual)
-- [ ] T063 [P] [US5] Crear `frontend/src/components/NavegacionDia.jsx`: fecha visible
+- [X] T063 [P] [US5] Crear `frontend/src/components/NavegacionDia.jsx`: fecha visible
   + botones «Día anterior» / «Día siguiente», habilitados según
   `navegacion.anterior`/`navegacion.siguiente` (null = deshabilitado); componente de
   presentación puro (Principio I)
-- [ ] T064 [US5] Integrar la navegación en
+- [X] T064 [US5] Integrar la navegación en
   `frontend/src/components/PaginaFichadasHoy.jsx`: estado de fecha seleccionada,
   `cargar(fecha)` vía el cliente extendido, montar `NavegacionDia` en el encabezado, y
   mostrar `BotonConsultarReloj` solo cuando `navegacion.esHoy` — depende de T062, T063
-- [ ] T065 [P] [US5] Tests de componente: `NavegacionDia` (botones
+- [X] T065 [P] [US5] Tests de componente: `NavegacionDia` (botones
   habilitados/deshabilitados según `navegacion`) en
   `frontend/src/components/NavegacionDia.test.jsx`, y en
   `frontend/src/components/PaginaFichadasHoy.test.jsx` los casos "navegar al día
@@ -399,12 +399,12 @@ muestra la primera por `desde` (con `+N` si hay más) y `—` en filas sin pausa
 retiros anticipados no aparecen en esas columnas (quickstart.md, Escenario 6, pasos
 1–3).
 
-- [ ] T066 [P] [US1] Tests de componente de las columnas de pausa: fila sin pausas →
+- [X] T066 [P] [US1] Tests de componente de las columnas de pausa: fila sin pausas →
   `—`/`—`; una pausa intermedia → sus horas; dos pausas intermedias → la primera por
   `desde` + indicador `+1`; fila con solo retiro anticipado → `—` (no se muestra en
   estas columnas), en `frontend/src/components/TablaFichadasHoy.test.jsx` — DEBEN
   fallar antes de T067
-- [ ] T067 [US1] Agregar las columnas «Inicio pausa» / «Fin pausa» a
+- [X] T067 [US1] Agregar las columnas «Inicio pausa» / «Fin pausa» a
   `frontend/src/components/TablaFichadasHoy.jsx`, derivando la pausa principal de
   `fila.pausas[]` (primera vigente `tipo: 'intermedia'` ordenada por `desde`; `+N`
   para las adicionales) — depende de T066
@@ -423,19 +423,19 @@ aparece como modal (`role="dialog"`, `aria-modal`); Escape o click en el backdro
 cierra sin efecto; el flujo de guardado sigue funcionando igual (quickstart.md,
 Escenario 6, paso 4).
 
-- [ ] T068 [P] [US2] Tests de componente de `Dialogo`: renderiza contenido con
+- [X] T068 [P] [US2] Tests de componente de `Dialogo`: renderiza contenido con
   `role="dialog"` y `aria-modal="true"`, cierra con Escape y con click en el backdrop
   (llamando `onCerrar`), no cierra con click dentro del contenido, en
   `frontend/src/components/Dialogo.test.jsx` — DEBEN fallar antes de T069
-- [ ] T069 [US2] Crear `frontend/src/components/Dialogo.jsx` (backdrop + contenedor
+- [X] T069 [US2] Crear `frontend/src/components/Dialogo.jsx` (backdrop + contenedor
   `role="dialog"`/`aria-modal="true"`/etiqueta accesible, cierre por Escape y click en
   backdrop; foco inicial dentro del diálogo) siguiendo el patrón de
   `DialogoConfirmarReclasificar.jsx` — depende de T068
-- [ ] T070 [US2] Envolver `FormularioCorreccion` y `FormularioPausaRetiro` en
+- [X] T070 [US2] Envolver `FormularioCorreccion` y `FormularioPausaRetiro` en
   `Dialogo` desde `frontend/src/components/PaginaFichadasHoy.jsx` (cancelar = cerrar
   el diálogo, sin efecto; los formularios no cambian su lógica interna) — depende de
   T069
-- [ ] T071 [P] [US3] Ajustar los tests de página existentes para el nuevo patrón modal
+- [X] T071 [P] [US3] Ajustar los tests de página existentes para el nuevo patrón modal
   (los formularios se encuentran dentro de un `role="dialog"`) en
   `frontend/src/components/PaginaFichadasHoy.test.jsx`,
   `FormularioCorreccion.test.jsx` y `FormularioPausaRetiro.test.jsx` según haga falta
@@ -447,10 +447,10 @@ Escenario 6, paso 4).
 
 ## Phase 12: Polish iteración 2
 
-- [ ] T072 Ejecutar manualmente los Escenarios 5 y 6 de `quickstart.md` de punta a
+- [X] T072 Ejecutar manualmente los Escenarios 5 y 6 de `quickstart.md` de punta a
   punta y registrar el resultado en el propio `quickstart.md` (mismo formato que la
   tabla de T053)
-- [ ] T073 [P] Correr las suites completas (backend `node --test` y frontend
+- [X] T073 [P] Correr las suites completas (backend `node --test` y frontend
   `npx vitest run`) confirmando que la iteración 2 no rompe nada de T001–T055
 
 ---

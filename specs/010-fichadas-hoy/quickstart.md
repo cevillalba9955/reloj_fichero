@@ -132,6 +132,32 @@ mismo patrón que los tests de la feature 002). **11/11 pasos PASS**:
 | 4 — Servicio caído → 502, datos previos intactos | PASS |
 | Auditoría transversal (autor/motivo/fechaHora/valores) | PASS |
 
+## Resultado de ejecución — iteración 2 (T072 — 2026-07-18)
+
+Escenario 5 ejecutado contra el servidor web real (`crearApp`) sobre datos
+temporales (mismo arnés que los tests); Escenario 6 verificado sobre la
+aplicación real desplegada localmente (`npm run web` + build de Vite, datos
+reales del repo) navegando con el browser, más los tests de componentes para
+las variantes de pausas. **10/10 pasos PASS**:
+
+| Escenario | Resultado |
+|-----------|-----------|
+| 5.1 — GET hoy incluye `navegacion { esHoy: true, siguiente: null }` | PASS |
+| 5.2 — GET día previo → 200 con `esHoy: false` | PASS |
+| 5.3 — POST corrección sobre día previo → 200, auditada con esa fecha | PASS |
+| 5.4 — GET/POST fecha futura o período sin calendario → 400 `FECHA_FUERA_DE_RANGO` | PASS |
+| 6.1 — Columnas «Inicio pausa» / «Fin pausa» visibles, `—` sin pausa | PASS |
+| 6.2 — Pausa principal por `desde` + `+N` (tests de componente) | PASS |
+| 6.3 — Retiro anticipado excluido de las columnas (tests de componente) | PASS |
+| 6.4 — «Corregir» abre modal `role="dialog"` sobre un día previo | PASS |
+| 6.4 — Escape cierra el modal sin efecto alguno | PASS |
+| UI — «Consultar reloj» solo visible cuando el día mostrado es hoy | PASS |
+
+Nota: en la app real, al navegar del 2026-07-18 (hoy) al 2026-07-17 el botón
+«Consultar reloj» desaparece y reaparece al volver a hoy; la corrección del
+modal en día previo se abrió y canceló sin persistir (no se alteraron los
+datos reales del repo).
+
 Nota operativa: la consulta manual usa `scheduler.tick({ forzarConsulta: true })`
 y abre sesión contra el reloj **en cualquier momento**, aunque ninguna ventana de
 checkpoint esté abierta (el chequeo de ventana solo aplica al ciclo programado).

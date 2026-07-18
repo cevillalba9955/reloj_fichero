@@ -27,9 +27,10 @@ export function crearClienteFichadasHoy({ fetchImpl, base = '/api' } = {}) {
   }
 
   return {
-    // GET /api/fichadas-hoy → VistaFichadasHoy
-    obtenerFichadasHoy() {
-      return pedir('/fichadas-hoy');
+    // GET /api/fichadas-hoy[?fecha=YYYY-MM-DD] → VistaFichadasHoy. Sin fecha:
+    // el día actual del servidor; con fecha: un día previo navegable (US5).
+    obtenerFichadasHoy(fecha = null) {
+      return pedir(fecha ? `/fichadas-hoy?fecha=${encodeURIComponent(fecha)}` : '/fichadas-hoy');
     },
     // POST /api/fichadas-hoy/correcciones → FilaFichadaHoy recalculada (US2)
     corregir(legajo, { fecha, entrada = null, salida = null, autor = null, motivo }) {

@@ -13,8 +13,10 @@ import {
 // Acceptance Scenario de la Historia 1 del spec. Se extiende por historia
 // (US2: correcciones; US3: pausas/retiros; US4: consulta al reloj).
 
-const FECHA = fechaDelMes(10); // reclasificada Laborable
-const FERIADO = fechaDelMes(11); // reclasificada Feriado
+// Días 1 y 2: siempre <= hoy, navegables cualquiera sea el día en que corra la
+// suite (iteración 2 valida FECHA_FUERA_DE_RANGO sobre fechas futuras).
+const FECHA = fechaDelMes(1); // reclasificada Laborable
+const FERIADO = fechaDelMes(2); // reclasificada Feriado
 
 const PADRON = [
   { legajo: 1, categoria: 'ADMIN', nombre: 'Ana Presente' }, // entrada en margen
@@ -252,8 +254,13 @@ test('US4: el control trae 2 fichadas nuevas → la vista devuelta ya las reflej
     entregar?.();
     return { resultado: 'ok', fichadasNuevas: 2, detail: null };
   });
-  const e = await entorno({ envExtra: { FICHADAS_CONTROL_URL: control.url } });
+  // HOY se reclasifica Laborable explícitamente: el esquema lun-vie del arnés
+  // lo dejaría 'No Laborable' en fin de semana y la jornada no computaría.
   const HOY = fechaDelMes(new Date().getDate());
+  const e = await entorno({
+    envExtra: { FICHADAS_CONTROL_URL: control.url },
+    clasificaciones: { [FECHA]: 'Laborable', [FERIADO]: 'Feriado', [HOY]: 'Laborable' },
+  });
   entregar = () =>
     e.agregarFichadas([
       { legajo: 1, fecha: HOY, hora: '07:03:00' },
@@ -343,6 +350,37 @@ test('US1: la vista es de solo lectura — el GET no altera el estado persistido
     const antes = await (await fetch(`${e.base}/api/fichadas-hoy?fecha=${FECHA}`)).json();
     const despues = await (await fetch(`${e.base}/api/fichadas-hoy?fecha=${FECHA}`)).json();
     assert.deepEqual(despues, antes, 'dos GET consecutivos devuelven lo mismo');
+  } finally {
+    e.close();
+  }
+});
+
+// T060 (US5, iteración 2) — Editar un día previo navegable: la corrección se
+// guarda y audita con la fecha del día corregido, igual que si fuera hoy
+// (quickstart.md, Escenario 5).
+test('US5: corregir un horario de un día previo persiste y audita con esa fecha', async () => {
+  const e = await entorno();
+  try {
+    const res = await postJson(e.base, '/api/fichadas-hoy/correcciones', {
+      legajo: 3, fecha: FECHA, entrada: '07:05', autor: 'admin@utn',
+      motivo: 'corrección retroactiva antes del cierre',
+    });
+    assert.equal(res.status, 200);
+
+    // La vista de ese día previo refleja la corrección al navegar hacia él.
+    const v = await (await fetch(`${e.base}/api/fichadas-hoy?fecha=${FECHA}`)).json();
+    const fila = v.empleados.find((f) => f.legajo === 3);
+    assert.equal(fila.entrada, '07:05');
+    assert.equal(fila.correccionVigente, true);
+    assert.ok(v.navegacion, 'la vista de un día previo incluye navegacion');
+
+    // Auditoría: la corrección queda con la fecha del día corregido (no la de hoy).
+    const estado = JSON.parse(readFileSync(join(e.repoDir, `${e.periodo}.json`), 'utf8'));
+    const corr = estado.correcciones.find((c) => c.legajo === 3 && c.vigente);
+    assert.equal(corr.fecha, FECHA);
+    assert.equal(corr.autor, 'admin@utn');
+    assert.equal(corr.motivo, 'corrección retroactiva antes del cierre');
+    assert.ok(corr.fechaHora, 'marca de tiempo del alta');
   } finally {
     e.close();
   }
