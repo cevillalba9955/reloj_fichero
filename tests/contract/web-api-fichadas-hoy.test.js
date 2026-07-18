@@ -16,7 +16,9 @@ const PADRON = [
   { legajo: 9, categoria: 'CATEGORIA_INEXISTENTE', nombre: 'Zoe Anomalía' },
 ];
 
-const FECHA = fechaDelMes(10);
+// Día 1: siempre <= hoy, así la fecha es navegable cualquiera sea el día en que
+// corra la suite (iteración 2 valida FECHA_FUERA_DE_RANGO sobre fechas futuras).
+const FECHA = fechaDelMes(1);
 
 test('GET /api/fichadas-hoy → 200 con la forma de VistaFichadasHoy', async () => {
   const e = await crearEntornoFichadasHoy({
@@ -364,6 +366,107 @@ test('POST consultar-reloj — el ciclo del reloj falló (resultado "error") →
   } finally {
     e.close();
     control.close();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// T058/T059 (US5, iteración 2) — Navegación de días previos: el GET con ?fecha=
+// es contrato oficial; fechas futuras o de períodos sin calendario ("período de
+// liquidación abierto", research.md §6) → 400 FECHA_FUERA_DE_RANGO, también en
+// los POST de edición.
+// ---------------------------------------------------------------------------
+
+// 'YYYY-MM-DD' a `delta` días de hoy (reloj real del sistema, UTC-safe).
+function fechaRelativa(delta) {
+  const n = new Date();
+  return new Date(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate() + delta))
+    .toISOString()
+    .slice(0, 10);
+}
+
+// Día 15 del mes ANTERIOR: el entorno solo genera calendario del mes actual,
+// así que este período no está "abierto".
+function fechaMesSinCalendario() {
+  const n = new Date();
+  return new Date(Date.UTC(n.getFullYear(), n.getMonth() - 1, 15)).toISOString().slice(0, 10);
+}
+
+test('GET sin ?fecha → 200 con navegacion { esHoy: true, siguiente: null }', async () => {
+  const e = await crearEntornoFichadasHoy({ padron: PADRON });
+  try {
+    const res = await fetch(`${e.base}/api/fichadas-hoy`);
+    assert.equal(res.status, 200);
+    const v = await res.json();
+    assert.ok(v.navegacion, 'la vista incluye el bloque navegacion');
+    assert.equal(v.navegacion.esHoy, true);
+    assert.equal(v.navegacion.siguiente, null, 'nunca se ofrece un día futuro');
+  } finally {
+    e.close();
+  }
+});
+
+test('GET ?fecha= de un día previo navegable → 200 con navegacion coherente', async () => {
+  const e = await crearEntornoFichadasHoy({
+    padron: PADRON,
+    clasificaciones: { [FECHA]: 'Laborable' },
+  });
+  try {
+    const res = await fetch(`${e.base}/api/fichadas-hoy?fecha=${FECHA}`);
+    assert.equal(res.status, 200);
+    const v = await res.json();
+    assert.equal(v.fecha, FECHA);
+    // esHoy solo si la suite corre justo el día 1 del mes.
+    assert.equal(v.navegacion.esHoy, FECHA === fechaRelativa(0));
+    assert.equal(v.navegacion.anterior, null, 'el día 1 del único período con calendario no ofrece anterior');
+  } finally {
+    e.close();
+  }
+});
+
+test('GET ?fecha= futura → 400 FECHA_FUERA_DE_RANGO', async () => {
+  const e = await crearEntornoFichadasHoy({ padron: PADRON });
+  try {
+    const res = await fetch(`${e.base}/api/fichadas-hoy?fecha=${fechaRelativa(1)}`);
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error.codigo, 'FECHA_FUERA_DE_RANGO');
+  } finally {
+    e.close();
+  }
+});
+
+test('GET ?fecha= de un período sin calendario → 400 FECHA_FUERA_DE_RANGO', async () => {
+  const e = await crearEntornoFichadasHoy({ padron: PADRON });
+  try {
+    const res = await fetch(`${e.base}/api/fichadas-hoy?fecha=${fechaMesSinCalendario()}`);
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error.codigo, 'FECHA_FUERA_DE_RANGO');
+  } finally {
+    e.close();
+  }
+});
+
+test('POST correcciones/pausas/retiros — fecha futura o de período sin calendario → 400 FECHA_FUERA_DE_RANGO', async () => {
+  const e = await crearEntornoFichadasHoy({
+    padron: PADRON,
+    clasificaciones: { [FECHA]: 'Laborable' },
+  });
+  try {
+    const casos = [
+      ['/api/fichadas-hoy/correcciones', { entrada: '08:15' }],
+      ['/api/fichadas-hoy/pausas', { desde: '12:00', hasta: '13:00' }],
+      ['/api/fichadas-hoy/retiros-anticipados', { hora: '14:30' }],
+    ];
+    for (const [path, extra] of casos) {
+      for (const fecha of [fechaRelativa(1), fechaMesSinCalendario()]) {
+        const res = await postJson(e.base, path, {
+          legajo: 1, fecha, autor: 'admin', motivo: 'motivo válido', ...extra,
+        });
+        assert.equal(res.status, 400, `${path} con fecha ${fecha}`);
+        assert.equal((await res.json()).error.codigo, 'FECHA_FUERA_DE_RANGO', `${path} con fecha ${fecha}`);
+      }
+    }
+  } finally {
+    e.close();
   }
 });
 

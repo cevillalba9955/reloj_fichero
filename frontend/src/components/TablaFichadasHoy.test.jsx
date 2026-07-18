@@ -90,3 +90,60 @@ test('sin empleados muestra el estado vacío en vez de una tabla', () => {
   expect(screen.queryByRole('table')).toBeNull();
   expect(screen.getByText(/No hay empleados esperados/)).toBeInTheDocument();
 });
+
+// T066 (feature 010, iteración 2, FR-001) — Columnas «Inicio pausa» /
+// «Fin pausa»: muestran la primera pausa intermedia vigente por `desde` (+N si
+// hay más); los retiros anticipados no aparecen en estas columnas.
+
+function pausaIntermedia(desde, hasta) {
+  return { desde, hasta, tipo: 'intermedia', motivo: 'corte' };
+}
+
+test('las columnas de pausa existen y una fila sin pausas muestra —', () => {
+  render(<TablaFichadasHoy empleados={[fila()]} />);
+  expect(screen.getByText('Inicio pausa')).toBeInTheDocument();
+  expect(screen.getByText('Fin pausa')).toBeInTheDocument();
+  const celdas = screen.getAllByRole('row')[1].querySelectorAll('td');
+  // legajo, nombre, entrada, salida, inicio pausa, fin pausa, horas, situación
+  expect(celdas[4]).toHaveTextContent('—');
+  expect(celdas[5]).toHaveTextContent('—');
+});
+
+test('una pausa intermedia se muestra en sus columnas', () => {
+  render(
+    <TablaFichadasHoy empleados={[fila({ pausas: [pausaIntermedia('12:00', '13:00')] })]} />,
+  );
+  const celdas = screen.getAllByRole('row')[1].querySelectorAll('td');
+  expect(celdas[4]).toHaveTextContent('12:00');
+  expect(celdas[5]).toHaveTextContent('13:00');
+});
+
+test('con dos pausas intermedias muestra la primera por desde, con indicador +1', () => {
+  render(
+    <TablaFichadasHoy
+      empleados={[
+        fila({ pausas: [pausaIntermedia('14:00', '14:30'), pausaIntermedia('12:00', '13:00')] }),
+      ]}
+    />,
+  );
+  const celdas = screen.getAllByRole('row')[1].querySelectorAll('td');
+  expect(celdas[4]).toHaveTextContent('12:00', 'la primera por desde, no por orden de alta');
+  expect(celdas[5]).toHaveTextContent('13:00');
+  expect(celdas[5]).toHaveTextContent('+1');
+});
+
+test('un retiro anticipado no aparece en las columnas de pausa', () => {
+  render(
+    <TablaFichadasHoy
+      empleados={[
+        fila({
+          situacion: 'RETIRO_ANTICIPADO',
+          pausas: [{ desde: '14:30', hasta: '16:00', tipo: 'retiro_anticipado', motivo: 'médico' }],
+        }),
+      ]}
+    />,
+  );
+  const celdas = screen.getAllByRole('row')[1].querySelectorAll('td');
+  expect(celdas[4]).toHaveTextContent('—');
+  expect(celdas[5]).toHaveTextContent('—');
+});

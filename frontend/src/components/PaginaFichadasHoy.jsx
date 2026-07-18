@@ -4,6 +4,8 @@ import TablaFichadasHoy from './TablaFichadasHoy.jsx';
 import FormularioCorreccion from './FormularioCorreccion.jsx';
 import FormularioPausaRetiro from './FormularioPausaRetiro.jsx';
 import BotonConsultarReloj from './BotonConsultarReloj.jsx';
+import NavegacionDia from './NavegacionDia.jsx';
+import Dialogo from './Dialogo.jsx';
 
 // feature 010 — Página "Fichadas de Hoy": carga la vista del día al montar,
 // con estados cargando / con-datos / error (reintento) (US1); permite corregir
@@ -26,18 +28,21 @@ export default function PaginaFichadasHoy({ cliente = clientePorDefecto }) {
   const [estado, setEstado] = useState({ tipo: 'cargando' });
   const [correccion, setCorreccion] = useState(null); // fila en corrección
   const [pausaRetiro, setPausaRetiro] = useState(null); // fila en pausa/retiro
+  // US5: día seleccionado (null = hoy del servidor). Solo se navega a fechas
+  // que el servidor ofreció en `navegacion` (FR-016/FR-017).
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(null);
 
   const cargar = useCallback(async () => {
     setEstado({ tipo: 'cargando' });
     setCorreccion(null);
     setPausaRetiro(null);
     try {
-      const vista = await cliente.obtenerFichadasHoy();
+      const vista = await cliente.obtenerFichadasHoy(fechaSeleccionada);
       setEstado({ tipo: 'con-datos', vista });
     } catch (err) {
       setEstado({ tipo: 'error', mensaje: err.message });
     }
-  }, [cliente]);
+  }, [cliente, fechaSeleccionada]);
 
   useEffect(() => {
     cargar();
@@ -113,7 +118,12 @@ export default function PaginaFichadasHoy({ cliente = clientePorDefecto }) {
             <p className="dia-clasificacion">
               {ETIQUETA_DIA[estado.vista.diaClasificacion] ?? estado.vista.diaClasificacion}
             </p>
-            <BotonConsultarReloj onConsultar={consultarReloj} />
+            <NavegacionDia
+              navegacion={estado.vista.navegacion}
+              onNavegar={setFechaSeleccionada}
+            />
+            {/* La consulta manual al reloj solo aplica al día actual (FR-008). */}
+            {estado.vista.navegacion?.esHoy && <BotonConsultarReloj onConsultar={consultarReloj} />}
           </header>
           <TablaFichadasHoy
             empleados={estado.vista.empleados}
@@ -126,19 +136,31 @@ export default function PaginaFichadasHoy({ cliente = clientePorDefecto }) {
               setPausaRetiro(fila);
             }}
           />
+          {/* FR-018: los formularios de edición se abren como diálogo modal;
+              Escape / click en el backdrop equivalen a Cancelar. */}
           {correccion && (
-            <FormularioCorreccion
-              fila={correccion}
-              onGuardar={guardarCorreccion}
-              onCancelar={() => setCorreccion(null)}
-            />
+            <Dialogo
+              etiqueta={`Corregir horarios del legajo ${correccion.legajo}`}
+              onCerrar={() => setCorreccion(null)}
+            >
+              <FormularioCorreccion
+                fila={correccion}
+                onGuardar={guardarCorreccion}
+                onCancelar={() => setCorreccion(null)}
+              />
+            </Dialogo>
           )}
           {pausaRetiro && (
-            <FormularioPausaRetiro
-              fila={pausaRetiro}
-              onGuardar={guardarPausaRetiro}
-              onCancelar={() => setPausaRetiro(null)}
-            />
+            <Dialogo
+              etiqueta={`Pausa o retiro anticipado del legajo ${pausaRetiro.legajo}`}
+              onCerrar={() => setPausaRetiro(null)}
+            >
+              <FormularioPausaRetiro
+                fila={pausaRetiro}
+                onGuardar={guardarPausaRetiro}
+                onCancelar={() => setPausaRetiro(null)}
+              />
+            </Dialogo>
           )}
         </>
       )}

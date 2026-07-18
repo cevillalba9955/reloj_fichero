@@ -27,6 +27,18 @@ function formatoHoras(min) {
   return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
 }
 
+// iteración 2 (FR-001, research.md §7) — Pausa "principal" del día: la primera
+// pausa intermedia ordenada por `desde` (regla de presentación; los retiros
+// anticipados tienen su propia situación y no se muestran en estas columnas).
+// `adicionales` cuenta las pausas intermedias restantes (indicador +N).
+function pausaPrincipalDe(pausas = []) {
+  const intermedias = pausas
+    .filter((p) => (p.tipo ?? 'intermedia') === 'intermedia')
+    .sort((a, b) => a.desde.localeCompare(b.desde));
+  if (intermedias.length === 0) return { principal: null, adicionales: 0 };
+  return { principal: intermedias[0], adicionales: intermedias.length - 1 };
+}
+
 export default function TablaFichadasHoy({ empleados, onCorregir = null, onPausaRetiro = null }) {
   if (!empleados || empleados.length === 0) {
     return <p className="fichadas-vacio">No hay empleados esperados para hoy.</p>;
@@ -40,6 +52,8 @@ export default function TablaFichadasHoy({ empleados, onCorregir = null, onPausa
           <th scope="col">Nombre</th>
           <th scope="col">Entrada</th>
           <th scope="col">Salida</th>
+          <th scope="col">Inicio pausa</th>
+          <th scope="col">Fin pausa</th>
           <th scope="col">Horas trabajadas</th>
           <th scope="col">Situación</th>
           {conAcciones && <th scope="col">Acciones</th>}
@@ -48,12 +62,18 @@ export default function TablaFichadasHoy({ empleados, onCorregir = null, onPausa
       <tbody>
         {empleados.map((fila) => {
           const clave = CLAVE_SITUACION[fila.situacion] ?? 'desconocida';
+          const { principal, adicionales } = pausaPrincipalDe(fila.pausas);
           return (
             <tr key={fila.legajo} className={`fila-fichada situacion-${clave}`}>
               <td>{fila.legajo}</td>
               <td>{fila.nombre ?? '—'}</td>
               <td>{fila.entrada ?? '—'}</td>
               <td>{fila.salida ?? '—'}</td>
+              <td>{principal?.desde ?? '—'}</td>
+              <td>
+                {principal?.hasta ?? '—'}
+                {adicionales > 0 && <span className="pausas-adicionales"> +{adicionales}</span>}
+              </td>
               <td>{formatoHoras(fila.horasTrabajadas)}</td>
               <td>
                 <span className={`situacion clave-${clave}`}>

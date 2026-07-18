@@ -79,9 +79,15 @@ Lo que arma `construirVistaFichadasHoy` (`src/web/view-model.js`) y devuelve
 
 ```text
 VistaFichadasHoy {
-  fecha: string                 # YYYY-MM-DD, hoy del servidor
+  fecha: string                 # YYYY-MM-DD, día mostrado (hoy por defecto;
+                                 # iteración 2: puede ser un día previo navegable)
   periodo: string                # YYYYMM del día (para llamadas subsiguientes)
   diaClasificacion: 'Laborable' | 'No Laborable' | 'Feriado'
+  navegacion: {                  # NUEVO (iteración 2, research.md §6) — calculado
+    anterior: string | null      # por el servidor con el predicado fechaNavegable:
+    siguiente: string | null     # fecha <= hoy Y período con calendario generado
+    esHoy: boolean               # ("período abierto"); null = no navegable en esa
+  }                              # dirección. La UI no re-deriva esta regla.
   empleados: FilaFichadaHoy[]
 }
 
@@ -99,6 +105,12 @@ FilaFichadaHoy {
   anomalias: string[]            # p. ej. "categoría no configurada"
 }
 ```
+
+**Pausa principal (regla de presentación, iteración 2 — research.md §7)**: las
+columnas «Inicio pausa» / «Fin pausa» de la tabla muestran la primera pausa vigente
+con `tipo: 'intermedia'` ordenada por `desde`, derivada por el frontend a partir de
+`pausas[]` (sin campo nuevo en la API). Pausas intermedias adicionales se indican con
+`+N` en la celda; los retiros anticipados no aparecen en estas columnas.
 
 No incluye legajos crudos del reloj, templates biométricos ni credenciales (Principio
 V, FR-015 del spec). El campo `nombre` es el único dato personal expuesto, ya presente
