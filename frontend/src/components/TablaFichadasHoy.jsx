@@ -45,16 +45,15 @@ export default function TablaFichadasHoy({ empleados, onCorregir = null, onPausa
   }
   const conAcciones = Boolean(onCorregir || onPausaRetiro);
   return (
-    <table className="tabla-fichadas" aria-label="Fichadas de hoy">
+    <table width="100%" border="1" style={{ textAlign: 'center' }} className="tabla-fichadas" aria-label="Fichadas de hoy">
       <thead>
         <tr>
-          <th scope="col">Legajo</th>
-          <th scope="col">Nombre</th>
+          <th scope="col">Leg</th>
+          <th scope="col">Empleado</th>
           <th scope="col">Entrada</th>
+          <th scope="col" colSpan="2">Pausa</th>
           <th scope="col">Salida</th>
-          <th scope="col">Inicio pausa</th>
-          <th scope="col">Fin pausa</th>
-          <th scope="col">Horas trabajadas</th>
+          <th scope="col">Horas</th>
           <th scope="col">Situación</th>
           {conAcciones && <th scope="col">Acciones</th>}
         </tr>
@@ -68,18 +67,18 @@ export default function TablaFichadasHoy({ empleados, onCorregir = null, onPausa
               <td>{fila.legajo}</td>
               <td>{fila.nombre ?? '—'}</td>
               <td>{fila.entrada ?? '—'}</td>
-              <td>{fila.salida ?? '—'}</td>
               <td>{principal?.desde ?? '—'}</td>
               <td>
                 {principal?.hasta ?? '—'}
                 {adicionales > 0 && <span className="pausas-adicionales"> +{adicionales}</span>}
               </td>
+              <td>{fila.salida ?? '—'}</td>
               <td>{formatoHoras(fila.horasTrabajadas)}</td>
               <td>
                 <span className={`situacion clave-${clave}`}>
                   {ETIQUETA_SITUACION[fila.situacion] ?? fila.situacion}
                 </span>
-                {fila.correccionVigente && <span className="marca-correccion"> (corregida)</span>}
+                {fila.correccionVigente && <span className="marca-correccion"> (*)</span>}
                 {fila.anomalias?.length > 0 && (
                   <span className="anomalias"> {fila.anomalias.join('; ')}</span>
                 )}
@@ -93,7 +92,7 @@ export default function TablaFichadasHoy({ empleados, onCorregir = null, onPausa
                   )}
                   {onPausaRetiro && fila.situacion !== 'ANOMALIA' && (
                     <button type="button" onClick={() => onPausaRetiro(fila)}>
-                      Pausa / Retiro
+                      Excepcion
                     </button>
                   )}
                 </td>
