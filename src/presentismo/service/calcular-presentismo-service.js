@@ -4,6 +4,7 @@ import { calcularJornadaAuto, aplicarAjustes } from '../domain/jornada.js';
 import { construirResumen } from '../domain/resumen-presentismo.js';
 import { correccionVigenteDe, crearCorreccion } from '../domain/correccion.js';
 import { calcularSituacionHoy, SituacionDia } from '../domain/situacion-dia.js';
+import { proyectarResumenPeriodo } from '../domain/resumen-periodo.js';
 import { parseHoraMinuto } from '../domain/tiempo.js';
 import { TipoPausa, normalizarTipoPausa } from '../domain/pausa.js';
 import { assertCumplePuerto } from '../ports/index.js';
@@ -215,6 +216,27 @@ export function createCalcularPresentismoService({
     return { fecha, periodo, diaClasificacion: diaCal.clasificacion, filas };
   }
 
+  // feature 011 (US1): resumen del período por empleado para la página
+  // "Resumen del Período". Reutiliza calcularEmpleado (auto + ajustes); para
+  // quincenales suma los tramos Q1+Q2 en una fila mensual única concatenando
+  // sus jornadas (research.md §3). `hoy` en 'YYYY-MM-DD' (FR-008; inyectable
+  // para tests, default hoyLocal del servidor vía el caller).
+  async function calcularResumenPeriodo(periodo, legajos, hoy) {
+    const filas = [];
+    for (const legajo of legajos) {
+      const resúmenes = await calcularEmpleado(legajo, periodo);
+      if (resúmenes[0]?.sinCalculo) {
+        filas.push({ legajo, anomalia: resúmenes[0].anomalias?.[0] ?? 'sin categoría configurada' });
+        continue;
+      }
+      const params = resúmenes[0].params;
+      const jornadas = resúmenes.flatMap((r) => r.jornadas ?? []);
+      const proyeccion = proyectarResumenPeriodo({ resumen: { legajo, params, jornadas }, hoy });
+      filas.push({ ...proyeccion, anomalia: null });
+    }
+    return filas;
+  }
+
   async function calcularPlantilla(periodo, legajos) {
     const salida = [];
     for (const legajo of legajos) {
@@ -326,6 +348,7 @@ export function createCalcularPresentismoService({
     reclasificarDia: reclasificarDiaMes,
     calcularEmpleado,
     calcularHoy,
+    calcularResumenPeriodo,
     calcularPlantilla,
     cargarCorreccion,
     revertirCorreccion,

@@ -68,3 +68,26 @@ Valida end-to-end las 3 historias del spec sobre el entorno local ya usado por
 
 - Con un padrón sintético de 500 legajos (fixture), medir `GET /api/resumen-periodo`
   del período con más datos: **Esperado**: respuesta en <10 s.
+
+## Resultado de ejecución (T025-T026 — 2026-07-18)
+
+Suites automatizadas: **93/93 PASS** (13 backend en
+`tests/contract/web-api-resumen-periodo.test.js` +
+`tests/integration/resumen-periodo.integration.test.js` incluido el test de
+rendimiento, 9 unit de `presentismo-resumen-periodo.test.js`, y 12 archivos /
+83 tests de frontend). Suite completa del repo: 408 backend + 83 frontend,
+sin regresiones.
+
+Escenarios 1-3 verificados manualmente sobre la app real (`npm run web` +
+build de Vite, datos reales del repo, navegador):
+
+| Escenario | Resultado |
+|-----------|-----------|
+| 1 — Tabla con 12 empleados y 7 indicadores por fila (horas, completas, incompletas, ausencias, tarde, retiros, correcciones) | PASS |
+| 2 — Clic en fila abre diálogo modal (`role="dialog"`) con detalle día por día | PASS |
+| 2 — Escape cierra el diálogo sin efecto | PASS |
+| 3 — Selector de período (5 meses generados, más reciente por defecto) cambia la tabla sin recargar la app | PASS |
+
+Rendimiento (SC-004): 500 legajos sintéticos → **748 ms** (test automatizado),
+muy por debajo del presupuesto de 10 s; no hizo falta la optimización de
+research.md §6.

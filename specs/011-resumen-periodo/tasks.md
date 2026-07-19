@@ -37,22 +37,22 @@ estructura (la feature reutiliza el contexto web y el dominio ya cableados por 0
 
 **⚠️ CRITICAL**: ninguna historia puede completarse sin esta fase.
 
-- [ ] T001 [P] Tests unitarios de `proyectarResumenPeriodo({ resumen, hoy })` con
+- [X] T001 [P] Tests unitarios de `proyectarResumenPeriodo({ resumen, hoy })` con
   fixtures derivados de los Acceptance Scenarios de US1 (completas, incompletas
   vencidas, ausencias solo en Laborable vencido, día futuro NO cuenta, tarde por
   entrada fuera de margen, tarde anulada por corrección de entrada, retiro
   anticipado por pausa `tipo`, correcciones vigentes, coherencia fila↔detalle
   SC-002) en `tests/unit/presentismo-resumen-periodo.test.js` — DEBEN fallar antes
   de T003 (Principio IV)
-- [ ] T002 Extraer el predicado compartido de "entrada fuera de margen de apertura"
+- [X] T002 Extraer el predicado compartido de "entrada fuera de margen de apertura"
   (regla `TARDE` de `src/presentismo/domain/situacion-dia.js`) a un helper exportado
   reutilizable por ambos módulos (research.md §2), sin cambiar el comportamiento de
   010 (las suites existentes de situacion-dia deben seguir verdes)
-- [ ] T003 Implementar `proyectarResumenPeriodo({ resumen, hoy })` y
+- [X] T003 Implementar `proyectarResumenPeriodo({ resumen, hoy })` y
   `esLlegadaTarde(jornada, params)` en
   `src/presentismo/domain/resumen-periodo.js` (data-model.md: fila de acumulados +
   `detalle[]` del mismo arreglo filtrado por `fecha <= hoy`) — depende de T001, T002
-- [ ] T004 Agregar `calcularResumenPeriodo(periodo, legajos, hoy)` a
+- [X] T004 Agregar `calcularResumenPeriodo(periodo, legajos, hoy)` a
   `src/presentismo/service/calcular-presentismo-service.js`: por legajo llama
   `calcularEmpleado` y aplica la proyección; suma tramos Q1+Q2 en una fila mensual
   para quincenales (research.md §3); legajo `sinCalculo` → fila con anomalía —
@@ -75,12 +75,12 @@ sin necesitar el diálogo (US2) ni el selector (US3).
 
 ### Tests for User Story 1
 
-- [ ] T005 [P] [US1] Test de contrato para `GET /api/resumen-periodo` (200 con la
+- [X] T005 [P] [US1] Test de contrato para `GET /api/resumen-periodo` (200 con la
   forma de `VistaResumenPeriodo`, fila con `anomalia` para legajo sin categoría,
   filas vacías con padrón vacío, 400 `PERIODO_INVALIDO`, 404
   `CALENDARIO_NO_GENERADO`, sin rawHex/biométricos) en
   `tests/contract/web-api-resumen-periodo.test.js` — DEBE fallar antes de T008
-- [ ] T006 [P] [US1] Test de integración US1 en
+- [X] T006 [P] [US1] Test de integración US1 en
   `tests/integration/resumen-periodo.integration.test.js`: escenarios 1.2–1.5 del
   spec (ausencia por día laborable sin fichadas, 2 llegadas tarde, corrección
   prevalece en horas y anula la tarde, día futuro no cuenta) + verificación
@@ -89,27 +89,27 @@ sin necesitar el diálogo (US2) ni el selector (US3).
 
 ### Implementation for User Story 1
 
-- [ ] T007 [US1] Agregar `construirVistaResumenPeriodo({ periodo, periodos, filas,
+- [X] T007 [US1] Agregar `construirVistaResumenPeriodo({ periodo, periodos, filas,
   nombres })` a `src/web/view-model.js` (forma `FilaResumenPeriodo` de
   data-model.md; `horasTrabajadas` en minutos, nombre del padrón como único dato
   personal) — depende de T004
-- [ ] T008 [US1] Crear `src/web/api/resumen-periodo-handlers.js` con
+- [X] T008 [US1] Crear `src/web/api/resumen-periodo-handlers.js` con
   `GET /api/resumen-periodo` (query `periodo` opcional con default al más reciente,
   FR-002; validaciones y códigos de contracts/web-api.md) y registrarlo en
   `src/web/server.js` — depende de T007; hace pasar T005/T006
-- [ ] T009 [P] [US1] Crear `frontend/src/api/resumen-periodo-client.js` con
+- [X] T009 [P] [US1] Crear `frontend/src/api/resumen-periodo-client.js` con
   `obtenerResumen(periodo?)` (mismo patrón que `fichadas-hoy-client.js`)
-- [ ] T010 [P] [US1] Crear `frontend/src/components/TablaResumenPeriodo.jsx`:
+- [X] T010 [P] [US1] Crear `frontend/src/components/TablaResumenPeriodo.jsx`:
   fila por empleado con los 7 indicadores + anomalía distinguible; horas
   formateadas H:MM (mismo helper/criterio que `TablaFichadasHoy`); componente de
   presentación puro con `onSeleccionar(fila)` opcional
-- [ ] T011 [US1] Crear `frontend/src/components/PaginaResumenPeriodo.jsx`: carga la
+- [X] T011 [US1] Crear `frontend/src/components/PaginaResumenPeriodo.jsx`: carga la
   vista al montar (período default), estados cargando/con-datos/error con
   reintento, renderiza `TablaResumenPeriodo` — depende de T009, T010
-- [ ] T012 [US1] Agregar la pestaña "Resumen período" en `frontend/src/App.jsx`
+- [X] T012 [US1] Agregar la pestaña "Resumen período" en `frontend/src/App.jsx`
   montando `PaginaResumenPeriodo` (mismo patrón de pestañas sin librería de ruteo)
   — depende de T011
-- [ ] T013 [P] [US1] Tests de componente para `TablaResumenPeriodo`
+- [X] T013 [P] [US1] Tests de componente para `TablaResumenPeriodo`
   (indicadores por fila, anomalía, formato de horas) en
   `frontend/src/components/TablaResumenPeriodo.test.jsx` y para
   `PaginaResumenPeriodo` (carga, error, reintento) en
@@ -131,11 +131,11 @@ abre por clic y se cierra por botón/Escape/clic fuera sin efecto.
 
 ### Tests for User Story 2
 
-- [ ] T014 [P] [US2] Test de contrato para `GET /api/resumen-periodo/{legajo}`
+- [X] T014 [P] [US2] Test de contrato para `GET /api/resumen-periodo/{legajo}`
   (200 con `dias[]` ordenados y horas 'HH:MM', 400 `LEGAJO_INVALIDO`, 409
   `EMPLEADO_SIN_CATEGORIA`, 404 `CALENDARIO_NO_GENERADO`) en
   `tests/contract/web-api-resumen-periodo.test.js` — DEBE fallar antes de T016
-- [ ] T015 [P] [US2] Test de integración US2 en
+- [X] T015 [P] [US2] Test de integración US2 en
   `tests/integration/resumen-periodo.integration.test.js`: día corregido con
   `corregida: true`, retiro anticipado distinguible de pausa intermedia en
   `pausas[].tipo`, y coherencia SC-002 (Σ `dias[].horas` = fila; conteos de la fila
@@ -143,20 +143,20 @@ abre por clic y se cierra por botón/Escape/clic fuera sin efecto.
 
 ### Implementation for User Story 2
 
-- [ ] T016 [US2] Agregar `construirDetalleEmpleado(...)` a `src/web/view-model.js`
+- [X] T016 [US2] Agregar `construirDetalleEmpleado(...)` a `src/web/view-model.js`
   (forma `VistaDetalleEmpleado`/`DetalleJornada`, horas 'HH:MM') e implementar
   `GET /api/resumen-periodo/{legajo}` en
   `src/web/api/resumen-periodo-handlers.js` — depende de T008; hace pasar T014/T015
-- [ ] T017 [P] [US2] Agregar `obtenerDetalle(legajo, periodo?)` a
+- [X] T017 [P] [US2] Agregar `obtenerDetalle(legajo, periodo?)` a
   `frontend/src/api/resumen-periodo-client.js`
-- [ ] T018 [US2] Crear `frontend/src/components/DialogoDetalleEmpleado.jsx`: pide el
+- [X] T018 [US2] Crear `frontend/src/components/DialogoDetalleEmpleado.jsx`: pide el
   detalle al abrir (estados cargando/error), lo muestra dentro del `Dialogo` modal
   reutilizable (010 it. 2) con botón cerrar; días corregidos y retiros señalados —
   depende de T017
-- [ ] T019 [US2] Integrar en `PaginaResumenPeriodo.jsx`: clic en fila sin anomalía
+- [X] T019 [US2] Integrar en `PaginaResumenPeriodo.jsx`: clic en fila sin anomalía
   abre `DialogoDetalleEmpleado` (filas con anomalía no abren); cerrar vuelve al
   resumen sin efecto — depende de T018, T011
-- [ ] T020 [P] [US2] Tests de componente para `DialogoDetalleEmpleado` (render del
+- [X] T020 [P] [US2] Tests de componente para `DialogoDetalleEmpleado` (render del
   detalle, cierre por botón/Escape sin efecto, señalado de corregidos/retiros) en
   `frontend/src/components/DialogoDetalleEmpleado.test.jsx`
 
@@ -175,7 +175,7 @@ acumulados en 0 con las ausencias del calendario.
 
 ### Tests for User Story 3
 
-- [ ] T021 [P] [US3] Test de integración US3 en
+- [X] T021 [P] [US3] Test de integración US3 en
   `tests/integration/resumen-periodo.integration.test.js`: dos períodos generados →
   el GET de cada uno devuelve sus propios acumulados; período con calendario sin
   fichadas → acumulados 0 y ausencias según días laborables vencidos — DEBE fallar
@@ -184,13 +184,13 @@ acumulados en 0 con las ausencias del calendario.
 
 ### Implementation for User Story 3
 
-- [ ] T022 [P] [US3] Crear `frontend/src/components/SelectorPeriodo.jsx`:
+- [X] T022 [P] [US3] Crear `frontend/src/components/SelectorPeriodo.jsx`:
   desplegable con `periodos` de la vista (formato legible "Julio 2026"), valor
   actual `periodo`; componente de presentación puro con `onCambiar(periodo)`
-- [ ] T023 [US3] Integrar el selector en `PaginaResumenPeriodo.jsx`: estado de
+- [X] T023 [US3] Integrar el selector en `PaginaResumenPeriodo.jsx`: estado de
   período seleccionado, recarga de la vista al cambiar (SC-003, sin recargar la
   aplicación) — depende de T022, T011
-- [ ] T024 [P] [US3] Tests de componente para `SelectorPeriodo` (opciones, cambio) y
+- [X] T024 [P] [US3] Tests de componente para `SelectorPeriodo` (opciones, cambio) y
   el caso "cambiar período recarga la tabla" en
   `frontend/src/components/SelectorPeriodo.test.jsx` y
   `frontend/src/components/PaginaResumenPeriodo.test.jsx`
@@ -201,15 +201,15 @@ acumulados en 0 con las ausencias del calendario.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T025 [P] Test de rendimiento (SC-004): fixture sintético de 500 legajos →
+- [X] T025 [P] Test de rendimiento (SC-004): fixture sintético de 500 legajos →
   `GET /api/resumen-periodo` responde en <10 s, en
   `tests/integration/resumen-periodo.integration.test.js` (o archivo de performance
   aparte si el tiempo de suite lo justifica); si excede, aplicar la optimización
   local de research.md §6 (cachear calendario/correcciones/pausas por request)
-- [ ] T026 Ejecutar manualmente los 3 escenarios de `quickstart.md` de punta a punta
+- [X] T026 Ejecutar manualmente los 3 escenarios de `quickstart.md` de punta a punta
   (incluidas las verificaciones de solo lectura SC-005 y rendimiento SC-004) y
   registrar el resultado en el propio `quickstart.md`
-- [ ] T027 [P] Correr las suites completas (backend `node --test` y frontend
+- [X] T027 [P] Correr las suites completas (backend `node --test` y frontend
   `npx vitest run`) confirmando que nada de 001–010 se rompe
 
 ---

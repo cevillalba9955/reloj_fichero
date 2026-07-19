@@ -3,6 +3,8 @@ import { crearClienteCalendario } from './api/calendario-client.js';
 import PaginaCalendario from './components/PaginaCalendario.jsx';
 import PaginaFichadasHoy from './components/PaginaFichadasHoy.jsx';
 import { crearClienteFichadasHoy } from './api/fichadas-hoy-client.js';
+import PaginaResumenPeriodo from './components/PaginaResumenPeriodo.jsx';
+import { crearClienteResumenPeriodo } from './api/resumen-periodo-client.js';
 
 // feature 007 — Pantalla principal. Orquesta la carga del último mes generado,
 // los estados (cargando / con datos / vacío global / vacío de un mes / error),
@@ -16,8 +18,13 @@ import { crearClienteFichadasHoy } from './api/fichadas-hoy-client.js';
 // useCallback/useEffect en cascada y dispara un loop infinito de fetch.
 const clienteCalendarioPorDefecto = crearClienteCalendario();
 const clienteFichadasPorDefecto = crearClienteFichadasHoy(); // se inyecta desde main.jsx
+const clienteResumenPeriodoPorDefecto = crearClienteResumenPeriodo();
 
-export default function App({ clienteCalendario = clienteCalendarioPorDefecto, clienteFichadas = clienteFichadasPorDefecto  }) {
+export default function App({
+  clienteCalendario = clienteCalendarioPorDefecto,
+  clienteFichadas = clienteFichadasPorDefecto,
+  clienteResumenPeriodo = clienteResumenPeriodoPorDefecto,
+}) {
   const [pestania, setPestania] = useState('fichadas-hoy');
 
   return (
@@ -41,12 +48,22 @@ export default function App({ clienteCalendario = clienteCalendarioPorDefecto, c
           >
             Fichadas de hoy
           </button>
+          <button
+            type="button"
+            className={pestania === 'resumen-periodo' ? 'pestania activa' : 'pestania'}
+            aria-pressed={pestania === 'resumen-periodo'}
+            onClick={() => setPestania('resumen-periodo')}
+          >
+            Resumen período
+          </button>
         </nav>
       </header>
 
       {pestania === 'fichadas-hoy' && <PaginaFichadasHoy cliente={clienteFichadas} />}
 
       {pestania === 'calendario' && <PaginaCalendario cliente={clienteCalendario} />}
+
+      {pestania === 'resumen-periodo' && <PaginaResumenPeriodo cliente={clienteResumenPeriodo} />}
     </main>
   );
 }

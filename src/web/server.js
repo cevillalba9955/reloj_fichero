@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createRouter } from './api/router.js';
 import { registrarRutas } from './api/calendario-handlers.js';
 import { registrarRutas as registrarRutasFichadasHoy } from './api/fichadas-hoy-handlers.js';
+import { registrarRutas as registrarRutasResumenPeriodo } from './api/resumen-periodo-handlers.js';
 import { crearContextoWeb } from './wiring.js';
 
 // feature 007 — Servidor web local (node:http, sin framework). Sirve la API en
@@ -54,6 +55,7 @@ export function crearApp({ env = process.env } = {}) {
   const router = createRouter();
   registrarRutas(router, ctx);
   registrarRutasFichadasHoy(router, ctx);
+  registrarRutasResumenPeriodo(router, ctx);
 
   return async function handler(req, res) {
     const manejadaPorApi = await router.handle(req, res);
