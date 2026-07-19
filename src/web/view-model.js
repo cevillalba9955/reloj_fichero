@@ -155,6 +155,69 @@ export function construirVistaFichadasHoy({ fecha, periodo, diaClasificacion, fi
   };
 }
 
+// feature 011 — VistaResumenPeriodo / FilaResumenPeriodo (data-model.md):
+// lo que devuelve GET /api/resumen-periodo. `filas` es la salida de
+// service.calcularResumenPeriodo con el `nombre` ya mezclado por el handler.
+export function construirVistaResumenPeriodo({ periodo, periodos, filas = [] }) {
+  return {
+    periodo,
+    periodos,
+    filas: filas.map((f) =>
+      f.anomalia
+        ? {
+            legajo: f.legajo,
+            nombre: f.nombre ?? null,
+            horasTrabajadas: 0,
+            completas: 0,
+            incompletas: 0,
+            ausencias: 0,
+            llegadasTarde: 0,
+            retirosAnticipados: 0,
+            correcciones: 0,
+            anomalia: f.anomalia,
+          }
+        : {
+            legajo: f.legajo,
+            nombre: f.nombre ?? null,
+            horasTrabajadas: f.horasTrabajadas,
+            completas: f.completas,
+            incompletas: f.incompletas,
+            ausencias: f.ausencias,
+            llegadasTarde: f.llegadasTarde,
+            retirosAnticipados: f.retirosAnticipados,
+            correcciones: f.correcciones,
+            anomalia: null,
+          },
+    ),
+  };
+}
+
+// feature 011 — VistaDetalleEmpleado / DetalleJornada (data-model.md): lo que
+// devuelve GET /api/resumen-periodo/{legajo}. Horas SIEMPRE en 'HH:MM' hacia
+// el cliente (nunca minutos crudos), mismo criterio que 010.
+export function construirDetalleEmpleado({ periodo, legajo, nombre = null, detalle = [] }) {
+  return {
+    periodo,
+    legajo,
+    nombre,
+    dias: detalle.map((d) => ({
+      fecha: d.fecha,
+      clasificacion: d.clasificacion,
+      estado: d.estado,
+      entrada: d.entrada != null ? formatHoraMinuto(d.entrada) : null,
+      salida: d.salida != null ? formatHoraMinuto(d.salida) : null,
+      horas: d.horas,
+      llegadaTarde: d.llegadaTarde,
+      corregida: d.corregida,
+      pausas: d.pausas.map((p) => ({
+        desde: formatHoraMinuto(p.desde),
+        hasta: formatHoraMinuto(p.hasta),
+        tipo: p.tipo,
+      })),
+    })),
+  };
+}
+
 // Construye la VistaCalendarioMes. `periodos` es la lista de YYYYMM generados
 // (para `esUltimoGenerado`); `hoy` es la fecha del servidor (YYYY-MM-DD).
 export function construirVistaCalendario({ calendario, periodos = [], hoy = hoyLocal() }) {

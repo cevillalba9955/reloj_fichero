@@ -19,6 +19,13 @@ export const SituacionDia = Object.freeze({
   ANOMALIA: 'ANOMALIA',
 });
 
+// feature 011 — Predicado compartido de "entrada fuera del margen de
+// tolerancia de apertura": lo usan la situación TARDE de hoy (acá) y el conteo
+// retrospectivo de llegadas tarde del resumen de período (resumen-periodo.js).
+export function esEntradaTarde(entradaHora, params) {
+  return entradaHora != null && entradaHora > params.aperturaOficial + params.margenApertura;
+}
+
 // `auto` es la salida de calcularJornadaAuto; `ajustado` la de aplicarAjustes
 // (trae correccion/pausas vigentes); `ahora` en minutos-del-día. La corrección
 // vigente de entrada/salida prevalece sobre la fichada real (FR-009).
@@ -49,7 +56,7 @@ export function calcularSituacionHoy({ clasificacion, auto, ajustado, ahora, par
 
   // Entrada fuera del margen de tolerancia de apertura → TARDE, aunque la
   // jornada después cierre (Escenario 3).
-  if (entradaHora > params.aperturaOficial + params.margenApertura) {
+  if (esEntradaTarde(entradaHora, params)) {
     return SituacionDia.TARDE;
   }
 
