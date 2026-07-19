@@ -30,7 +30,7 @@ test('siguiente, anterior y volver invocan onIr cuando el destino es alcanzable'
   expect(onIr).toHaveBeenCalledWith('202607');
 
   // "Volver al mes en curso" lleva a mesActual (202607), que está generado.
-  fireEvent.click(screen.getByText(/Volver al mes en curso/));
+  fireEvent.click(screen.getByText(/Volver/));
   expect(onIr).toHaveBeenCalledWith('202607');
 });
 
@@ -39,7 +39,7 @@ test('"volver al mes en curso" queda deshabilitado si ya estamos en el mes actua
   render(
     <NavegacionMes periodo="202607" mesActual="202607" periodos={['202607']} onIr={onIr} />,
   );
-  expect(screen.getByText(/Volver al mes en curso/)).toBeDisabled();
+  expect(screen.getByText(/Volver/)).toBeDisabled();
 });
 
 test('"volver al mes en curso" deshabilitado si el mes actual no es alcanzable (evita callejón sin salida)', () => {
@@ -54,7 +54,7 @@ test('"volver al mes en curso" deshabilitado si el mes actual no es alcanzable (
       onIr={onIr}
     />,
   );
-  expect(screen.getByText(/Volver al mes en curso/)).toBeDisabled();
+  expect(screen.getByText(/Volver/)).toBeDisabled();
 });
 
 // US3 (feature 008) — el "siguiente" se puede pisar hasta la frontera generable,

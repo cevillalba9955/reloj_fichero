@@ -1,11 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { crearClienteCalendario } from './api/calendario-client.js';
-import GrillaMes from './components/GrillaMes.jsx';
-import Leyenda from './components/Leyenda.jsx';
-import EstadoVacio from './components/EstadoVacio.jsx';
-import EncabezadoPeriodo from './components/EncabezadoPeriodo.jsx';
-import NavegacionMes from './components/NavegacionMes.jsx';
-import DialogoConfirmarReclasificar from './components/DialogoConfirmarReclasificar.jsx';
+import Calendario from './components/Calendario.jsx';
 import PaginaFichadasHoy from './components/PaginaFichadasHoy.jsx';
 
 // feature 007 — Pantalla principal. Orquesta la carga del último mes generado,
@@ -27,8 +22,6 @@ export default function App({ cliente = clientePorDefecto, clienteFichadas = und
   const [periodos, setPeriodos] = useState([]);
   const [generables, setGenerables] = useState([]);
   const [mesActual, setMesActual] = useState(null);
-  const [aviso, setAviso] = useState(null);
-  const [dialogo, setDialogo] = useState(null); // { dia, clasificacion }
 
   const cargarMes = useCallback(
     async (periodo) => {
@@ -66,29 +59,8 @@ export default function App({ cliente = clientePorDefecto, clienteFichadas = und
 
   const periodoMostrado = estado.vista?.periodo ?? estado.periodo ?? null;
 
-  function pedirReclasificar(dia, clasificacion) {
-    setAviso(null);
-    setDialogo({ dia, clasificacion });
-  }
-
-  async function confirmarReclasificacion() {
-    const { dia, clasificacion } = dialogo;
-    setDialogo(null);
-    try {
-      const vista = await cliente.reclasificar(periodoMostrado, {
-        fecha: dia.fecha,
-        clasificacion,
-        autor: 'ui',
-      });
-      setEstado({ tipo: 'con-datos', vista });
-    } catch (err) {
-      setAviso(`No se pudo reclasificar: ${err.message}`);
-    }
-  }
-
   async function generarCalendarioDelPeriodo(periodo) {
     if (!periodo) return;
-    setAviso(null);
     try {
       setEstado({ tipo: 'cargando' });
       await cliente.generarCalendario(periodo);
@@ -102,7 +74,7 @@ export default function App({ cliente = clientePorDefecto, clienteFichadas = und
       setMesActual(mes ?? null);
       await cargarMes(periodo);
     } catch (err) {
-      setAviso(`No se pudo generar el calendario: ${err.message}`);
+      setEstado({ tipo: 'error', mensaje: err.message });
       await inicializar();
     }
   }
@@ -129,77 +101,24 @@ export default function App({ cliente = clientePorDefecto, clienteFichadas = und
             Fichadas de hoy
           </button>
         </nav>
-        {pestania === 'calendario' && periodoMostrado && ultimo && (
-          <NavegacionMes
-            periodo={periodoMostrado}
-            mesActual={mesActual}
-            periodos={periodos}
-            generables={generables}
-            onIr={cargarMes}
-          />
-        )}
       </header>
 
       {pestania === 'fichadas-hoy' && <PaginaFichadasHoy cliente={clienteFichadas} />}
 
       {pestania === 'calendario' && (
-      <>
-      {aviso && (
-        <p className="aviso" role="alert">
-          {aviso}
-        </p>
-      )}
-
-      {estado.tipo === 'cargando' && (
-        <p className="cargando" role="status">
-          Cargando…
-        </p>
-      )}
-
-      {estado.tipo === 'error' && (
-        <div className="error" role="alert">
-          <p>Ocurrió un error: {estado.mensaje}</p>
-          <button type="button" onClick={inicializar}>
-            Reintentar
-          </button>
-        </div>
-      )}
-
-      {estado.tipo === 'vacio-global' && (
-        <EstadoVacio
-          mensaje="Aún no se generó ningún calendario."
-          periodo={mesActual}
+        <Calendario
+          estado={estado}
+          ultimo={ultimo}
+          periodos={periodos}
           generables={generables}
-          onGenerar={() => generarCalendarioDelPeriodo(mesActual)}
+          mesActual={mesActual}
+          periodoMostrado={periodoMostrado}
+          cliente={cliente}
+          inicializar={inicializar}
+          cargarMes={cargarMes}
+          generarCalendarioDelPeriodo={generarCalendarioDelPeriodo}
+          onEstadoActualizado={setEstado}
         />
-      )}
-
-      {estado.tipo === 'vacio-mes' && (
-        <EstadoVacio
-          mensaje={`El calendario del período ${estado.periodo} aún no fue generado.`}
-          periodo={estado.periodo}
-          generables={generables}
-          onGenerar={() => generarCalendarioDelPeriodo(estado.periodo)}
-        />
-      )}
-
-      {estado.tipo === 'con-datos' && (
-        <section className="calendario">
-          <EncabezadoPeriodo periodoActivo={estado.vista.periodoActivo} />
-          <Leyenda items={estado.vista.leyenda} />
-          <GrillaMes dias={estado.vista.dias} onReclasificar={pedirReclasificar} />
-        </section>
-      )}
-
-      {dialogo && (
-        <DialogoConfirmarReclasificar
-          dia={dialogo.dia}
-          clasificacion={dialogo.clasificacion}
-          onConfirmar={confirmarReclasificacion}
-          onCancelar={() => setDialogo(null)}
-        />
-      )}
-      </>
       )}
     </main>
   );
