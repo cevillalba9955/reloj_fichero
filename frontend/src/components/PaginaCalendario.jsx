@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import GrillaMes from './GrillaMes.jsx';
 import Leyenda from './Leyenda.jsx';
 import EstadoVacio from './EstadoVacio.jsx';
@@ -6,21 +6,68 @@ import EncabezadoPeriodo from './EncabezadoPeriodo.jsx';
 import NavegacionMes from './NavegacionMes.jsx';
 import DialogoConfirmarReclasificar from './DialogoConfirmarReclasificar.jsx';
 
-export default function Calendario({
-  estado,
-  ultimo,
-  periodos,
-  generables,
-  mesActual,
-  periodoMostrado,
-  cliente,
-  inicializar,
-  cargarMes,
-  generarCalendarioDelPeriodo,
-  onEstadoActualizado,
-}) {
+export default function PaginaCalendario({ cliente, inicializarDesdeApp }) {
+  const [estado, setEstado] = useState({ tipo: 'cargando' });
+  const [ultimo, setUltimo] = useState(null);
+  const [periodos, setPeriodos] = useState([]);
+  const [generables, setGenerables] = useState([]);
+  const [mesActual, setMesActual] = useState(null);
   const [aviso, setAviso] = useState(null);
   const [dialogo, setDialogo] = useState(null); // { dia, clasificacion }
+
+  const cargarMes = useCallback(
+    async (periodo) => {
+      setEstado({ tipo: 'cargando' });
+      try {
+        const vista = await cliente.obtenerCalendario(periodo);
+        setEstado({ tipo: 'con-datos', vista });
+      } catch (err) {
+        if (err.status === 404) setEstado({ tipo: 'vacio-mes', periodo });
+        else setEstado({ tipo: 'error', mensaje: err.message, periodo });
+      }
+    },
+    [cliente],
+  );
+
+  const inicializar = useCallback(async () => {
+    setEstado({ tipo: 'cargando' });
+    try {
+      const { ultimo: ult, periodos: perds, generables: gen, mesActual: mes } =
+        await cliente.listarCalendarios();
+      setUltimo(ult);
+      setPeriodos(perds ?? []);
+      setGenerables(gen ?? []);
+      setMesActual(mes ?? null);
+      if (!ult) setEstado({ tipo: 'vacio-global' });
+      else await cargarMes(ult);
+    } catch (err) {
+      setEstado({ tipo: 'error', mensaje: err.message });
+    }
+  }, [cliente, cargarMes]);
+
+  useEffect(() => {
+    inicializar();
+  }, [inicializar]);
+
+  const periodoMostrado = estado.vista?.periodo ?? estado.periodo ?? null;
+
+  async function generarCalendarioDelPeriodo(periodo) {
+    if (!periodo) return;
+    try {
+      setEstado({ tipo: 'cargando' });
+      await cliente.generarCalendario(periodo);
+      const { ultimo: ult, periodos: perds, generables: gen, mesActual: mes } =
+        await cliente.listarCalendarios();
+      setUltimo(ult ?? null);
+      setPeriodos(perds ?? []);
+      setGenerables(gen ?? []);
+      setMesActual(mes ?? null);
+      await cargarMes(periodo);
+    } catch (err) {
+      setEstado({ tipo: 'error', mensaje: err.message });
+      await inicializar();
+    }
+  }
 
   const pedirReclasificar = useCallback((dia, clasificacion) => {
     setAviso(null);
@@ -36,11 +83,11 @@ export default function Calendario({
         clasificacion,
         autor: 'ui',
       });
-      onEstadoActualizado({ tipo: 'con-datos', vista });
+      setEstado({ tipo: 'con-datos', vista });
     } catch (err) {
       setAviso(`No se pudo reclasificar: ${err.message}`);
     }
-  }, [dialogo, cliente, periodoMostrado, onEstadoActualizado]);
+  }, [dialogo, cliente, periodoMostrado]);
   
   return (
     <>

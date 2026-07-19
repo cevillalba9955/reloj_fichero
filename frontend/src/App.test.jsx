@@ -45,11 +45,11 @@ function vista(over = {}) {
   };
 }
 
-test('sin prop "cliente" (uso real, como main.jsx) no entra en loop infinito de fetch', async () => {
-  // Regresión: `cliente = crearClienteCalendario()` como default de parámetro
+test('sin prop "clienteCalendario" (uso real, como main.jsx) no entra en loop infinito de fetch', async () => {
+  // Regresión: `clienteCalendario = crearClienteCalendario()` como default de parámetro
   // se reevaluaba en cada render, invalidando useCallback/useEffect en cascada
   // y disparando fetch sin fin. Acá se ejercita el default real (sin mock de
-  // cliente), solo interceptando `fetch` global.
+  // clienteCalendario), solo interceptando `fetch` global.
   const fetchMock = vi.fn(async (url) => {
     const body = String(url).endsWith('/calendarios')
       ? { periodos: ['202607'], ultimo: '202607' }

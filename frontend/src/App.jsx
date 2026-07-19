@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { crearClienteCalendario } from './api/calendario-client.js';
-import Calendario from './components/Calendario.jsx';
+import PaginaCalendario from './components/PaginaCalendario.jsx';
 import PaginaFichadasHoy from './components/PaginaFichadasHoy.jsx';
+import { crearClienteFichadasHoy } from './api/fichadas-hoy-client.js';
 
 // feature 007 — Pantalla principal. Orquesta la carga del último mes generado,
 // los estados (cargando / con datos / vacío global / vacío de un mes / error),
@@ -11,73 +12,13 @@ import PaginaFichadasHoy from './components/PaginaFichadasHoy.jsx';
 // de ruteo) para alternar entre el calendario y la página "Fichadas de hoy".
 
 // Instancia única a nivel de módulo: un default de parámetro se reevalúa en
-// cada render, y una referencia nueva de `cliente` en cada render invalida
+// cada render, y una referencia nueva de `clienteCalendario` en cada render invalida
 // useCallback/useEffect en cascada y dispara un loop infinito de fetch.
-const clientePorDefecto = crearClienteCalendario();
+const clienteCalendarioPorDefecto = crearClienteCalendario();
+const clienteFichadasPorDefecto = crearClienteFichadasHoy(); // se inyecta desde main.jsx
 
-export default function App({ cliente = clientePorDefecto, clienteFichadas = undefined }) {
+export default function App({ clienteCalendario = clienteCalendarioPorDefecto, clienteFichadas = clienteFichadasPorDefecto  }) {
   const [pestania, setPestania] = useState('fichadas-hoy');
-  const [estado, setEstado] = useState({ tipo: 'cargando' });
-  const [ultimo, setUltimo] = useState(null);
-  const [periodos, setPeriodos] = useState([]);
-  const [generables, setGenerables] = useState([]);
-  const [mesActual, setMesActual] = useState(null);
-
-  const cargarMes = useCallback(
-    async (periodo) => {
-      setEstado({ tipo: 'cargando' });
-      try {
-        const vista = await cliente.obtenerCalendario(periodo);
-        setEstado({ tipo: 'con-datos', vista });
-      } catch (err) {
-        if (err.status === 404) setEstado({ tipo: 'vacio-mes', periodo });
-        else setEstado({ tipo: 'error', mensaje: err.message, periodo });
-      }
-    },
-    [cliente],
-  );
-
-  const inicializar = useCallback(async () => {
-    setEstado({ tipo: 'cargando' });
-    try {
-      const { ultimo: ult, periodos: perds, generables: gen, mesActual: mes } =
-        await cliente.listarCalendarios();
-      setUltimo(ult);
-      setPeriodos(perds ?? []);
-      setGenerables(gen ?? []);
-      setMesActual(mes ?? null);
-      if (!ult) setEstado({ tipo: 'vacio-global' });
-      else await cargarMes(ult);
-    } catch (err) {
-      setEstado({ tipo: 'error', mensaje: err.message });
-    }
-  }, [cliente, cargarMes]);
-
-  useEffect(() => {
-    inicializar();
-  }, [inicializar]);
-
-  const periodoMostrado = estado.vista?.periodo ?? estado.periodo ?? null;
-
-  async function generarCalendarioDelPeriodo(periodo) {
-    if (!periodo) return;
-    try {
-      setEstado({ tipo: 'cargando' });
-      await cliente.generarCalendario(periodo);
-      // Refrescar la frontera completa: la generación corre el rango y cambia
-      // qué períodos quedan generables (feature 008).
-      const { ultimo: ult, periodos: perds, generables: gen, mesActual: mes } =
-        await cliente.listarCalendarios();
-      setUltimo(ult ?? null);
-      setPeriodos(perds ?? []);
-      setGenerables(gen ?? []);
-      setMesActual(mes ?? null);
-      await cargarMes(periodo);
-    } catch (err) {
-      setEstado({ tipo: 'error', mensaje: err.message });
-      await inicializar();
-    }
-  }
 
   return (
     <main className="app">
@@ -105,21 +46,7 @@ export default function App({ cliente = clientePorDefecto, clienteFichadas = und
 
       {pestania === 'fichadas-hoy' && <PaginaFichadasHoy cliente={clienteFichadas} />}
 
-      {pestania === 'calendario' && (
-        <Calendario
-          estado={estado}
-          ultimo={ultimo}
-          periodos={periodos}
-          generables={generables}
-          mesActual={mesActual}
-          periodoMostrado={periodoMostrado}
-          cliente={cliente}
-          inicializar={inicializar}
-          cargarMes={cargarMes}
-          generarCalendarioDelPeriodo={generarCalendarioDelPeriodo}
-          onEstadoActualizado={setEstado}
-        />
-      )}
+      {pestania === 'calendario' && <PaginaCalendario cliente={clienteCalendario} />}
     </main>
   );
 }
