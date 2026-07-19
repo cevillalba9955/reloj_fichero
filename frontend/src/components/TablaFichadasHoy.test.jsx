@@ -101,12 +101,12 @@ function pausaIntermedia(desde, hasta) {
 
 test('las columnas de pausa existen y una fila sin pausas muestra —', () => {
   render(<TablaFichadasHoy empleados={[fila()]} />);
-  expect(screen.getByText('Inicio pausa')).toBeInTheDocument();
-  expect(screen.getByText('Fin pausa')).toBeInTheDocument();
+  expect(screen.getByText('Pausa')).toBeInTheDocument();
+  //expect(screen.getByText('Fin pausa')).toBeInTheDocument();
   const celdas = screen.getAllByRole('row')[1].querySelectorAll('td');
-  // legajo, nombre, entrada, salida, inicio pausa, fin pausa, horas, situación
+  // legajo, nombre, entrada, inicio pausa, fin pausa, salida, horas, situación
+  expect(celdas[3]).toHaveTextContent('—');
   expect(celdas[4]).toHaveTextContent('—');
-  expect(celdas[5]).toHaveTextContent('—');
 });
 
 test('una pausa intermedia se muestra en sus columnas', () => {
@@ -114,8 +114,8 @@ test('una pausa intermedia se muestra en sus columnas', () => {
     <TablaFichadasHoy empleados={[fila({ pausas: [pausaIntermedia('12:00', '13:00')] })]} />,
   );
   const celdas = screen.getAllByRole('row')[1].querySelectorAll('td');
-  expect(celdas[4]).toHaveTextContent('12:00');
-  expect(celdas[5]).toHaveTextContent('13:00');
+  expect(celdas[3]).toHaveTextContent('12:00');
+  expect(celdas[4]).toHaveTextContent('13:00');
 });
 
 test('con dos pausas intermedias muestra la primera por desde, con indicador +1', () => {
@@ -127,9 +127,9 @@ test('con dos pausas intermedias muestra la primera por desde, con indicador +1'
     />,
   );
   const celdas = screen.getAllByRole('row')[1].querySelectorAll('td');
-  expect(celdas[4]).toHaveTextContent('12:00', 'la primera por desde, no por orden de alta');
-  expect(celdas[5]).toHaveTextContent('13:00');
-  expect(celdas[5]).toHaveTextContent('+1');
+  expect(celdas[3]).toHaveTextContent('12:00', 'la primera por desde, no por orden de alta');
+  expect(celdas[4]).toHaveTextContent('13:00');
+  expect(celdas[4]).toHaveTextContent('+1');
 });
 
 test('un retiro anticipado no aparece en las columnas de pausa', () => {

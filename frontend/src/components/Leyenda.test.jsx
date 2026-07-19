@@ -12,11 +12,20 @@ const items = [
   { clave: 'periodo-activo', etiqueta: 'Período activo', descripcion: 'Días del período' },
 ];
 
-test('renderiza un ítem por clave con su etiqueta', () => {
-  render(<Leyenda items={items} />);
+test('renderiza un ítem por clave con su etiqueta, sin descripción', () => {
+  render(<Leyenda items={items} ocultarDescripcion={true} />);
   expect(screen.getAllByRole('listitem')).toHaveLength(5);
   expect(screen.getByText('Feriado')).toBeInTheDocument();
   expect(screen.getByText('Período activo')).toBeInTheDocument();
+  expect(screen.queryByText('Día laborable')).not.toBeInTheDocument();
+});
+
+test('renderiza un ítem por clave con su etiqueta y descripción', () => {
+  render(<Leyenda items={items} ocultarDescripcion={false} />);
+  expect(screen.getAllByRole('listitem')).toHaveLength(5);
+  expect(screen.getByText('Feriado')).toBeInTheDocument();
+  expect(screen.getByText('Período activo')).toBeInTheDocument();
+  expect(screen.getByText('Día laborable')).toBeInTheDocument();
 });
 
 test('sin ítems no renderiza la lista', () => {

@@ -25,7 +25,7 @@ export default function NavegacionMes({ periodo, mesActual = null, periodos = []
   const volverDeshabilitado = !mesActual || periodo === mesActual || !alcanzable(mesActual);
 
   return (
-    <nav className="navegacion" aria-label="Navegación de meses">
+    <nav className="navegacion" aria-label="Navegación de meses" style={{ justifyContent: 'end' }}>
       <button
         type="button"
         aria-label="Mes anterior"
@@ -49,7 +49,7 @@ export default function NavegacionMes({ periodo, mesActual = null, periodos = []
         disabled={volverDeshabilitado}
         onClick={() => mesActual && onIr(mesActual)}
       >
-        Volver al mes en curso ({mesActual ?? '—'})
+        Volver ({mesActual ?? '—'})
       </button>
     </nav>
   );
