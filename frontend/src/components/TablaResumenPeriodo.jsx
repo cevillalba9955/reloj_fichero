@@ -15,12 +15,12 @@ export default function TablaResumenPeriodo({ filas, onSeleccionar = null }) {
     return <p className="resumen-vacio">No hay empleados esperados en este período.</p>;
   }
   return (
-    <table className="tabla-resumen-periodo" aria-label="Resumen del período">
+    <table className="tabla-resumen-periodo" aria-label="Resumen del período" border="1">
       <thead>
         <tr>
-          <th scope="col">Legajo</th>
+          <th scope="col">Leg</th>
           <th scope="col">Nombre</th>
-          <th scope="col">Horas trabajadas</th>
+          <th scope="col">Horas</th>
           <th scope="col">Completas</th>
           <th scope="col">Incompletas</th>
           <th scope="col">Ausencias</th>

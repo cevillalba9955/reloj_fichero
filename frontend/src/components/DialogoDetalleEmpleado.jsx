@@ -56,7 +56,7 @@ export default function DialogoDetalleEmpleado({ cliente, legajo, nombre, period
         )}
 
         {estado.tipo === 'con-datos' && (
-          <table className="tabla-detalle-empleado">
+          <table className="tabla-detalle-empleado" border="1">
             <thead>
               <tr>
                 <th scope="col">Fecha</th>
