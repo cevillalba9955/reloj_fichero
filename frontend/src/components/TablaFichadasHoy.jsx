@@ -21,6 +21,13 @@ const ETIQUETA_SITUACION = {
   ANOMALIA: 'Anomalía',
 };
 
+// feature 012 — un día con Justificación `Paga` vigente se etiqueta como
+// "LICENCIA" en la columna Situación (en vez de AUSENTE/etc.), para que se
+// note de un vistazo que la ausencia está cubierta y paga.
+function esLicencia(fila) {
+  return fila.justificacion?.tipoPago === 'Paga';
+}
+
 // Minutos → 'H:MM' para lectura (el dato viaja en minutos, formato de 004).
 function formatoHoras(min) {
   const m = Number.isInteger(min) && min >= 0 ? min : 0;
@@ -66,7 +73,9 @@ export default function TablaFichadasHoy({
       </thead>
       <tbody>
         {empleados.map((fila) => {
-          const clave = CLAVE_SITUACION[fila.situacion] ?? 'desconocida';
+          const licencia = esLicencia(fila);
+          const clave = licencia ? 'licencia' : CLAVE_SITUACION[fila.situacion] ?? 'desconocida';
+          const etiquetaSituacion = licencia ? 'LICENCIA' : ETIQUETA_SITUACION[fila.situacion] ?? fila.situacion;
           const { principal, adicionales } = pausaPrincipalDe(fila.pausas);
           return (
             <tr key={fila.legajo} className={`fila-fichada situacion-${clave}`}>
@@ -82,15 +91,10 @@ export default function TablaFichadasHoy({
               <td>{formatoHoras(fila.horasTrabajadas)}</td>
               <td>
                 <span className={`situacion clave-${clave}`}>
-                  {ETIQUETA_SITUACION[fila.situacion] ?? fila.situacion}
+                  {!fila.justificacion && etiquetaSituacion}
+                  {fila.justificacion && fila.justificacion.etiquetaMotivo}
                 </span>
                 {fila.correccionVigente && <span className="marca-correccion"> (*)</span>}
-                {fila.justificacion && (
-                  <span className="marca-justificacion">
-                    {' '}
-                    ({fila.justificacion.etiquetaMotivo}, {fila.justificacion.tipoPago})
-                  </span>
-                )}
                 {fila.requiereJustificacionRevision && (
                   <span className="marca-revision" role="alert">
                     {' '}
@@ -103,12 +107,12 @@ export default function TablaFichadasHoy({
               </td>
               {conAcciones && (
                 <td>
-                  {onCorregir && fila.situacion !== 'ANOMALIA' && (
+                  {onCorregir && fila.situacion !== 'ANOMALIA' && !fila.justificacion && (
                     <button type="button" onClick={() => onCorregir(fila)}>
                       Corregir
                     </button>
                   )}
-                  {onPausaRetiro && fila.situacion !== 'ANOMALIA' && (
+                  {onPausaRetiro && fila.situacion !== 'ANOMALIA' && fila.entrada != null && (
                     <button type="button" onClick={() => onPausaRetiro(fila)}>
                       Excepcion
                     </button>

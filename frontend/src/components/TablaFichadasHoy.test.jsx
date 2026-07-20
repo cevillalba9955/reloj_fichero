@@ -148,6 +148,25 @@ test('un retiro anticipado no aparece en las columnas de pausa', () => {
   expect(celdas[5]).toHaveTextContent('—');
 });
 
+// "Excepcion" (pausa intermedia/retiro anticipado) no aplica sin fichadas: no
+// hay jornada en curso sobre la que cargar una pausa o un retiro.
+test('el botón "Excepcion" se oculta cuando la fila no tiene entrada (sin fichadas)', () => {
+  render(
+    <TablaFichadasHoy
+      empleados={[
+        fila({ legajo: 1, entrada: null, situacion: 'ESPERANDO' }),
+        fila({ legajo: 2, entrada: null, situacion: 'AUSENTE' }),
+        fila({ legajo: 3, entrada: '07:05', situacion: 'PRESENTE' }),
+      ]}
+      onPausaRetiro={vi.fn()}
+    />,
+  );
+  const filas = screen.getAllByRole('row').slice(1);
+  expect(filas[0]).not.toHaveTextContent('Excepcion');
+  expect(filas[1]).not.toHaveTextContent('Excepcion');
+  expect(filas[2]).toHaveTextContent('Excepcion');
+});
+
 // feature 012 — acción "Justificación" en días AUSENTE, badge de motivo y
 // acción de revertir cuando ya hay una Justificación vigente.
 test('el botón "Justificación" solo aparece en filas AUSENTE sin justificación vigente', () => {
@@ -169,7 +188,7 @@ test('el botón "Justificación" solo aparece en filas AUSENTE sin justificació
   expect(onJustificar).toHaveBeenCalledWith(expect.objectContaining({ legajo: 1 }));
 });
 
-test('una fila con justificación vigente muestra el motivo y el botón de revertir', () => {
+test('una fila con justificación vigente muestra el motivo, el botón de revertir, y oculta Corregir', () => {
   const onRevertirJustificacion = vi.fn();
   render(
     <TablaFichadasHoy
@@ -180,16 +199,37 @@ test('una fila con justificación vigente muestra el motivo y el botón de rever
           justificacion: { motivoId: 'vacaciones', etiquetaMotivo: 'Vacaciones', tipoPago: 'Paga' },
         }),
       ]}
+      onCorregir={vi.fn()}
       onJustificar={vi.fn()}
       onRevertirJustificacion={onRevertirJustificacion}
     />,
   );
   const [datos] = screen.getAllByRole('row').slice(1);
   expect(datos).toHaveTextContent('Vacaciones');
-  expect(datos).toHaveTextContent('Paga');
+  expect(datos).toHaveTextContent('LICENCIA'); // motivo Paga: la situación se etiqueta como Licencia
+  expect(datos).not.toHaveTextContent('AUSENTE');
   expect(datos).not.toHaveTextContent('Justificación'); // ya justificada: no ofrece cargar de nuevo
+  expect(datos).not.toHaveTextContent('Corregir'); // no aplica sobre una ausencia justificada
   fireEvent.click(screen.getByText('Revertir justificación'));
   expect(onRevertirJustificacion).toHaveBeenCalledWith(expect.objectContaining({ legajo: 1 }));
+});
+
+test('un motivo No paga conserva la etiqueta de situación original (no se muestra como Licencia)', () => {
+  render(
+    <TablaFichadasHoy
+      empleados={[
+        fila({
+          legajo: 4,
+          situacion: 'AUSENTE',
+          justificacion: { motivoId: 'sin_aviso', etiquetaMotivo: 'Sin Aviso', tipoPago: 'No paga' },
+        }),
+      ]}
+    />,
+  );
+  const [datos] = screen.getAllByRole('row').slice(1);
+  expect(datos).toHaveTextContent('AUSENTE');
+  expect(datos).toHaveTextContent('Sin Aviso');
+  expect(datos).not.toHaveTextContent('LICENCIA');
 });
 
 test('requiereJustificacionRevision se señala junto a la situación', () => {

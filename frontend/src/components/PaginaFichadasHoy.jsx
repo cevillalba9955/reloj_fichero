@@ -161,14 +161,20 @@ export default function PaginaFichadasHoy({
       {estado.tipo === 'con-datos' && (
         <>
           <header className="fichadas-encabezado">
-            <h2>Fichadas del {estado.vista.fecha}</h2>
-            <p className="dia-clasificacion">
-              {ETIQUETA_DIA[estado.vista.diaClasificacion] ?? estado.vista.diaClasificacion}
-            </p>
+            <div className="fichadas-titulo">
+              <h2>Fichadas del {estado.vista.fecha}</h2>
+              <p className="dia-clasificacion">
+                {ETIQUETA_DIA[estado.vista.diaClasificacion] ?? estado.vista.diaClasificacion}
+              </p>
+            </div>
+            {/* Navegación de días a la derecha, mismo patrón que NavegacionMes
+                en PaginaCalendario. */}
             <NavegacionDia
               navegacion={estado.vista.navegacion}
               onNavegar={setFechaSeleccionada}
             />
+          </header>
+          <div className="fichadas-acciones">
             {/* La consulta manual al reloj solo aplica al día actual (FR-008). */}
             {estado.vista.navegacion?.esHoy && <BotonConsultarReloj onConsultar={consultarReloj} />}
             {/* feature 012 — entrada general para justificar un día/rango que
@@ -177,7 +183,7 @@ export default function PaginaFichadasHoy({
             <button type="button" onClick={() => abrirJustificacion({})}>
               Justificar ausencia
             </button>
-          </header>
+          </div>
           <TablaFichadasHoy
             empleados={estado.vista.empleados}
             onCorregir={(fila) => {
