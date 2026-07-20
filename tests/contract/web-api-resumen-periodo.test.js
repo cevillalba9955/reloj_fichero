@@ -41,6 +41,7 @@ test('GET /api/resumen-periodo → 200 con la forma de VistaResumenPeriodo', asy
       for (const campo of [
         'legajo', 'nombre', 'horasTrabajadas', 'completas', 'incompletas',
         'ausencias', 'llegadasTarde', 'retirosAnticipados', 'correcciones', 'anomalia',
+        'feriado', 'licencia',
       ]) {
         assert.ok(campo in fila, `cada fila debe incluir "${campo}"`);
       }
@@ -235,6 +236,38 @@ test('MENSUAL (default): ?periodo=YYYYMM-Q1 → 400 PERIODO_INVALIDO', async () 
     const res = await fetch(`${e.base}/api/resumen-periodo?periodo=${mesActualPeriodo()}-Q1`);
     assert.equal(res.status, 400);
     assert.equal((await res.json()).error.codigo, 'PERIODO_INVALIDO');
+  } finally {
+    e.close();
+  }
+});
+
+// feature 012 (FR-012) — columnas feriado/licencia y `dias[].justificacion`.
+test('feature 012: feriado/licencia en el resumen y justificacion en el detalle', async () => {
+  const FECHA_LICENCIA = fechaDelMes(2);
+  const FECHA_FERIADO = fechaDelMes(9);
+  const e = await crearEntornoFichadasHoy({
+    padron: [{ legajo: 1, categoria: 'ADMIN', nombre: 'Ana Pérez' }],
+    clasificaciones: { [FECHA_LICENCIA]: 'Laborable', [FECHA_FERIADO]: 'Feriado' },
+  });
+  try {
+    const alta = await fetch(`${e.base}/api/justificaciones`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ legajo: 1, fecha: FECHA_LICENCIA, motivoId: 'vacaciones' }),
+    });
+    assert.equal(alta.status, 200);
+
+    const res = await fetch(`${e.base}/api/resumen-periodo`);
+    const v = await res.json();
+    const fila1 = v.filas.find((f) => f.legajo === 1);
+    assert.equal(fila1.feriado, 1);
+    assert.equal(fila1.licencia, 1);
+
+    const detalleRes = await fetch(`${e.base}/api/resumen-periodo/1`);
+    const detalle = await detalleRes.json();
+    const dia = detalle.dias.find((d) => d.fecha === FECHA_LICENCIA);
+    assert.equal(dia.justificacion.motivoId, 'vacaciones');
+    assert.equal(dia.justificacion.tipoPago, 'Paga');
   } finally {
     e.close();
   }

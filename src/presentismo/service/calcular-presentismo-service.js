@@ -1,4 +1,4 @@
-import { generarCalendario, reclasificarDia } from '../domain/calendario-mes.js';
+import { generarCalendario, reclasificarDia, diaDe, Clasificacion } from '../domain/calendario-mes.js';
 import { recortar, tramosParaTipo, fechaEnTramo } from '../domain/periodo-liquidacion.js';
 import { calcularJornadaAuto, aplicarAjustes } from '../domain/jornada.js';
 import { construirResumen } from '../domain/resumen-presentismo.js';
@@ -7,6 +7,11 @@ import { calcularSituacionHoy, SituacionDia } from '../domain/situacion-dia.js';
 import { proyectarResumenPeriodo } from '../domain/resumen-periodo.js';
 import { parseHoraMinuto } from '../domain/tiempo.js';
 import { TipoPausa, normalizarTipoPausa } from '../domain/pausa.js';
+import {
+  justificacionVigenteDe,
+  crearJustificacion,
+  expandirRangoElegible,
+} from '../domain/justificacion.js';
 import { assertCumplePuerto } from '../ports/index.js';
 import { createNullLogger } from '../logging/presentismo-logger.js';
 
@@ -25,6 +30,10 @@ export function createCalcularPresentismoService({
   logger = createNullLogger(),
   fichadasProvider = null,
   categoryProvider = null,
+  // feature 012 — catálogo de motivos de ausencia; null = las operaciones de
+  // Justificación no están disponibles (mismo criterio best-effort que otros
+  // proveedores opcionales).
+  motivosAusenciaConfig = null,
 }) {
   assertCumplePuerto('PresentismoRepository', repo);
   assertCumplePuerto('PresentismoLogger', logger);
@@ -126,6 +135,7 @@ export function createCalcularPresentismoService({
 
     const correcciones = await repo.listarCorrecciones(periodo, legajo);
     const pausas = await repo.listarPausas(periodo, legajo);
+    const justificaciones = await repo.listarJustificaciones(periodo, legajo);
 
     const resúmenes = [];
     for (const tramo of tramosParaTipo(modalidad.tipo)) {
@@ -139,7 +149,8 @@ export function createCalcularPresentismoService({
         });
         const correccion = correccionVigenteDe(correcciones, legajo, dia.fecha);
         const pausasDia = pausas.filter((p) => p.vigente !== false && p.fecha === dia.fecha);
-        const resultado = aplicarAjustes(auto, { correccion, pausas: pausasDia, params: modalidad });
+        const justificacion = justificacionVigenteDe(justificaciones, legajo, dia.fecha);
+        const resultado = aplicarAjustes(auto, { correccion, pausas: pausasDia, params: modalidad, justificacion });
         return { dia, resultado };
       });
 
@@ -347,6 +358,134 @@ export function createCalcularPresentismoService({
     logger.evento('pausa_reversion', { periodo, id, autor: autor ?? null });
   }
 
+  function periodoDeFecha(fecha) {
+    return fecha.slice(0, 4) + fecha.slice(5, 7);
+  }
+
+  // 'YYYY-MM-DD' siguiente, sin efectos de huso/DST (misma técnica que
+  // view-model.js `diaVecino`).
+  function diaSiguiente(fecha) {
+    const [y, m, d] = fecha.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+  }
+
+  function fechasEnRango(desde, hasta) {
+    const out = [];
+    let cur = desde;
+    while (cur <= hasta) {
+      out.push(cur);
+      cur = diaSiguiente(cur);
+    }
+    return out;
+  }
+
+  // feature 012 (US1) — Registra una Justificación de ausencia sobre un día o
+  // un rango `[fecha, hasta]` (FR-003a). Requiere que la categoría del legajo
+  // ya esté validada por el llamador (mismo criterio que cargarCorreccion vía
+  // exigirCategoriaConfigurada en el handler). Lanza con `.httpCode` cuando NO
+  // se pudo registrar ningún día (contracts/web-api.md): un solo día no
+  // elegible → 'JUSTIFICACION_NO_APLICABLE'; un rango sin ningún día elegible
+  // → 'RANGO_SIN_DIAS_ELEGIBLES'; motivo desconocido/inactivo →
+  // 'JUSTIFICACION_INVALIDA'.
+  async function cargarJustificacion({ legajo, fecha, hasta = null, motivoId, autor, hoy }) {
+    if (!motivosAusenciaConfig) {
+      throw new Error('presentismo: catálogo de motivos de ausencia no configurado');
+    }
+    const motivo = motivosAusenciaConfig.resolverMotivoActivo(motivoId);
+    if (!motivo) {
+      const err = new Error(`justificacion: motivo "${motivoId}" no existe o no está activo`);
+      err.httpCode = 'JUSTIFICACION_INVALIDA';
+      throw err;
+    }
+
+    const esRango = hasta != null;
+    const fechas = fechasEnRango(fecha, hasta ?? fecha);
+    const calendarios = new Map();
+    const justifsPorPeriodo = new Map();
+    const resumenesPorPeriodo = new Map();
+    const diasInfo = [];
+
+    for (const f of fechas) {
+      const periodo = periodoDeFecha(f);
+      if (!calendarios.has(periodo)) calendarios.set(periodo, await repo.cargarCalendario(periodo));
+      const calendario = calendarios.get(periodo);
+      const dia = calendario ? diaDe(calendario, f) : null;
+      if (!dia) {
+        // Sin calendario/día para esa fecha: se trata como no elegible en
+        // silencio (mismo destino que No Laborable) en vez de bloquear el
+        // resto del rango; un día único sin calendario cae en el mismo caso.
+        diasInfo.push({ fecha: f, clasificacion: Clasificacion.NO_LABORABLE, estado: null, esFuturo: f > hoy, yaJustificado: false });
+        continue;
+      }
+
+      if (!justifsPorPeriodo.has(periodo)) {
+        justifsPorPeriodo.set(periodo, await repo.listarJustificaciones(periodo, legajo));
+      }
+      const yaJustificado = justificacionVigenteDe(justifsPorPeriodo.get(periodo), legajo, f) != null;
+      const esFuturo = f > hoy;
+
+      let estado = null;
+      if (!esFuturo && dia.clasificacion === Clasificacion.LABORABLE) {
+        if (!resumenesPorPeriodo.has(periodo)) {
+          resumenesPorPeriodo.set(periodo, await calcularEmpleado(legajo, periodo));
+        }
+        const resumenes = resumenesPorPeriodo.get(periodo);
+        let jornada = null;
+        for (const r of resumenes) {
+          jornada = r.jornadas?.find((j) => j.fecha === f) ?? null;
+          if (jornada) break;
+        }
+        estado = jornada?.estado ?? null;
+      }
+
+      diasInfo.push({ fecha: f, clasificacion: dia.clasificacion, estado, esFuturo, yaJustificado });
+    }
+
+    const { elegibles, omitidas, noAplicables } = expandirRangoElegible(diasInfo);
+
+    if (elegibles.length === 0) {
+      const err = new Error(
+        esRango
+          ? 'justificacion: el rango no tiene ningún día Laborable elegible'
+          : `justificacion: el día ${fecha} no es elegible (${noAplicables[0]?.razon ?? omitidas[0]?.razon ?? 'NO_LABORABLE'})`,
+      );
+      err.httpCode = esRango ? 'RANGO_SIN_DIAS_ELEGIBLES' : 'JUSTIFICACION_NO_APLICABLE';
+      err.razon = noAplicables[0]?.razon ?? omitidas[0]?.razon ?? null;
+      throw err;
+    }
+
+    const registradas = [];
+    const fechaHora = new Date().toISOString();
+    for (const f of elegibles) {
+      const periodo = periodoDeFecha(f);
+      const justificacion = crearJustificacion({
+        periodo,
+        legajo,
+        fecha: f,
+        motivo,
+        autor,
+        fechaHora,
+        origenCarga: esRango ? { desde: fecha, hasta } : null,
+      });
+      await repo.guardarJustificacion(justificacion);
+      registradas.push({ fecha: f, motivoId: motivo.id, etiquetaMotivo: motivo.etiqueta, tipoPago: motivo.tipoPago });
+      logger.evento('justificacion_alta', { periodo, legajo, dia: f, autor: autor ?? null, motivoId: motivo.id });
+    }
+
+    return { registradas, omitidas, noAplicables };
+  }
+
+  // feature 012 (US3) — Revierte la Justificación vigente de un legajo/día.
+  async function revertirJustificacion({ periodo, legajo, fecha, autor }) {
+    const encontrada = await repo.revertirJustificacion(periodo, legajo, fecha, { autor: autor ?? null });
+    if (!encontrada) {
+      const err = new Error(`justificacion: no hay una Justificación vigente para el ${fecha}`);
+      err.httpCode = 'JUSTIFICACION_NO_ENCONTRADA';
+      throw err;
+    }
+    logger.evento('justificacion_reversion', { periodo, legajo, dia: fecha, autor: autor ?? null });
+  }
+
   return {
     generarCalendario: generarCalendarioMes,
     reclasificarDia: reclasificarDiaMes,
@@ -359,5 +498,7 @@ export function createCalcularPresentismoService({
     cargarPausa,
     cargarRetiroAnticipado,
     revertirPausa,
+    cargarJustificacion,
+    revertirJustificacion,
   };
 }

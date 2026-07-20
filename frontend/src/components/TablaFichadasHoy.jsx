@@ -39,11 +39,17 @@ function pausaPrincipalDe(pausas = []) {
   return { principal: intermedias[0], adicionales: intermedias.length - 1 };
 }
 
-export default function TablaFichadasHoy({ empleados, onCorregir = null, onPausaRetiro = null }) {
+export default function TablaFichadasHoy({
+  empleados,
+  onCorregir = null,
+  onPausaRetiro = null,
+  onJustificar = null,
+  onRevertirJustificacion = null,
+}) {
   if (!empleados || empleados.length === 0) {
     return <p className="fichadas-vacio">No hay empleados esperados para hoy.</p>;
   }
-  const conAcciones = Boolean(onCorregir || onPausaRetiro);
+  const conAcciones = Boolean(onCorregir || onPausaRetiro || onJustificar);
   return (
     <table width="100%" border="1" style={{ textAlign: 'center' }} className="tabla-fichadas" aria-label="Fichadas de hoy">
       <thead>
@@ -79,6 +85,18 @@ export default function TablaFichadasHoy({ empleados, onCorregir = null, onPausa
                   {ETIQUETA_SITUACION[fila.situacion] ?? fila.situacion}
                 </span>
                 {fila.correccionVigente && <span className="marca-correccion"> (*)</span>}
+                {fila.justificacion && (
+                  <span className="marca-justificacion">
+                    {' '}
+                    ({fila.justificacion.etiquetaMotivo}, {fila.justificacion.tipoPago})
+                  </span>
+                )}
+                {fila.requiereJustificacionRevision && (
+                  <span className="marca-revision" role="alert">
+                    {' '}
+                    ⚠ revisar: llegaron fichadas sobre un día justificado
+                  </span>
+                )}
                 {fila.anomalias?.length > 0 && (
                   <span className="anomalias"> {fila.anomalias.join('; ')}</span>
                 )}
@@ -93,6 +111,16 @@ export default function TablaFichadasHoy({ empleados, onCorregir = null, onPausa
                   {onPausaRetiro && fila.situacion !== 'ANOMALIA' && (
                     <button type="button" onClick={() => onPausaRetiro(fila)}>
                       Excepcion
+                    </button>
+                  )}
+                  {onJustificar && fila.situacion === 'AUSENTE' && !fila.justificacion && (
+                    <button type="button" onClick={() => onJustificar(fila)}>
+                      Justificación
+                    </button>
+                  )}
+                  {onRevertirJustificacion && fila.justificacion && (
+                    <button type="button" onClick={() => onRevertirJustificacion(fila)}>
+                      Revertir justificación
                     </button>
                   )}
                 </td>

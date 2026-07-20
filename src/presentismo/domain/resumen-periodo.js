@@ -33,6 +33,14 @@ export function esLlegadaTarde(jornada, params) {
   return esEntradaTarde(entradaConsiderada(jornada), params);
 }
 
+// feature 012 — proyección mínima de la Justificación vigente de un día para
+// el detalle/resumen (data-model.md "Proyección en el resumen del período").
+function justificacionDe(jornada) {
+  if (!jornada.justificacion) return null;
+  const { motivoId, etiquetaMotivo, tipoPago } = jornada.justificacion;
+  return { motivoId, etiquetaMotivo, tipoPago };
+}
+
 function detalleDeJornada(jornada, params) {
   const pausasVigentes = (jornada.pausas ?? []).filter((p) => p.vigente !== false);
   return {
@@ -45,6 +53,8 @@ function detalleDeJornada(jornada, params) {
     llegadaTarde: esLlegadaTarde(jornada, params),
     corregida: Boolean(jornada.correccionVigente),
     pausas: pausasVigentes.map((p) => ({ desde: p.desde, hasta: p.hasta, tipo: p.tipo ?? TipoPausa.INTERMEDIA })),
+    justificacion: justificacionDe(jornada),
+    requiereJustificacionRevision: Boolean(jornada.requiereJustificacionRevision),
   };
 }
 
@@ -64,12 +74,21 @@ export function proyectarResumenPeriodo({ resumen, hoy }) {
   let llegadasTarde = 0;
   let retirosAnticipados = 0;
   let correcciones = 0;
+  // feature 012 (FR-012): dos columnas nuevas junto a las 7 anteriores.
+  // `feriado` cuenta días Feriado del período; `licencia` cuenta días con
+  // Justificación `Paga` vigente. Una Justificación `No paga` NO tiene
+  // columna propia: sigue sumando a `ausencias` (Clarifications 2026-07-20).
+  let feriado = 0;
+  let licencia = 0;
 
   for (const d of detalle) {
     horasTrabajadas += d.horas;
+    const esLicencia = d.justificacion?.tipoPago === 'Paga';
+    if (d.clasificacion === Clasificacion.FERIADO) feriado += 1;
+    if (esLicencia) licencia += 1;
     if (d.estado === EstadoJornada.COMPLETA) completas += 1;
     else if (d.estado === EstadoJornada.INCOMPLETA) incompletas += 1;
-    else if (d.estado === EstadoJornada.SIN_FICHADAS) ausencias += 1;
+    else if (d.estado === EstadoJornada.SIN_FICHADAS && !esLicencia) ausencias += 1;
     if (d.llegadaTarde) llegadasTarde += 1;
     if (d.corregida) correcciones += 1;
     if (d.pausas.some((p) => p.tipo === TipoPausa.RETIRO_ANTICIPADO)) retirosAnticipados += 1;
@@ -84,6 +103,8 @@ export function proyectarResumenPeriodo({ resumen, hoy }) {
     llegadasTarde,
     retirosAnticipados,
     correcciones,
+    feriado,
+    licencia,
     detalle,
   };
 }

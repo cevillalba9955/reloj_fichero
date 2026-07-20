@@ -80,3 +80,39 @@ Valida end-to-end las 3 historias del spec sobre el entorno local ya usado por
 
 - Medir `POST /api/justificaciones` para un rango de 31 días (un mes completo).
   **Esperado**: respuesta en <500 ms.
+
+## Resultado de ejecución (T034 — 2026-07-20)
+
+Suites automatizadas: **465/465 PASS** backend (`node --test`: unit + contract +
+integration, incluidos `presentismo-justificacion.test.js`,
+`presentismo-motivos-ausencia-config.test.js`, `web-api-justificaciones.test.js`,
+`justificacion.integration.test.js` y las extensiones de `presentismo-jornada`,
+`presentismo-resumen`, `presentismo-resumen-periodo`, `web-api-resumen-periodo`,
+`presentismo-ports.contract`) + **97/97 PASS** frontend (`vitest run`, 22 archivos,
+incluidos `FormularioJustificacion.test.jsx` y las extensiones de
+`TablaFichadasHoy`/`TablaResumenPeriodo`/`DialogoDetalleEmpleado`/`PaginaFichadasHoy`).
+Sin regresiones en 001–011.
+
+Escenarios verificados manualmente sobre la app real (`npm run web` + `npm run dev`
+del frontend con proxy `/api`, datos reales del repo — padrón de 12 empleados,
+calendario de julio/junio 2026 — navegador real):
+
+| Escenario | Resultado |
+|-----------|-----------|
+| 1 — Botón "Justificación" visible en fila `AUSENTE` (legajo 35, VILLAR JOSE); diálogo precarga legajo y fecha del día mostrado; catálogo de 9 motivos cargado desde `config/motivos-ausencia.json` real | PASS |
+| 1 — `POST /api/justificaciones` con `motivoId: "vacaciones"` → fila pasa a `9:00` horas, `AUSENTE (Vacaciones, Paga)`, botón cambia a "Revertir justificación" | PASS |
+| 2 — "Resumen período": columnas `Feriado`/`Licencia` nuevas junto a las 7 existentes; fila del legajo justificado muestra `Licencia: 1` y horas totales con el crédito (`27:00` con 2 días completos + 1 Paga) | PASS |
+| 2 — Detalle por empleado (clic en la fila): día `2026-07-20` muestra `Sin fichadas (Vacaciones, Paga)` con `9:00` | PASS |
+| 3 — "Revertir justificación" → `DELETE /api/justificaciones` **200**; fila vuelve a `AUSENTE` sin motivo, horas a `0:00`, botón vuelve a ofrecer "Justificación" | PASS |
+
+Bug encontrado y corregido durante esta verificación manual (no cubierto por los tests
+automatizados originales): el botón de fila "Justificación" precargaba `fila.fecha`,
+pero `FilaFichadaHoy` no trae ese campo (solo `estado.vista.fecha` a nivel página) —
+la fecha quedaba vacía en el formulario. Corregido en `PaginaFichadasHoy.jsx`
+(`onJustificar={(fila) => abrirJustificacion({ ...fila, fecha: estado.vista.fecha })}`)
+y cubierto con una prueba de regresión en `PaginaFichadasHoy.test.jsx`.
+
+Escenarios 3 (rango de días futuros con `incluirMesSiguiente`) y la verificación
+transversal de fichadas tardías se validaron mediante las suites de integración
+(`justificacion.integration.test.js`), no repetidos manualmente por requerir
+mutar el archivo de fichadas del período en caliente.

@@ -235,3 +235,48 @@ test('valorCorregido explícito prevalece sobre el total derivado (compat 004)',
   assert.equal(ajustada.entradaEfectiva, 420, 'la entrada efectiva se recalcula igual');
   assert.equal(ajustada.totalDiario, 600, 'el override de total manda');
 });
+
+// feature 012 — Justificación de Ausencias (FR-010/013/014).
+test('justificación Paga sobre día Sin fichadas acredita la jornada esperada (como Feriado)', () => {
+  const auto = calc(Clasificacion.LABORABLE, []);
+  assert.equal(auto.estado, EstadoJornada.SIN_FICHADAS);
+  const ajustada = aplicarAjustes(auto, {
+    justificacion: { tipoPago: 'Paga', motivoId: 'vacaciones' },
+    params: PARAMS,
+  });
+  assert.equal(ajustada.estado, EstadoJornada.SIN_FICHADAS, 'el estado retrospectivo no cambia');
+  assert.equal(ajustada.totalDiario, 540, 'acredita la jornada esperada completa');
+  assert.equal(ajustada.requiereJustificacionRevision, false);
+  assert.deepEqual(ajustada.justificacion, { tipoPago: 'Paga', motivoId: 'vacaciones' });
+});
+
+test('justificación No paga sobre día Sin fichadas no acredita nada', () => {
+  const auto = calc(Clasificacion.LABORABLE, []);
+  const ajustada = aplicarAjustes(auto, {
+    justificacion: { tipoPago: 'No paga', motivoId: 'sin_aviso' },
+    params: PARAMS,
+  });
+  assert.equal(ajustada.totalDiario, 0);
+  assert.equal(ajustada.estado, EstadoJornada.SIN_FICHADAS);
+});
+
+test('fichadas que llegan después de justificar señalan requiereJustificacionRevision sin tocar el resultado', () => {
+  const auto = calc(Clasificacion.LABORABLE, [425, 958]); // Completa, 9:00
+  const ajustada = aplicarAjustes(auto, {
+    justificacion: { tipoPago: 'Paga', motivoId: 'vacaciones' },
+    params: PARAMS,
+  });
+  assert.equal(ajustada.requiereJustificacionRevision, true);
+  assert.equal(ajustada.estado, EstadoJornada.COMPLETA, 'el cálculo auto no se descarta');
+  assert.equal(ajustada.totalDiario, 540, 'las horas calculadas de las fichadas reales prevalecen');
+});
+
+test('justificación no aplica sobre Feriado/No Laborable (defensa en profundidad de FR-002)', () => {
+  const feriado = calc(Clasificacion.FERIADO, []);
+  const ajustada = aplicarAjustes(feriado, {
+    justificacion: { tipoPago: 'Paga', motivoId: 'vacaciones' },
+    params: PARAMS,
+  });
+  assert.equal(ajustada.justificacion, null, 'un Feriado ignora la justificación: nunca es Laborable');
+  assert.equal(ajustada.totalDiario, 540, 'sigue acreditado por ser Feriado, no por la justificación');
+});

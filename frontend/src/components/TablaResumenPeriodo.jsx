@@ -27,6 +27,8 @@ export default function TablaResumenPeriodo({ filas, onSeleccionar = null }) {
           <th scope="col">Llegadas tarde</th>
           <th scope="col">Retiros anticipados</th>
           <th scope="col">Correcciones</th>
+          <th scope="col">Feriado</th>
+          <th scope="col">Licencia</th>
         </tr>
       </thead>
       <tbody>
@@ -42,7 +44,7 @@ export default function TablaResumenPeriodo({ filas, onSeleccionar = null }) {
               <td>{fila.legajo}</td>
               <td>{fila.nombre ?? '—'}</td>
               {fila.anomalia ? (
-                <td colSpan={7} className="anomalia-mensaje">
+                <td colSpan={9} className="anomalia-mensaje">
                   Anomalía: {fila.anomalia}
                 </td>
               ) : (
@@ -54,6 +56,8 @@ export default function TablaResumenPeriodo({ filas, onSeleccionar = null }) {
                   <td>{fila.llegadasTarde}</td>
                   <td>{fila.retirosAnticipados}</td>
                   <td>{fila.correcciones}</td>
+                  <td>{fila.feriado}</td>
+                  <td>{fila.licencia}</td>
                 </>
               )}
             </tr>

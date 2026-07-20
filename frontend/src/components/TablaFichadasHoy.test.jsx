@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import TablaFichadasHoy from './TablaFichadasHoy.jsx';
 
 // T015 (feature 010, US1) — la tabla muestra por fila los datos del
@@ -146,4 +146,63 @@ test('un retiro anticipado no aparece en las columnas de pausa', () => {
   const celdas = screen.getAllByRole('row')[1].querySelectorAll('td');
   expect(celdas[4]).toHaveTextContent('—');
   expect(celdas[5]).toHaveTextContent('—');
+});
+
+// feature 012 — acción "Justificación" en días AUSENTE, badge de motivo y
+// acción de revertir cuando ya hay una Justificación vigente.
+test('el botón "Justificación" solo aparece en filas AUSENTE sin justificación vigente', () => {
+  const onJustificar = vi.fn();
+  render(
+    <TablaFichadasHoy
+      empleados={[
+        fila({ legajo: 1, situacion: 'AUSENTE' }),
+        fila({ legajo: 2, situacion: 'PRESENTE' }),
+      ]}
+      onJustificar={onJustificar}
+    />,
+  );
+  const filas = screen.getAllByRole('row').slice(1);
+  expect(filas[0]).toHaveTextContent('Justificación');
+  expect(filas[1]).not.toHaveTextContent('Justificación');
+
+  fireEvent.click(filas[0].querySelector('button'));
+  expect(onJustificar).toHaveBeenCalledWith(expect.objectContaining({ legajo: 1 }));
+});
+
+test('una fila con justificación vigente muestra el motivo y el botón de revertir', () => {
+  const onRevertirJustificacion = vi.fn();
+  render(
+    <TablaFichadasHoy
+      empleados={[
+        fila({
+          legajo: 1,
+          situacion: 'AUSENTE',
+          justificacion: { motivoId: 'vacaciones', etiquetaMotivo: 'Vacaciones', tipoPago: 'Paga' },
+        }),
+      ]}
+      onJustificar={vi.fn()}
+      onRevertirJustificacion={onRevertirJustificacion}
+    />,
+  );
+  const [datos] = screen.getAllByRole('row').slice(1);
+  expect(datos).toHaveTextContent('Vacaciones');
+  expect(datos).toHaveTextContent('Paga');
+  expect(datos).not.toHaveTextContent('Justificación'); // ya justificada: no ofrece cargar de nuevo
+  fireEvent.click(screen.getByText('Revertir justificación'));
+  expect(onRevertirJustificacion).toHaveBeenCalledWith(expect.objectContaining({ legajo: 1 }));
+});
+
+test('requiereJustificacionRevision se señala junto a la situación', () => {
+  render(
+    <TablaFichadasHoy
+      empleados={[
+        fila({
+          situacion: 'AUSENTE',
+          justificacion: { motivoId: 'vacaciones', etiquetaMotivo: 'Vacaciones', tipoPago: 'Paga' },
+          requiereJustificacionRevision: true,
+        }),
+      ]}
+    />,
+  );
+  expect(screen.getByRole('alert')).toHaveTextContent(/revisar/i);
 });

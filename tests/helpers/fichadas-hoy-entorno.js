@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:http';
 import { crearApp } from '../../src/web/server.js';
-import { generarCalendario, reclasificarDia } from '../../src/presentismo/domain/calendario-mes.js';
+import { generarCalendario, reclasificarDia, periodoSiguiente } from '../../src/presentismo/domain/calendario-mes.js';
 import { createFilePresentismoRepository } from '../../src/presentismo/adapters/file-presentismo-repository.js';
 import { registrarFichadas } from '../../src/presentismo/adapters/file-fichadas-archive.js';
 
@@ -20,6 +20,13 @@ export function mesActualPeriodo() {
 // 'YYYY-MM-DD' del día `dd` del mes actual.
 export function fechaDelMes(dd) {
   const p = mesActualPeriodo();
+  return `${p.slice(0, 4)}-${p.slice(4, 6)}-${String(dd).padStart(2, '0')}`;
+}
+
+// feature 012 — 'YYYY-MM-DD' del día `dd` del mes SIGUIENTE (siempre futuro,
+// sin depender de en qué día del mes corra la suite).
+export function fechaDelMesSiguiente(dd) {
+  const p = periodoSiguiente(mesActualPeriodo());
   return `${p.slice(0, 4)}-${p.slice(4, 6)}-${String(dd).padStart(2, '0')}`;
 }
 
@@ -43,6 +50,10 @@ export async function crearEntornoFichadasHoy({
   clasificaciones = {},
   fichadas = [],
   envExtra = {},
+  // feature 012 — genera además el calendario del mes SIGUIENTE (opt-in: por
+  // defecto NO, para no alterar el período "más reciente" que ya asumen los
+  // tests de 010/011 que no pasan `?periodo=` explícito).
+  incluirMesSiguiente = false,
 } = {}) {
   const raiz = mkdtempSync(join(tmpdir(), 'fichadas-hoy-'));
   const repoDir = join(raiz, 'repo');
@@ -54,11 +65,24 @@ export async function crearEntornoFichadasHoy({
   // Calendario del mes actual (esquema lun-vie) + reclasificaciones explícitas
   // para que cada escenario controle la clasificación del día bajo prueba.
   const repo = createFilePresentismoRepository({ repoDir });
+  const periodoDeFecha = (f) => f.slice(0, 4) + f.slice(5, 7);
   let cal = generarCalendario(periodo, new Set([1, 2, 3, 4, 5]));
   for (const [fecha, clasificacion] of Object.entries(clasificaciones)) {
-    cal = reclasificarDia(cal, fecha, clasificacion);
+    if (periodoDeFecha(fecha) === periodo) cal = reclasificarDia(cal, fecha, clasificacion);
   }
   await repo.guardarCalendario(cal);
+
+  // feature 012 — opcionalmente, el mes SIGUIENTE (esquema lun-vie), para que
+  // los tests de Justificación puedan usar fechas futuras inequívocas (día 1+
+  // del mes siguiente) sin depender de en qué día del mes corra la suite.
+  if (incluirMesSiguiente) {
+    const periodoSig = periodoSiguiente(periodo);
+    let calSig = generarCalendario(periodoSig, new Set([1, 2, 3, 4, 5]));
+    for (const [fecha, clasificacion] of Object.entries(clasificaciones)) {
+      if (periodoDeFecha(fecha) === periodoSig) calSig = reclasificarDia(calSig, fecha, clasificacion);
+    }
+    await repo.guardarCalendario(calSig);
+  }
 
   writeFileSync(padronFile, JSON.stringify({ empleados: padron }, null, 2), 'utf8');
 
