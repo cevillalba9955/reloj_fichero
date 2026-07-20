@@ -97,6 +97,17 @@ total sin declarar una hora puntual (compatibilidad con 004).
   FR-023 de 004) y ajustes manuales (`aplicarAjustes`), que es justamente lo que permite
   auditar qué fue automático y qué fue corregido.
 
+**CORRECCIÓN (2026-07-20)**: esta decisión especificó que `aplicarAjustes` recalcula
+`entradaEfectiva`/`salidaEfectiva`/total a partir de `entradaCorregida`/
+`salidaCorregida`, pero no contempló que el campo `estado` (Completa/Incompleta) también
+depende de esas dos puntas y debía recalcularse — quedó heredado tal cual del auto. El
+gap no afectaba a esta pantalla ("Fichadas de hoy" deriva su situación directamente de
+`entradaHora`/`salidaHora` en `situacion-dia.js`, sin leer `estado`), pero sí a los
+contadores de completas/incompletas de la feature 011 (resumen del período), que fue
+donde se detectó. Fix y detalle normativo en `specs/004-dominio-presentismo/research.md`
+§7 (dueño de `EstadoJornada`/`aplicarAjustes`); código en
+`src/presentismo/domain/jornada.js`.
+
 ## §4. Consulta manual al reloj ("consultar nuevas fichadas")
 
 **Hallazgo (corrige un supuesto inicial)**: `src/web/server.js` (`rs956-web.service`) y

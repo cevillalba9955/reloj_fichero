@@ -214,6 +214,32 @@ acumulados en 0 con las ausencias del calendario.
 
 ---
 
+## Phase 7: Cambios post-entrega (2026-07-20)
+
+**Nota de documentación retroactiva**: ambos cambios ya estaban implementados y
+verificados de punta a punta (backend 418/418, frontend 84/84, chequeo manual contra
+datos reales del repo) antes de registrar esta fase — se documenta el trabajo tal como
+se hizo, todas las tareas quedan marcadas `[X]`. Detalle de diseño en research.md §7.
+
+- [X] T028 [P] Granularidad configurable por `.env` (FR-013): `PRESENTISMO_RESUMEN_PERIODO`
+  (`MENSUAL`|`QUINCENAL`) en `src/web/wiring.js`; `fechaEnTramo(fecha, tramo)` en
+  `src/presentismo/domain/periodo-liquidacion.js`; parámetro `{ tramo }` en
+  `calcularResumenPeriodo` (`calcular-presentismo-service.js`); expansión/validación de
+  `YYYYMM-Q1`/`YYYYMM-Q2` en `src/web/api/resumen-periodo-handlers.js`; etiquetas de
+  quincena en `frontend/src/components/SelectorPeriodo.jsx`. Tests: unit
+  (`presentismo-periodo-liquidacion.test.js`), contract
+  (`web-api-resumen-periodo.test.js`), componente (`SelectorPeriodo.test.jsx`,
+  `PaginaResumenPeriodo.test.jsx`).
+- [X] T029 [P] Detalle: entrada/salida muestran la hora real fichada (o la corregida
+  vigente), no la efectiva ajustada por tolerancia — `entradaConsiderada`/
+  `salidaConsiderada` en `src/presentismo/domain/resumen-periodo.js`. Tests: unit
+  (`presentismo-resumen-periodo.test.js`), contract
+  (`web-api-resumen-periodo.test.js`).
+
+**Checkpoint**: quincena configurable y hora real en el detalle, sin romper US1–US3.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

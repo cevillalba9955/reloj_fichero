@@ -126,3 +126,42 @@ Se valida con el test de performance del quickstart antes de optimizar.
 - *Precálculo/caché persistente del resumen*: rechazada (spec Assumptions) — agrega
   invalidación (correcciones de 010 mutan el período abierto) sin necesidad
   demostrada.
+
+## §7. Cambios post-entrega (2026-07-20): quincena configurable y hora real en el detalle
+
+**Decisión 1 — granularidad configurable (FR-013)**: se agrega `PRESENTISMO_RESUMEN_PERIODO`
+(`.env`, `MENSUAL` default | `QUINCENAL`, valor inválido aborta el arranque en
+`wiring.js`). En `QUINCENAL`, `resumen-periodo-handlers.js` expande cada mes generado a
+`YYYYMM-Q1`/`YYYYMM-Q2` (reutilizando `Tramo`/`recortar` de `periodo-liquidacion.js`, 004
+§6) y el default pasa a ser la quincena en curso. Se agregó `fechaEnTramo(fecha, tramo)`
+a `periodo-liquidacion.js` (el resto del dominio trabajaba con `dd` del calendario, no con
+fechas ISO sueltas) para recortar `resumen.jornadas` por tramo en
+`calcularResumenPeriodo(periodo, legajos, hoy, { tramo })`. El recorte es institucional:
+aplica a todos los legajos por igual, sea cual sea su modalidad (Mensual/Quincenal) — no
+hay que confundir el tramo de VISUALIZACIÓN de esta pantalla con el tramo de CÁLCULO de
+la modalidad quincenal (research §3), aunque reutilizan el mismo `Tramo`/`recortar`.
+`periodo=YYYYMM` (mes completo) se sigue aceptando en ambos modos; `YYYYMM-Q1/Q2` en modo
+`MENSUAL` → 400 `PERIODO_INVALIDO`.
+
+**Alternativas consideradas**:
+- *Parámetro por request en vez de variable de entorno*: rechazada — el pedido fue
+  "agregar parámetro configurable en .env", y la granularidad es una decisión de
+  instalación (RRHH liquida mensual o quincenal), no algo que cada consulta deba poder
+  cambiar.
+
+**Decisión 2 — entrada/salida del detalle: hora real, no efectiva (spec Clarifications
+2026-07-20)**: `proyectarResumenPeriodo`/`detalleDeJornada` (`resumen-periodo.js`)
+exponían `jornada.entradaEfectiva`/`salidaEfectiva` (la hora ajustada por el margen de
+tolerancia, uso interno para calcular horas). Se pidió que el detalle muestre la hora que
+la persona realmente fichó — o la corregida, si hay corrección vigente —, igual criterio
+que `construirFilaFichadaHoy` (010). Se agregaron `entradaConsiderada`/
+`salidaConsiderada` (misma regla que ya usaba `esLlegadaTarde` para la entrada) y se
+reemplazó el campo `entrada`/`salida` del detalle por su resultado; el cálculo de horas
+trabajadas no cambia (sigue usando las efectivas internamente).
+
+**Nota — bug relacionado descubierto en esta sesión**: verificando datos reales tras
+estos dos cambios, se detectó que días con corrección vigente que completaba una jornada
+`Incompleta` (solo fichada de entrada) seguían contando como `Incompleta` en vez de
+`Completa`. La causa no estaba en esta feature sino en `aplicarAjustes` (004/010, ver
+`specs/004-dominio-presentismo/research.md` §7); el fix ahí beneficia automáticamente los
+contadores de esta pantalla sin cambios en `resumen-periodo.js`.

@@ -175,6 +175,22 @@ los fixtures de test. Todo en minutos-del-día.
   salida_efectiva])` de cada pausa; `total_diario = max(0, horas − descuento)` (FR-038/39).
 - **Corrección manual**: si existe y está vigente, su valor prevalece sobre el auto para
   el total (FR-028); puede exceder la jornada esperada solo por corrección (FR-024).
+  **CORRECCIÓN (2026-07-20)**: esta regla, tal como se implementó originalmente en
+  `aplicarAjustes` (`jornada.js`), solo recalculaba `entradaEfectiva`/`salidaEfectiva`/
+  `totalDiario` a partir de la corrección — el campo `estado` (Completa/Incompleta/Sin
+  fichadas) quedaba congelado en el valor del cálculo automático. Una jornada con solo
+  fichada de entrada (auto `Incompleta`) seguía marcada `Incompleta` aunque una
+  corrección cargara también la salida, porque nadie volvía a evaluar si las dos puntas
+  ya estaban presentes. El bug era invisible cuando el auto ya tenía ambas fichadas (no
+  cambiaba nada visible), y se detectó recién con la feature 011 (resumen del período),
+  cuyos contadores de `completas`/`incompletas` sí exponían la inconsistencia. Fix:
+  `aplicarAjustes` ahora deriva `estado` de `entradaEfectiva`/`salidaEfectiva` ya
+  corregidas cuando la corrección toca el horario (`corrigeHorario`), solo para días
+  `Laborable` (Feriado/No Laborable conservan su estado especial). Sin cambios en
+  `resumen-periodo.js` ni `resumen-presentismo.js`: ambos leen `estado` tal como se lo
+  entrega `aplicarAjustes`, así que se benefician automáticamente. Ver también
+  `specs/010-fichadas-hoy/research.md` §3 (origen de `entradaCorregida`/
+  `salidaCorregida`).
 - **Quincena**: primera = días con `DD ≤ 15`; segunda = `DD ≥ 16`. Suma de ambas = mes
   (SC-012).
 
@@ -223,3 +239,4 @@ proyecto para diagnóstico homogéneo.
 | 7 | Reglas de cálculo | Normalizadas en minutos, bordes inclusivos, deterministas |
 | 8 | Testing | `node:test`, fixtures 1:1 con Acceptance, fake de conexión Oracle |
 | 9 | Observabilidad | Logger NDJSON estructurado sin datos sensibles |
+| 10 | Corrección de horario (2026-07-20) | `aplicarAjustes` recalcula `estado` desde `entradaEfectiva`/`salidaEfectiva` corregidas, no solo el total (§7) |
