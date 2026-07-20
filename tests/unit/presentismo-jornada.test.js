@@ -166,6 +166,11 @@ test('corrección de salida sobre jornada incompleta deriva el total', () => {
   });
   assert.equal(ajustada.salidaEfectiva, 960, 'la salida corregida respeta el margen de cierre');
   assert.equal(ajustada.totalDiario, 540);
+  assert.equal(
+    ajustada.estado,
+    EstadoJornada.COMPLETA,
+    'la corrección completó la punta que faltaba: la jornada ya no es Incompleta',
+  );
 });
 
 test('corrección de entrada y salida sin fichadas reconstruye la jornada', () => {
@@ -176,9 +181,14 @@ test('corrección de entrada y salida sin fichadas reconstruye la jornada', () =
     params: PARAMS,
   });
   assert.equal(ajustada.totalDiario, 540);
+  assert.equal(
+    ajustada.estado,
+    EstadoJornada.COMPLETA,
+    'ambas puntas llegaron por corrección: la jornada pasa de Sin fichadas a Completa',
+  );
 });
 
-test('solo entrada corregida, sin salida real ni corregida → total sigue en 0', () => {
+test('solo entrada corregida, sin salida real ni corregida → total sigue en 0 y sigue Incompleta', () => {
   const auto = calc(Clasificacion.LABORABLE, []);
   const ajustada = aplicarAjustes(auto, {
     correccion: correccionDe({ entradaCorregida: 425, valorCalculado: 0 }),
@@ -186,6 +196,23 @@ test('solo entrada corregida, sin salida real ni corregida → total sigue en 0'
   });
   assert.equal(ajustada.entradaEfectiva, 420);
   assert.equal(ajustada.totalDiario, 0, 'la jornada sigue incompleta');
+  assert.equal(ajustada.estado, EstadoJornada.INCOMPLETA, 'falta la salida: no se completa a medias');
+});
+
+test('corrección de horario sobre Feriado/No Laborable no pisa el estado especial', () => {
+  const feriado = calc(Clasificacion.FERIADO, []);
+  const feriadoAjustado = aplicarAjustes(feriado, {
+    correccion: correccionDe({ entradaCorregida: 425, salidaCorregida: 958, valorCalculado: 540 }),
+    params: PARAMS,
+  });
+  assert.equal(feriadoAjustado.estado, EstadoJornada.FERIADO_CUMPLIDO);
+
+  const noLaborable = calc(Clasificacion.NO_LABORABLE, []);
+  const noLaborableAjustado = aplicarAjustes(noLaborable, {
+    correccion: correccionDe({ entradaCorregida: 425, salidaCorregida: 958, valorCalculado: 0 }),
+    params: PARAMS,
+  });
+  assert.equal(noLaborableAjustado.estado, EstadoJornada.NO_APLICA);
 });
 
 test('las pausas vigentes se descuentan del total derivado de la corrección', () => {

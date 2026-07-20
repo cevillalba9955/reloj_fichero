@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { proyectarResumenPeriodo, esLlegadaTarde } from '../../src/presentismo/domain/resumen-periodo.js';
+import { calcularJornadaAuto, aplicarAjustes, EstadoJornada as EstadoJornadaDom } from '../../src/presentismo/domain/jornada.js';
+import { crearCorreccion } from '../../src/presentismo/domain/correccion.js';
+import { Clasificacion } from '../../src/presentismo/domain/calendario-mes.js';
 
 // T001 (feature 011) — Fixtures de calibración de la proyección de acumulados
 // del período (data-model.md, research.md §1-§2), derivados de los Acceptance
@@ -15,6 +18,7 @@ const PARAMS = {
   margenCierre: 30,
   jornadaEsperada: 540,
   ventanaApertura: [300, 720],
+  ventanaCierre: [720, 1439],
 };
 
 // Jornada como la deja calcularEmpleado en resumen.jornadas: { fecha, ...resultado }.
@@ -182,6 +186,33 @@ test('el detalle muestra la hora corregida cuando hay corrección vigente', () =
   assert.equal(d.entrada, 430, 'la corrección de entrada prevalece sobre la fichada');
   assert.equal(d.salida, 958, 'sin corrección de salida, se muestra la fichada real');
   assert.equal(d.corregida, true);
+});
+
+test('regresión: corrección de salida sobre jornada con solo entrada real pasa a Completa en el resumen', () => {
+  // Caso real reportado (2026-07-15, legajos 72/74/79): solo hay fichada de
+  // entrada; una corrección vigente carga entrada+salida (como el resto de
+  // los legajos ese día). El día debe contar como Completa, no Incompleta.
+  const auto = calcularJornadaAuto({
+    clasificacion: Clasificacion.LABORABLE,
+    fichadas: [{ id: 'f1', hora: 418 }], // 06:58, dentro de la ventana de apertura
+    params: PARAMS,
+  });
+  assert.equal(auto.estado, 'Incompleta', 'sin fichada de salida, el auto es Incompleta');
+
+  const correccion = crearCorreccion({
+    periodo: '202607', legajo: 72, fecha: '2026-07-15',
+    entradaCorregida: 418, salidaCorregida: 900, motivo: 'JUEGA ARG',
+  });
+  const resultado = aplicarAjustes(auto, { correccion, params: PARAMS });
+  assert.equal(resultado.estado, EstadoJornadaDom.COMPLETA, 'la corrección completó la jornada');
+
+  const r = proyectarResumenPeriodo({
+    resumen: resumen([{ fecha: '2026-07-15', ...resultado }]),
+    hoy: HOY,
+  });
+  assert.equal(r.completas, 1);
+  assert.equal(r.incompletas, 0);
+  assert.equal(r.detalle[0].estado, 'Completa');
 });
 
 test('esLlegadaTarde: sin entrada no hay tarde; solo aplica a Laborable', () => {

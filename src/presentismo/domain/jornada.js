@@ -139,6 +139,18 @@ export function calcularJornadaAuto({ clasificacion, fichadas = [], params }) {
 // descuentoPausas, correccionVigente y requiereRevision (FR-028/029/038/039).
 // `params` (modalidad) solo es necesario cuando la corrección trae
 // entrada/salida. Función pura.
+// Recalcula `estado` cuando una corrección modifica entrada/salida: una
+// jornada auto `Incompleta`/`Sin fichadas` puede quedar `Completa` si la
+// corrección aporta la punta que faltaba (la corrección prevalece en TODOS
+// los contadores, spec 011 FR-003). Solo aplica a Laborable: Feriado/No
+// Laborable conservan su estado especial.
+function estadoConCorreccion(auto, entradaEfectiva, salidaEfectiva) {
+  if (auto.clasificacion !== Clasificacion.LABORABLE) return auto.estado;
+  if (entradaEfectiva != null && salidaEfectiva != null) return EstadoJornada.COMPLETA;
+  if (entradaEfectiva != null || salidaEfectiva != null) return EstadoJornada.INCOMPLETA;
+  return EstadoJornada.SIN_FICHADAS;
+}
+
 export function aplicarAjustes(auto, { correccion = null, pausas = [], params = null } = {}) {
   const corrigeHorario =
     correccion && (correccion.entradaCorregida != null || correccion.salidaCorregida != null);
@@ -172,6 +184,7 @@ export function aplicarAjustes(auto, { correccion = null, pausas = [], params = 
       correccion.valorCalculado != null && correccion.valorCalculado !== auto.totalDiario;
     return {
       ...auto,
+      estado: estadoConCorreccion(auto, entradaEfectiva, salidaEfectiva),
       entradaEfectiva,
       salidaEfectiva,
       descuentoPausas: descuento,
