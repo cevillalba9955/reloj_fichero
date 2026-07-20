@@ -4,7 +4,7 @@
 // (garantizado por el test de contrato).
 
 export function estadoVacio() {
-  return { calendario: null, correcciones: [], pausas: [] };
+  return { calendario: null, correcciones: [], pausas: [], justificaciones: [] };
 }
 
 function motivoValido(motivo) {
@@ -65,6 +65,38 @@ export function revertPausa(state, id) {
   for (const p of state.pausas) {
     if (p.id === id && p.vigente) {
       p.vigente = false;
+      encontrada = true;
+    }
+  }
+  return encontrada;
+}
+
+// feature 012 — Justificación de Ausencias: mismo patrón que corrección (una
+// vigente por legajo/día; alta supersede la previa como defensa en
+// profundidad, aunque el dominio ya la impide con YA_JUSTIFICADO).
+export function listJustificaciones(state, legajo) {
+  const todas = state.justificaciones ?? [];
+  return legajo == null ? [...todas] : todas.filter((j) => j.legajo === legajo);
+}
+
+export function addJustificacion(state, j) {
+  if (typeof j?.motivoId !== 'string' || j.motivoId.trim() === '') {
+    throw new Error('presentismo-repo: la justificación requiere motivoId (FR-003)');
+  }
+  for (const prev of state.justificaciones) {
+    if (prev.legajo === j.legajo && prev.fecha === j.fecha && prev.vigente) {
+      prev.vigente = false;
+    }
+  }
+  state.justificaciones.push({ ...j, vigente: true });
+}
+
+export function revertJustificacion(state, legajo, fecha, { autor = null, fechaHora = null } = {}) {
+  let encontrada = false;
+  for (const j of state.justificaciones ?? []) {
+    if (j.legajo === legajo && j.fecha === fecha && j.vigente) {
+      j.vigente = false;
+      j.reversion = { autor, fechaHora: fechaHora ?? new Date().toISOString() };
       encontrada = true;
     }
   }

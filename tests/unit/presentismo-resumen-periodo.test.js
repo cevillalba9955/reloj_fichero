@@ -224,3 +224,40 @@ test('esLlegadaTarde: sin entrada no hay tarde; solo aplica a Laborable', () => 
   assert.equal(esLlegadaTarde(jornada('2026-07-01', { entrada: { hora: 490 } }), PARAMS), true);
   assert.equal(esLlegadaTarde(jornada('2026-07-01', { entrada: { hora: 445 } }), PARAMS), false);
 });
+
+// feature 012 (FR-012, data-model.md "Proyección en el resumen del período").
+test('feriado cuenta días Feriado; licencia cuenta Justificación Paga; ausencias excluye la Paga pero incluye la No paga', () => {
+  const r = proyectarResumenPeriodo({
+    resumen: resumen([
+      jornada('2026-07-09', { clasificacion: 'Feriado', estado: 'Feriado cumplido', entrada: null, salida: null, totalDiario: 540 }),
+      jornada('2026-07-10', {
+        estado: 'Sin fichadas',
+        entrada: null,
+        salida: null,
+        totalDiario: 540,
+        justificacion: { motivoId: 'vacaciones', etiquetaMotivo: 'Vacaciones', tipoPago: 'Paga' },
+      }),
+      jornada('2026-07-13', {
+        estado: 'Sin fichadas',
+        entrada: null,
+        salida: null,
+        totalDiario: 0,
+        justificacion: { motivoId: 'sin_aviso', etiquetaMotivo: 'Sin Aviso', tipoPago: 'No paga' },
+      }),
+      jornada('2026-07-14', { estado: 'Sin fichadas', entrada: null, salida: null, totalDiario: 0 }),
+    ]),
+    hoy: HOY,
+  });
+  assert.equal(r.feriado, 1);
+  assert.equal(r.licencia, 1);
+  assert.equal(r.ausencias, 2, 'la No paga y la sin justificar cuentan; la Paga no');
+  assert.equal(r.detalle.find((d) => d.fecha === '2026-07-10').justificacion.tipoPago, 'Paga');
+});
+
+test('requiereJustificacionRevision se expone en el detalle del día', () => {
+  const r = proyectarResumenPeriodo({
+    resumen: resumen([jornada('2026-07-10', { requiereJustificacionRevision: true })]),
+    hoy: HOY,
+  });
+  assert.equal(r.detalle[0].requiereJustificacionRevision, true);
+});

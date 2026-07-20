@@ -49,6 +49,33 @@
   font-weight: 600;
 }
 
+/* --- Fichadas de hoy: encabezado con navegación a la derecha (feature 012),
+   mismo patrón que .app-header / NavegacionMes --- */
+.fichadas-encabezado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+}
+.fichadas-titulo {
+  margin: 0;
+}
+.fichadas-titulo h2 {
+  margin: 0;
+}
+.navegacion-dia {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+.fichadas-acciones {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  margin: 0.5rem 0;
+}
+
 /* --- Encabezado del período activo --- */
 .periodo-activo {
   display: flex;
@@ -234,6 +261,84 @@
 }
 .btn-confirmar {
   font-weight: 700;
+}
+
+/* --- Situación (Fichadas de hoy, feature 010/012) — color + texto, nunca
+   solo color (mismo criterio que la leyenda del calendario). --- */
+.situacion {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.situacion.clave-esperando {
+  background: var(--nolab-bg);
+  color: #555;
+  border-color: var(--nolab-borde);
+}
+.situacion.clave-presente,
+.situacion.clave-completa {
+  background: #e6f7ec;
+  color: #1b7a3d;
+  border-color: #4caf50;
+}
+.situacion.clave-tarde {
+  background: var(--feriado-bg);
+  color: #915b00;
+  border-color: var(--feriado-borde);
+}
+.situacion.clave-ausente {
+  background: #fde8e8;
+  color: #b3261e;
+  border-color: #d64545;
+}
+.situacion.clave-retiro-anticipado {
+  background: #f1e9fb;
+  color: #6a3fb5;
+  border-color: #8a5fd6;
+}
+.situacion.clave-feriado-cumplido {
+  background: var(--feriado-bg);
+  color: #915b00;
+  border-color: var(--feriado-borde);
+  border-style: dashed;
+}
+.situacion.clave-no-aplica {
+  background: var(--nolab-bg);
+  color: #666;
+  border-color: var(--nolab-borde);
+}
+.situacion.clave-anomalia {
+  background: #fde8e8;
+  color: #7d1116;
+  border-color: #b3261e;
+  font-weight: 700;
+}
+/* Licencia (Justificación Paga, feature 012): distinta del rojo de una
+   ausencia sin cubrir — se lee como "cubierto", no como alerta. */
+.situacion.clave-licencia {
+  background: var(--habil-bg);
+  color: #1d4ed8;
+  border-color: var(--habil-borde);
+}
+.situacion.clave-desconocida {
+  background: var(--nolab-bg);
+  color: #555;
+  border-color: var(--nolab-borde);
+}
+
+/* Tinte suave de fila para las situaciones que más necesitan atención. */
+.fila-fichada.situacion-ausente {
+  background: #fff7f7;
+}
+.fila-fichada.situacion-anomalia {
+  background: #fff0f0;
+}
+.fila-fichada.situacion-licencia {
+  background: #f5f8ff;
 }
 
 /* Accesibilidad: etiqueta solo para lectores de pantalla. */

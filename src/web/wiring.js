@@ -1,4 +1,5 @@
 import { loadCategoriasConfig } from '../presentismo/config/categorias-config.js';
+import { loadMotivosAusenciaConfig } from '../presentismo/config/motivos-ausencia-config.js';
 import { createFilePresentismoRepository } from '../presentismo/adapters/file-presentismo-repository.js';
 import { createPresentismoLogger } from '../presentismo/logging/presentismo-logger.js';
 import { createCalcularPresentismoService } from '../presentismo/service/calcular-presentismo-service.js';
@@ -21,6 +22,7 @@ export function crearContextoWeb(env = process.env) {
   const repoDir = env.PRESENTISMO_REPO_DIR ?? './data/presentismo';
   const logDir = env.PRESENTISMO_LOG_DIR ?? './logs';
   const configPath = env.PRESENTISMO_CATEGORIAS_CONFIG ?? './config/categorias.json';
+  const motivosAusenciaConfigPath = env.PRESENTISMO_MOTIVOS_AUSENCIA_CONFIG ?? './config/motivos-ausencia.json';
   const padronFile = env.PRESENTISMO_PADRON_FILE ?? `${repoDir}/padron.json`;
   const fichadasDir = env.PRESENTISMO_FICHADAS_DIR ?? `${repoDir}/fichadas`;
   const controlUrl = env.FICHADAS_CONTROL_URL ?? 'http://127.0.0.1:5006';
@@ -34,6 +36,7 @@ export function crearContextoWeb(env = process.env) {
   }
 
   const categoriasConfig = loadCategoriasConfig(configPath);
+  const motivosAusenciaConfig = loadMotivosAusenciaConfig(motivosAusenciaConfigPath);
   const repo = createFilePresentismoRepository({ repoDir });
   const logger = createPresentismoLogger({ logDir });
   const categoryProvider = createFilePadronCategoryProvider({ filePath: padronFile });
@@ -46,12 +49,14 @@ export function crearContextoWeb(env = process.env) {
     logger,
     fichadasProvider,
     categoryProvider,
+    motivosAusenciaConfig,
   });
 
   return {
     repo,
     service,
     categoriasConfig,
+    motivosAusenciaConfig,
     logger,
     repoDir,
     categoryProvider,

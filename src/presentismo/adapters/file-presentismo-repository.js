@@ -4,8 +4,9 @@ import * as ops from './presentismo-repo-ops.js';
 
 // Adaptador de PresentismoRepository sobre archivos JSON (research §3).
 // Un archivo por período: `${repoDir}/${periodo}.json` con
-// { calendario, correcciones, pausas }. Escritura atómica (temp + rename)
-// para no corromper el estado ante un corte. NO usa Oracle (Principio II).
+// { calendario, correcciones, pausas, justificaciones }. Escritura atómica
+// (temp + rename) para no corromper el estado ante un corte. NO usa Oracle
+// (Principio II).
 export function createFilePresentismoRepository({ repoDir }) {
   mkdirSync(repoDir, { recursive: true });
 
@@ -22,6 +23,7 @@ export function createFilePresentismoRepository({ repoDir }) {
         calendario: parsed.calendario ?? null,
         correcciones: parsed.correcciones ?? [],
         pausas: parsed.pausas ?? [],
+        justificaciones: parsed.justificaciones ?? [],
       };
     } catch {
       throw new Error(`file-presentismo-repository: estado corrupto en "${ruta}"`);
@@ -91,6 +93,20 @@ export function createFilePresentismoRepository({ repoDir }) {
       const state = leer(periodo);
       ops.revertPausa(state, id);
       escribir(periodo, state);
+    },
+    async listarJustificaciones(periodo, legajo) {
+      return ops.listJustificaciones(leer(periodo), legajo);
+    },
+    async guardarJustificacion(j) {
+      const state = leer(j.periodo);
+      ops.addJustificacion(state, j);
+      escribir(j.periodo, state);
+    },
+    async revertirJustificacion(periodo, legajo, fecha, opciones) {
+      const state = leer(periodo);
+      const encontrada = ops.revertJustificacion(state, legajo, fecha, opciones);
+      escribir(periodo, state);
+      return encontrada;
     },
   };
 }

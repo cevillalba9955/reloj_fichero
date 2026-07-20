@@ -1,0 +1,13 @@
+{
+  "motivos": [
+    { "id": "sin_aviso", "etiqueta": "Sin Aviso", "tipoPago": "No paga", "activo": true },
+    { "id": "aviso_justificado", "etiqueta": "Aviso Justificado", "tipoPago": "No paga", "activo": true },
+    { "id": "enfermedad", "etiqueta": "Enfermedad", "tipoPago": "Paga", "activo": true },
+    { "id": "art", "etiqueta": "ART", "tipoPago": "Paga", "activo": true },
+    { "id": "nacimiento", "etiqueta": "Nacimiento", "tipoPago": "Paga", "activo": true },
+    { "id": "fallecimiento", "etiqueta": "Fallecimiento", "tipoPago": "Paga", "activo": true },
+    { "id": "vacaciones", "etiqueta": "Vacaciones", "tipoPago": "Paga", "activo": true },
+    { "id": "matrimonio", "etiqueta": "Matrimonio", "tipoPago": "Paga", "activo": true },
+    { "id": "examen", "etiqueta": "Examen", "tipoPago": "Paga", "activo": true }
+  ]
+}

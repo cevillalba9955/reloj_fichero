@@ -97,6 +97,16 @@ export function construirFilaFichadaHoy({ legajo, nombre = null, jornada = null,
     horasTrabajadas: jornada?.totalDiario ?? 0,
     situacion,
     correccionVigente: Boolean(jornada?.correccionVigente),
+    // feature 012: motivo vigente del día (si lo hay) y señalado de revisión
+    // cuando llegaron fichadas después de justificar (FR-010/FR-011).
+    justificacion: jornada?.justificacion
+      ? {
+          motivoId: jornada.justificacion.motivoId,
+          etiquetaMotivo: jornada.justificacion.etiquetaMotivo,
+          tipoPago: jornada.justificacion.tipoPago,
+        }
+      : null,
+    requiereJustificacionRevision: Boolean(jornada?.requiereJustificacionRevision),
     pausas: (jornada?.pausas ?? [])
       .filter((p) => p.vigente !== false)
       .map((p) => ({
@@ -174,6 +184,8 @@ export function construirVistaResumenPeriodo({ periodo, periodos, filas = [] }) 
             llegadasTarde: 0,
             retirosAnticipados: 0,
             correcciones: 0,
+            feriado: 0,
+            licencia: 0,
             anomalia: f.anomalia,
           }
         : {
@@ -186,6 +198,10 @@ export function construirVistaResumenPeriodo({ periodo, periodos, filas = [] }) 
             llegadasTarde: f.llegadasTarde,
             retirosAnticipados: f.retirosAnticipados,
             correcciones: f.correcciones,
+            // feature 012 (FR-012): días Feriado y días con Justificación
+            // Paga del período, junto a los 7 acumulados existentes.
+            feriado: f.feriado ?? 0,
+            licencia: f.licencia ?? 0,
             anomalia: null,
           },
     ),
@@ -214,6 +230,10 @@ export function construirDetalleEmpleado({ periodo, legajo, nombre = null, detal
         hasta: formatHoraMinuto(p.hasta),
         tipo: p.tipo,
       })),
+      // feature 012 (FR-011): motivo y clasificación de pago del día, o null
+      // si no hay Justificación vigente.
+      justificacion: d.justificacion ?? null,
+      requiereJustificacionRevision: Boolean(d.requiereJustificacionRevision),
     })),
   };
 }

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import PaginaFichadasHoy from './PaginaFichadasHoy.jsx';
 
 // T016 (feature 010, US1) — la página carga la vista al montar, muestra el
@@ -102,6 +102,127 @@ test('Pausa / Retiro abre su formulario dentro de un diálogo modal', async () =
   fireEvent.click(screen.getByText('Excepcion'));
   const dialogo = screen.getByRole('dialog');
   expect(dialogo).toHaveAttribute('aria-modal', 'true');
+});
+
+// feature 012 — el botón general "Justificar ausencia" carga el catálogo de
+// motivos recién al abrirse (no en el montaje de la página) y permite
+// registrar una Justificación sin depender de una fila existente.
+function clienteJustificacionesMock(over = {}) {
+  return {
+    obtenerMotivos: vi.fn().mockResolvedValue({
+      motivos: [{ id: 'vacaciones', etiqueta: 'Vacaciones', tipoPago: 'Paga' }],
+    }),
+    crearJustificacion: vi.fn().mockResolvedValue({ registradas: [{ fecha: '2026-08-03' }], omitidas: [], noAplicables: [] }),
+    revertirJustificacion: vi.fn().mockResolvedValue({ fecha: '2026-07-16', revertida: true }),
+    ...over,
+  };
+}
+
+test('"Justificar ausencia" abre el diálogo, carga motivos recién al abrir y guarda', async () => {
+  const cliente = clienteMock();
+  const clienteJustificaciones = clienteJustificacionesMock();
+  render(<PaginaFichadasHoy cliente={cliente} clienteJustificaciones={clienteJustificaciones} />);
+  await screen.findByRole('table');
+  expect(clienteJustificaciones.obtenerMotivos).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByText('Justificar ausencia'));
+  const dialogo = await screen.findByRole('dialog');
+  expect(clienteJustificaciones.obtenerMotivos).toHaveBeenCalledTimes(1);
+
+  fireEvent.change(within(dialogo).getByLabelText('Legajo'), { target: { value: '5' } });
+  fireEvent.change(within(dialogo).getByLabelText(/^Fecha/), { target: { value: '2026-08-03' } });
+  fireEvent.change(within(dialogo).getByLabelText(/Motivo/), { target: { value: 'vacaciones' } });
+  fireEvent.click(within(dialogo).getByText('Guardar'));
+
+  await waitFor(() =>
+    expect(clienteJustificaciones.crearJustificacion).toHaveBeenCalledWith(5, {
+      fecha: '2026-08-03',
+      hasta: null,
+      motivoId: 'vacaciones',
+      autor: 'ui',
+    }),
+  );
+  await waitFor(() => expect(cliente.obtenerFichadasHoy).toHaveBeenCalledTimes(2));
+});
+
+test('el botón "Justificación" de una fila precarga legajo y la fecha del día mostrado (no solo la fila)', async () => {
+  const cliente = clienteMock({
+    obtenerFichadasHoy: vi.fn().mockResolvedValue(
+      vista({
+        fecha: '2026-07-20',
+        empleados: [
+          {
+            legajo: 35,
+            nombre: 'Villar José',
+            entrada: null,
+            salida: null,
+            horasTrabajadas: 0,
+            situacion: 'AUSENTE',
+            correccionVigente: false,
+            pausas: [],
+            anomalias: [],
+          },
+        ],
+      }),
+    ),
+  });
+  const clienteJustificaciones = clienteJustificacionesMock();
+  render(<PaginaFichadasHoy cliente={cliente} clienteJustificaciones={clienteJustificaciones} />);
+  await screen.findByRole('table');
+
+  fireEvent.click(screen.getByText('Justificación'));
+  const dialogo = await screen.findByRole('dialog');
+  // La fila de "Fichadas de hoy" (FilaFichadaHoy) no trae `fecha` propia: la
+  // fecha del día se toma de `estado.vista.fecha` (regresión encontrada en
+  // verificación manual — la fila solo tiene legajo/nombre/entrada/salida/...).
+  expect(within(dialogo).getByLabelText(/^Fecha/)).toHaveValue('2026-07-20');
+
+  fireEvent.change(within(dialogo).getByLabelText(/Motivo/), { target: { value: 'vacaciones' } });
+  fireEvent.click(within(dialogo).getByText('Guardar'));
+
+  await waitFor(() =>
+    expect(clienteJustificaciones.crearJustificacion).toHaveBeenCalledWith(35, {
+      fecha: '2026-07-20',
+      hasta: null,
+      motivoId: 'vacaciones',
+      autor: 'ui',
+    }),
+  );
+});
+
+test('el botón "Revertir justificación" de una fila llama al cliente y recarga', async () => {
+  const cliente = clienteMock({
+    obtenerFichadasHoy: vi.fn().mockResolvedValue(
+      vista({
+        empleados: [
+          {
+            legajo: 1,
+            nombre: 'Ana Pérez',
+            entrada: null,
+            salida: null,
+            horasTrabajadas: 540,
+            situacion: 'AUSENTE',
+            correccionVigente: false,
+            justificacion: { motivoId: 'vacaciones', etiquetaMotivo: 'Vacaciones', tipoPago: 'Paga' },
+            pausas: [],
+            anomalias: [],
+          },
+        ],
+      }),
+    ),
+  });
+  const clienteJustificaciones = clienteJustificacionesMock();
+  render(<PaginaFichadasHoy cliente={cliente} clienteJustificaciones={clienteJustificaciones} />);
+  await screen.findByRole('table');
+
+  fireEvent.click(screen.getByText('Revertir justificación'));
+  await waitFor(() =>
+    expect(clienteJustificaciones.revertirJustificacion).toHaveBeenCalledWith(1, {
+      fecha: '2026-07-16',
+      autor: 'ui',
+    }),
+  );
+  await waitFor(() => expect(cliente.obtenerFichadasHoy).toHaveBeenCalledTimes(2));
 });
 
 test('un fallo de carga muestra el error y Reintentar vuelve a pedir', async () => {

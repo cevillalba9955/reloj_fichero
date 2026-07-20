@@ -70,7 +70,10 @@ export function createRouter() {
       rutaConPath = true;
       if (ruta.method !== req.method) continue;
       try {
-        const body = req.method === 'POST' || req.method === 'PUT' ? await leerBodyJson(req) : null;
+        const body =
+          req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE'
+            ? await leerBodyJson(req)
+            : null;
         const query = Object.fromEntries(url.searchParams.entries());
         const resultado = await ruta.handler({ params, query, body, req });
         enviarJson(res, resultado.status ?? 200, resultado.body);

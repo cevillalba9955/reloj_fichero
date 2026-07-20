@@ -64,3 +64,34 @@ test('desglose auto vs corregidas y descuento de pausas', () => {
   assert.equal(r.descuentoPausas, 60);
   assert.equal(r.horasTrabajadas, 1020);
 });
+
+// feature 012 (FR-013/FR-014) — el crédito de una Justificación Paga lo aplica
+// `aplicarAjustes` (jornada.js) fijando `totalDiario` a la jornada esperada;
+// este test de calibración confirma que `construirResumen` no necesita
+// ningún cambio para reflejarlo: `horasEsperadas` ya cuenta todo Laborable, y
+// `horasTrabajadas` ya suma `resultado.totalDiario` (research.md §4).
+test('un día Laborable con Justificación Paga no genera saldo negativo (mismo camino que Feriado)', () => {
+  const jornadas = [
+    {
+      dia: dia('2026-07-10', Clasificacion.LABORABLE),
+      resultado: { estado: EstadoJornada.SIN_FICHADAS, totalDiario: 540, justificacion: { tipoPago: 'Paga' } },
+    },
+  ];
+  const r = construirResumen({ legajo: 1, periodo: '202607', tramo: 'Mes', modalidadTipo: 'Mensual', params: PARAMS, jornadas });
+  assert.equal(r.horasEsperadas, 540);
+  assert.equal(r.horasTrabajadas, 540);
+  assert.equal(r.saldo, 0);
+});
+
+test('un día Laborable con Justificación No paga sigue en saldo negativo, como un Sin fichadas sin justificar', () => {
+  const jornadas = [
+    {
+      dia: dia('2026-07-10', Clasificacion.LABORABLE),
+      resultado: { estado: EstadoJornada.SIN_FICHADAS, totalDiario: 0, justificacion: { tipoPago: 'No paga' } },
+    },
+  ];
+  const r = construirResumen({ legajo: 1, periodo: '202607', tramo: 'Mes', modalidadTipo: 'Mensual', params: PARAMS, jornadas });
+  assert.equal(r.horasEsperadas, 540);
+  assert.equal(r.horasTrabajadas, 0);
+  assert.equal(r.saldo, -540);
+});

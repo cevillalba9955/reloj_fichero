@@ -17,6 +17,8 @@ const TIPOS = new Set([
   'pausa_alta',
   'pausa_reversion',
   'anomalia',
+  'justificacion_alta',
+  'justificacion_reversion',
 ]);
 
 // Campos que jamás deben aparecer en un evento (defensa en profundidad).

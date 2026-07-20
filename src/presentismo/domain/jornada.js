@@ -151,7 +151,17 @@ function estadoConCorreccion(auto, entradaEfectiva, salidaEfectiva) {
   return EstadoJornada.SIN_FICHADAS;
 }
 
-export function aplicarAjustes(auto, { correccion = null, pausas = [], params = null } = {}) {
+// `justificacion` (spec 012, feature 012): Justificación vigente de este día
+// ({tipoPago, ...}), aplicable solo cuando NO hay corrección (mutuamente
+// excluyentes por construcción: FR-002 exige Sin fichadas/futuro para
+// justificar, la corrección exige que ya haya jornada calculada). Sobre
+// Laborable: si el auto YA no está `Sin fichadas` (llegaron fichadas después
+// de justificar), no se toca el resultado y se señala
+// `requiereJustificacionRevision` (FR-010, edge case "fichadas que llegan
+// después de justificar"). Si sigue `Sin fichadas`, una Justificación `Paga`
+// acredita la jornada esperada igual que un `Feriado` (FR-013); una `No paga`
+// no cambia nada (FR-014): el día sigue en `Sin fichadas` con 0 horas.
+export function aplicarAjustes(auto, { correccion = null, pausas = [], params = null, justificacion = null } = {}) {
   const corrigeHorario =
     correccion && (correccion.entradaCorregida != null || correccion.salidaCorregida != null);
 
@@ -193,6 +203,8 @@ export function aplicarAjustes(auto, { correccion = null, pausas = [], params = 
       correccion,
       pausas,
       requiereRevision,
+      justificacion: null,
+      requiereJustificacionRevision: false,
     };
   }
 
@@ -213,6 +225,36 @@ export function aplicarAjustes(auto, { correccion = null, pausas = [], params = 
       correccion,
       pausas,
       requiereRevision,
+      justificacion: null,
+      requiereJustificacionRevision: false,
+    };
+  }
+
+  if (justificacion && auto.clasificacion === Clasificacion.LABORABLE) {
+    const llegaronFichadas = auto.estado !== EstadoJornada.SIN_FICHADAS;
+    if (llegaronFichadas) {
+      return {
+        ...auto,
+        descuentoPausas: descuento,
+        totalDiario: Math.max(0, auto.totalDiario - descuento),
+        correccionVigente: false,
+        pausas,
+        requiereRevision: false,
+        justificacion,
+        requiereJustificacionRevision: true,
+      };
+    }
+    const paga = justificacion.tipoPago === 'Paga';
+    const creditoPaga = paga && params ? params.jornadaEsperada : auto.totalDiario;
+    return {
+      ...auto,
+      totalDiario: paga ? creditoPaga : auto.totalDiario,
+      descuentoPausas: 0,
+      correccionVigente: false,
+      pausas,
+      requiereRevision: false,
+      justificacion,
+      requiereJustificacionRevision: false,
     };
   }
 
@@ -223,5 +265,7 @@ export function aplicarAjustes(auto, { correccion = null, pausas = [], params = 
     correccionVigente: false,
     pausas,
     requiereRevision: false,
+    justificacion: null,
+    requiereJustificacionRevision: false,
   };
 }

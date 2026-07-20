@@ -15,6 +15,8 @@ function fila(over = {}) {
     llegadasTarde: 3,
     retirosAnticipados: 1,
     correcciones: 1,
+    feriado: 0,
+    licencia: 0,
     anomalia: null,
     ...over,
   };
@@ -28,6 +30,17 @@ test('muestra una fila por empleado con los 7 indicadores', () => {
   expect(filas[0]).toHaveTextContent('9:00'); // 540 min
   expect(filas[0]).toHaveTextContent('20'); // completas
   expect(filas[0]).toHaveTextContent('3'); // llegadasTarde
+});
+
+// feature 012 (FR-012) — columnas Feriado y Licencia.
+test('muestra las columnas Feriado y Licencia', () => {
+  render(<TablaResumenPeriodo filas={[fila({ feriado: 2, licencia: 3 })]} />);
+  const encabezados = screen.getAllByRole('columnheader').map((th) => th.textContent);
+  expect(encabezados).toContain('Feriado');
+  expect(encabezados).toContain('Licencia');
+  const celdas = screen.getAllByRole('row')[1].querySelectorAll('td');
+  expect(celdas[celdas.length - 2]).toHaveTextContent('2');
+  expect(celdas[celdas.length - 1]).toHaveTextContent('3');
 });
 
 test('una fila con anomalía se muestra señalada, sin acumulados normales', () => {

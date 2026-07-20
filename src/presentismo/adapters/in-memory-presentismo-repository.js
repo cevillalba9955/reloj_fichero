@@ -41,5 +41,14 @@ export function createInMemoryPresentismoRepository() {
     async revertirPausa(periodo, id) {
       ops.revertPausa(estadoDe(periodo), id);
     },
+    async listarJustificaciones(periodo, legajo) {
+      return ops.listJustificaciones(estadoDe(periodo), legajo);
+    },
+    async guardarJustificacion(j) {
+      ops.addJustificacion(estadoDe(j.periodo), j);
+    },
+    async revertirJustificacion(periodo, legajo, fecha, opciones) {
+      return ops.revertJustificacion(estadoDe(periodo), legajo, fecha, opciones);
+    },
   };
 }

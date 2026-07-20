@@ -34,6 +34,9 @@
  * @property {(periodo:string, legajo?:number) => Promise<object[]>} listarPausas
  * @property {(p:object) => Promise<string>} guardarPausa
  * @property {(periodo:string, id:string) => Promise<void>} revertirPausa
+ * @property {(periodo:string, legajo?:number) => Promise<object[]>} listarJustificaciones
+ * @property {(j:object) => Promise<void>} guardarJustificacion
+ * @property {(periodo:string, legajo:number, fecha:string, opts?:object) => Promise<boolean>} revertirJustificacion
  */
 
 const METODOS = {
@@ -49,6 +52,9 @@ const METODOS = {
     'listarPausas',
     'guardarPausa',
     'revertirPausa',
+    'listarJustificaciones',
+    'guardarJustificacion',
+    'revertirJustificacion',
   ],
   PresentismoLogger: ['evento'],
 };

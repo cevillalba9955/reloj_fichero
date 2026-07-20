@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import TablaFichadasHoy from './TablaFichadasHoy.jsx';
 
 // T015 (feature 010, US1) — la tabla muestra por fila los datos del
@@ -146,4 +146,103 @@ test('un retiro anticipado no aparece en las columnas de pausa', () => {
   const celdas = screen.getAllByRole('row')[1].querySelectorAll('td');
   expect(celdas[4]).toHaveTextContent('—');
   expect(celdas[5]).toHaveTextContent('—');
+});
+
+// "Excepcion" (pausa intermedia/retiro anticipado) no aplica sin fichadas: no
+// hay jornada en curso sobre la que cargar una pausa o un retiro.
+test('el botón "Excepcion" se oculta cuando la fila no tiene entrada (sin fichadas)', () => {
+  render(
+    <TablaFichadasHoy
+      empleados={[
+        fila({ legajo: 1, entrada: null, situacion: 'ESPERANDO' }),
+        fila({ legajo: 2, entrada: null, situacion: 'AUSENTE' }),
+        fila({ legajo: 3, entrada: '07:05', situacion: 'PRESENTE' }),
+      ]}
+      onPausaRetiro={vi.fn()}
+    />,
+  );
+  const filas = screen.getAllByRole('row').slice(1);
+  expect(filas[0]).not.toHaveTextContent('Excepcion');
+  expect(filas[1]).not.toHaveTextContent('Excepcion');
+  expect(filas[2]).toHaveTextContent('Excepcion');
+});
+
+// feature 012 — acción "Justificación" en días AUSENTE, badge de motivo y
+// acción de revertir cuando ya hay una Justificación vigente.
+test('el botón "Justificación" solo aparece en filas AUSENTE sin justificación vigente', () => {
+  const onJustificar = vi.fn();
+  render(
+    <TablaFichadasHoy
+      empleados={[
+        fila({ legajo: 1, situacion: 'AUSENTE' }),
+        fila({ legajo: 2, situacion: 'PRESENTE' }),
+      ]}
+      onJustificar={onJustificar}
+    />,
+  );
+  const filas = screen.getAllByRole('row').slice(1);
+  expect(filas[0]).toHaveTextContent('Justificación');
+  expect(filas[1]).not.toHaveTextContent('Justificación');
+
+  fireEvent.click(filas[0].querySelector('button'));
+  expect(onJustificar).toHaveBeenCalledWith(expect.objectContaining({ legajo: 1 }));
+});
+
+test('una fila con justificación vigente muestra el motivo, el botón de revertir, y oculta Corregir', () => {
+  const onRevertirJustificacion = vi.fn();
+  render(
+    <TablaFichadasHoy
+      empleados={[
+        fila({
+          legajo: 1,
+          situacion: 'AUSENTE',
+          justificacion: { motivoId: 'vacaciones', etiquetaMotivo: 'Vacaciones', tipoPago: 'Paga' },
+        }),
+      ]}
+      onCorregir={vi.fn()}
+      onJustificar={vi.fn()}
+      onRevertirJustificacion={onRevertirJustificacion}
+    />,
+  );
+  const [datos] = screen.getAllByRole('row').slice(1);
+  expect(datos).toHaveTextContent('Vacaciones');
+  expect(datos).toHaveTextContent('LICENCIA'); // motivo Paga: la situación se etiqueta como Licencia
+  expect(datos).not.toHaveTextContent('AUSENTE');
+  expect(datos).not.toHaveTextContent('Justificación'); // ya justificada: no ofrece cargar de nuevo
+  expect(datos).not.toHaveTextContent('Corregir'); // no aplica sobre una ausencia justificada
+  fireEvent.click(screen.getByText('Revertir justificación'));
+  expect(onRevertirJustificacion).toHaveBeenCalledWith(expect.objectContaining({ legajo: 1 }));
+});
+
+test('un motivo No paga conserva la etiqueta de situación original (no se muestra como Licencia)', () => {
+  render(
+    <TablaFichadasHoy
+      empleados={[
+        fila({
+          legajo: 4,
+          situacion: 'AUSENTE',
+          justificacion: { motivoId: 'sin_aviso', etiquetaMotivo: 'Sin Aviso', tipoPago: 'No paga' },
+        }),
+      ]}
+    />,
+  );
+  const [datos] = screen.getAllByRole('row').slice(1);
+  expect(datos).toHaveTextContent('AUSENTE');
+  expect(datos).toHaveTextContent('Sin Aviso');
+  expect(datos).not.toHaveTextContent('LICENCIA');
+});
+
+test('requiereJustificacionRevision se señala junto a la situación', () => {
+  render(
+    <TablaFichadasHoy
+      empleados={[
+        fila({
+          situacion: 'AUSENTE',
+          justificacion: { motivoId: 'vacaciones', etiquetaMotivo: 'Vacaciones', tipoPago: 'Paga' },
+          requiereJustificacionRevision: true,
+        }),
+      ]}
+    />,
+  );
+  expect(screen.getByRole('alert')).toHaveTextContent(/revisar/i);
 });

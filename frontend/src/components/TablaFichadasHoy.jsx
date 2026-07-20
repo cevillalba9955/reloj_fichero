@@ -21,6 +21,13 @@ const ETIQUETA_SITUACION = {
   ANOMALIA: 'Anomalía',
 };
 
+// feature 012 — un día con Justificación `Paga` vigente se etiqueta como
+// "LICENCIA" en la columna Situación (en vez de AUSENTE/etc.), para que se
+// note de un vistazo que la ausencia está cubierta y paga.
+function esLicencia(fila) {
+  return fila.justificacion?.tipoPago === 'Paga';
+}
+
 // Minutos → 'H:MM' para lectura (el dato viaja en minutos, formato de 004).
 function formatoHoras(min) {
   const m = Number.isInteger(min) && min >= 0 ? min : 0;
@@ -39,11 +46,17 @@ function pausaPrincipalDe(pausas = []) {
   return { principal: intermedias[0], adicionales: intermedias.length - 1 };
 }
 
-export default function TablaFichadasHoy({ empleados, onCorregir = null, onPausaRetiro = null }) {
+export default function TablaFichadasHoy({
+  empleados,
+  onCorregir = null,
+  onPausaRetiro = null,
+  onJustificar = null,
+  onRevertirJustificacion = null,
+}) {
   if (!empleados || empleados.length === 0) {
     return <p className="fichadas-vacio">No hay empleados esperados para hoy.</p>;
   }
-  const conAcciones = Boolean(onCorregir || onPausaRetiro);
+  const conAcciones = Boolean(onCorregir || onPausaRetiro || onJustificar);
   return (
     <table width="100%" border="1" style={{ textAlign: 'center' }} className="tabla-fichadas" aria-label="Fichadas de hoy">
       <thead>
@@ -60,7 +73,9 @@ export default function TablaFichadasHoy({ empleados, onCorregir = null, onPausa
       </thead>
       <tbody>
         {empleados.map((fila) => {
-          const clave = CLAVE_SITUACION[fila.situacion] ?? 'desconocida';
+          const licencia = esLicencia(fila);
+          const clave = licencia ? 'licencia' : CLAVE_SITUACION[fila.situacion] ?? 'desconocida';
+          const etiquetaSituacion = licencia ? 'LICENCIA' : ETIQUETA_SITUACION[fila.situacion] ?? fila.situacion;
           const { principal, adicionales } = pausaPrincipalDe(fila.pausas);
           return (
             <tr key={fila.legajo} className={`fila-fichada situacion-${clave}`}>
@@ -76,23 +91,40 @@ export default function TablaFichadasHoy({ empleados, onCorregir = null, onPausa
               <td>{formatoHoras(fila.horasTrabajadas)}</td>
               <td>
                 <span className={`situacion clave-${clave}`}>
-                  {ETIQUETA_SITUACION[fila.situacion] ?? fila.situacion}
+                  {!fila.justificacion && etiquetaSituacion}
+                  {fila.justificacion && fila.justificacion.etiquetaMotivo}
                 </span>
                 {fila.correccionVigente && <span className="marca-correccion"> (*)</span>}
+                {fila.requiereJustificacionRevision && (
+                  <span className="marca-revision" role="alert">
+                    {' '}
+                    ⚠ revisar: llegaron fichadas sobre un día justificado
+                  </span>
+                )}
                 {fila.anomalias?.length > 0 && (
                   <span className="anomalias"> {fila.anomalias.join('; ')}</span>
                 )}
               </td>
               {conAcciones && (
                 <td>
-                  {onCorregir && fila.situacion !== 'ANOMALIA' && (
+                  {onCorregir && fila.situacion !== 'ANOMALIA' && !fila.justificacion && (
                     <button type="button" onClick={() => onCorregir(fila)}>
                       Corregir
                     </button>
                   )}
-                  {onPausaRetiro && fila.situacion !== 'ANOMALIA' && (
+                  {onPausaRetiro && fila.situacion !== 'ANOMALIA' && fila.entrada != null && (
                     <button type="button" onClick={() => onPausaRetiro(fila)}>
                       Excepcion
+                    </button>
+                  )}
+                  {onJustificar && fila.situacion === 'AUSENTE' && !fila.justificacion && (
+                    <button type="button" onClick={() => onJustificar(fila)}>
+                      Justificación
+                    </button>
+                  )}
+                  {onRevertirJustificacion && fila.justificacion && (
+                    <button type="button" onClick={() => onRevertirJustificacion(fila)}>
+                      Revertir justificación
                     </button>
                   )}
                 </td>

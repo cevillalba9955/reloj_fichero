@@ -82,6 +82,18 @@ export default function DialogoDetalleEmpleado({ cliente, legajo, nombre, period
                       {dia.estado}
                       {dia.corregida && <span className="marca-corregida"> (corregida)</span>}
                       {retiro && <span className="marca-retiro"> (retiro anticipado)</span>}
+                      {dia.justificacion && (
+                        <span className="marca-justificacion">
+                          {' '}
+                          ({dia.justificacion.etiquetaMotivo}, {dia.justificacion.tipoPago})
+                        </span>
+                      )}
+                      {dia.requiereJustificacionRevision && (
+                        <span className="marca-revision" role="alert">
+                          {' '}
+                          ⚠ revisar
+                        </span>
+                      )}
                     </td>
                   </tr>
                 );

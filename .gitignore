@@ -13,6 +13,7 @@ research/*.pcapng
 research/control_fichada.csv
 config/active-employees.json
 config/categorias.json
+config/motivos-ausencia.json
 # Estado operativo local del presentismo (calendarios, correcciones, pausas) y
 # snapshot del padrón (Principio VI): datos por período, no van al repositorio.
 /data/
