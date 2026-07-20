@@ -15,9 +15,13 @@ fecha/hora, motivo, vigente/revertida) y se puede cargar en un único día o en 
 de fechas (un registro por día `Laborable` elegible dentro del rango). Un día con
 Justificación `Paga` acredita la jornada esperada como cumplida en el cálculo de horas
 del período (mismo tratamiento que `Feriado`); uno `No paga` no acredita nada y sigue
-contando como ausencia, ahora con motivo documentado. Se expone vía API web (mismo
-patrón que correcciones/pausas de 010) y una acción nueva en la UI existente de
-fichadas/resumen.
+contando como ausencia, ahora con motivo documentado. En el resumen del período
+(feature 011) esto se ve como dos columnas nuevas junto a las 7 ya existentes:
+`Feriado` (cuenta días `Feriado`) y `Licencia` (cuenta días con Justificación `Paga`);
+las Justificaciones `No paga` no tienen columna propia y siguen sumando dentro de
+`Ausencias`, como cualquier `Sin fichadas` sin justificar (spec, Clarifications
+2026-07-20). Se expone vía API web (mismo patrón que correcciones/pausas de 010) y una
+acción nueva en la UI existente de fichadas/resumen.
 
 ## Technical Context
 
@@ -124,9 +128,20 @@ src/
 │   │   ├── justificacion.js         # NUEVO — crearJustificacion/revertir, elegibilidad
 │   │   │                             # del día (Laborable + Sin fichadas o futuro),
 │   │   │                             # expansión de rango a días Laborable individuales
-│   │   └── resumen-presentismo.js   # + trata Justificación Paga como crédito de
-│   │                                 # jornada esperada (mismo camino que Feriado);
-│   │                                 # No paga no acredita (FR-013/FR-014)
+│   │   ├── resumen-presentismo.js   # + trata Justificación Paga como crédito de
+│   │   │                             # jornada esperada, igual que Feriado
+│   │   │                             # (`clas === FERIADO` pasa a incluir el caso
+│   │   │                             # "Laborable con Justificación Paga vigente");
+│   │   │                             # Justificación No paga no acredita, la jornada
+│   │   │                             # sigue en `Sin fichadas` (FR-013/FR-014)
+│   │   └── resumen-periodo.js       # + dos contadores nuevos en `proyectarResumenPeriodo`:
+│   │                                 # `feriado` (clasificacion === Feriado) y
+│   │                                 # `licencia` (Justificación Paga vigente del día);
+│   │                                 # `ausencias` NO cambia su criterio (sigue siendo
+│   │                                 # `estado === Sin fichadas`, que ahora puede incluir
+│   │                                 # días con Justificación No paga); `detalleDeJornada`
+│   │                                 # agrega `justificacion: {motivoId, etiquetaMotivo,
+│   │                                 # tipoPago} | null` por día (FR-011)
 │   ├── config/
 │   │   └── motivos-ausencia-config.js  # NUEVO — carga + validación fail-fast del
 │   │                                     # catálogo (id, etiqueta, tipoPago, activo)
@@ -136,6 +151,9 @@ src/
 │   └── service/
 │       └── calcular-presentismo-service.js  # + cargarJustificacion, revertirJustificacion
 ├── web/
+│   ├── view-model.js                 # + `feriado`/`licencia` en construirVistaResumenPeriodo
+│   │                                   # (junto a completas/incompletas/ausencias/...) y
+│   │                                   # `justificacion` por día en construirDetalleEmpleado
 │   └── api/
 │       └── justificaciones-handlers.js  # NUEVO — POST/DELETE justificaciones,
 │                                          # GET catálogo de motivos; registrado en
@@ -151,8 +169,9 @@ frontend/
         │                                 # FormularioCorreccion.jsx
         ├── TablaFichadasHoy.jsx         # + botón "Justificación" junto a "Corregir"
         │                                 # cuando el día está `Sin fichadas`/futuro
-        └── TablaResumenPeriodo.jsx / DialogoDetalleEmpleado.jsx
-                                         # + motivo y clasificación Pago/No pago por día
+        ├── TablaResumenPeriodo.jsx      # + columnas `Feriado` y `Licencia` junto a las
+        │                                 # 7 columnas existentes (spec FR-012)
+        └── DialogoDetalleEmpleado.jsx   # + motivo y clasificación Pago/No pago por día
 
 config/
 ├── motivos-ausencia.json              # Catálogo activo (9 motivos por defecto)
@@ -162,7 +181,11 @@ tests/
 ├── unit/
 │   ├── presentismo-justificacion.test.js       # NUEVO — fixtures de calibración por
 │   │                                             # Acceptance Scenario (test-first)
-│   └── presentismo-motivos-ausencia-config.test.js  # NUEVO — validación fail-fast
+│   ├── presentismo-motivos-ausencia-config.test.js  # NUEVO — validación fail-fast
+│   ├── presentismo-resumen.test.js             # + caso Justificación Paga acredita
+│   │                                             # jornada esperada (FR-013/FR-014)
+│   └── presentismo-resumen-periodo.test.js     # + columnas `feriado`/`licencia`,
+│                                                 # `ausencias` sigue contando No paga
 ├── contract/
 │   └── web-api-justificaciones.test.js  # NUEVO — contrato de los endpoints
 └── integration/
@@ -174,10 +197,13 @@ frontend/src/components/*.test.jsx     # + tests de los componentes nuevos/tocad
 
 **Structure Decision**: Web application existente (backend Node.js + frontend React).
 Se agrega un módulo de dominio (`justificacion.js`) y un archivo de configuración
-nuevos, se extiende el archivo de estado por período y el resumen de 004/011, y se suma
-un endpoint + componentes de UI, todo replicando el patrón puerto/adaptador y el patrón
-API/UI ya usados por corrección y pausa (010). No se crean capas ni módulos de nivel
-superior.
+nuevos, se extiende el archivo de estado por período, el cálculo de horas de 004
+(`resumen-presentismo.js`) y la proyección por fila de 011 (`resumen-periodo.js`,
+`view-model.js`, `TablaResumenPeriodo.jsx`), y se suma un endpoint + componentes de UI,
+todo replicando el patrón puerto/adaptador y el patrón API/UI ya usados por corrección y
+pausa (010). No se crean capas ni módulos de nivel superior; las dos columnas nuevas del
+resumen (`Feriado`, `Licencia`) son contadores adicionales sobre la misma fila que ya
+produce 011, no una vista nueva.
 
 ## Complexity Tracking
 

@@ -25,6 +25,14 @@
   solo como dato informativo? → A: Acredita la jornada esperada como cumplida, igual
   que un `Feriado`; una Justificación `No paga` no acredita nada y el día sigue
   contando como ausencia en el saldo, ahora con motivo documentado.
+- Q: ¿Cómo se distinguen días `Feriado`, Justificaciones `Paga` y Justificaciones
+  `No paga` en las columnas del resumen del período (feature 011)? → A: El resumen
+  agrega dos columnas nuevas al conjunto de indicadores existente: `Feriado`
+  (cantidad de días `Feriado` del período) y `Licencia` (cantidad de días con
+  Justificación `Paga`, con la etiqueta de negocio "Licencia" para ese grupo de
+  motivos). Los días con Justificación `No paga` NO tienen columna propia: siguen
+  contando dentro de la columna `Ausencias` ya existente, igual que hoy cuenta
+  cualquier día `Laborable` `Sin fichadas` sin justificar.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -111,6 +119,12 @@ los datos de auditoría de la carga.
    motivos, **When** se consulta el resumen del período, **Then** se puede
    distinguir, para cada legajo, cuántos días de ausencia son pagos y cuántos no
    pagos.
+3. **Given** un legajo con 2 días `Feriado` en el período, 3 días con Justificación
+   `Paga` (por ejemplo `Vacaciones`) y 1 día con Justificación `No paga` (`Sin
+   Aviso`), **When** se consulta el resumen del período, **Then** la columna
+   `Feriado` muestra `2`, la columna `Licencia` muestra `3`, y la columna
+   `Ausencias` incluye el día `No paga` junto con cualquier otro día `Sin fichadas`
+   sin justificar.
 
 ---
 
@@ -210,11 +224,15 @@ original visible como no vigente.
 - **FR-010**: Si llegan fichadas nuevas de un legajo para un día con una
   Justificación vigente, el sistema DEBE señalar ese día para revisión de un
   responsable en lugar de descartar la Justificación o las fichadas en silencio.
-- **FR-011**: El detalle de un empleado y el resumen de un período DEBEN mostrar,
-  para cada día justificado, el motivo y su clasificación de pago (`Paga`/`No
-  paga`).
-- **FR-012**: El resumen de un período DEBE permitir distinguir, por legajo, la
-  cantidad de días de ausencia justificados como `Paga` y como `No paga`.
+- **FR-011**: El detalle de un empleado DEBE mostrar, para cada día justificado, el
+  motivo y su clasificación de pago (`Paga`/`No paga`).
+- **FR-012**: El resumen de un período DEBE agregar, por legajo, dos columnas de
+  conteo nuevas al conjunto de indicadores existente (horas trabajadas, completas,
+  incompletas, ausencias, llegadas tarde, retiros anticipados, correcciones):
+  `Feriado` (cantidad de días `Feriado` del período) y `Licencia` (cantidad de días
+  con Justificación `Paga`). Los días con Justificación `No paga` NO suman a una
+  columna propia: se cuentan dentro de la columna `Ausencias` ya existente, igual
+  que cualquier día `Laborable` `Sin fichadas` sin justificar.
 - **FR-013**: Un día con una Justificación vigente clasificada como `Paga` DEBE
   acreditar la jornada esperada de ese día como cumplida en el cálculo de horas del
   período (mismo tratamiento que un día `Feriado` en la feature 004), sin generar
@@ -247,8 +265,9 @@ original visible como no vigente.
   de pago) no requiere ninguna intervención de desarrollo ni una nueva versión
   desplegada del sistema.
 - **SC-004**: El resumen de un período distingue, para el 100% de los días
-  justificados de un legajo, si la ausencia es paga o no paga, sin cálculo manual
-  adicional por parte del responsable de liquidación.
+  justificados de un legajo, si la ausencia es paga (columna `Licencia`) o no paga
+  (dentro de la columna `Ausencias`), y expone por separado la columna `Feriado`,
+  sin cálculo manual adicional por parte del responsable de liquidación.
 
 ## Assumptions
 
@@ -274,3 +293,8 @@ original visible como no vigente.
   011): ambas quedan como dependencia de esta feature para la parte de cálculo,
   aunque el registro del motivo en sí (User Story 1 y 2) es independiente y
   entregable primero.
+- Las columnas `Feriado` y `Licencia` (FR-012) se agregan a la tabla de resumen del
+  período ya existente (feature 011, `TablaResumenPeriodo.jsx` y su vista), sin
+  quitar ni renombrar ninguna columna actual; la columna `Ausencias` conserva su
+  significado y forma de conteo actuales (días `Laborable` `Sin fichadas`), solo que
+  ahora ese conjunto puede incluir días con Justificación `No paga`.

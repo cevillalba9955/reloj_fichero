@@ -106,10 +106,43 @@ configuración inválida — fail-fast, mismo criterio que `categorias-config.js
 
 - **Día del Calendario del mes** (004): fuente de `clasificacion` (`Laborable` requerido)
   y, para días pasados, de `EstadoJornada` (`Sin fichadas` requerido).
-- **Resumen del período** (`resumen-presentismo.js`, 004/011): consumidor — un día con
-  Justificación `Paga` vigente se agrega igual que un `Feriado` (crédito de jornada
-  esperada); un día `No paga` se expone con su motivo pero no cambia el número de horas
-  (research.md §4).
+- **Cálculo de horas del período** (`resumen-presentismo.js`, 004): consumidor del
+  crédito de horas — un día con Justificación `Paga` vigente se agrega igual que un
+  `Feriado` (crédito de jornada esperada, `horasEsperadas`); un día `No paga` no cambia
+  el número de horas, sigue como `Laborable` `Sin fichadas` (research.md §4).
+- **Fila de resumen por legajo** (`resumen-periodo.js`, `view-model.js`, 011):
+  consumidor de la clasificación de pago para exponerla como columnas — ver
+  "Proyección en el resumen del período" abajo (spec, Clarifications 2026-07-20).
 - **Corrección Manual** (004): entidad hermana en el patrón de auditoría (autor, fecha,
   motivo, vigente/reversión), mutuamente excluyente por construcción con Justificación
   (research.md §5).
+
+## Proyección en el resumen del período (feature 011)
+
+`proyectarResumenPeriodo` (`resumen-periodo.js`) agrega, por legajo, dos contadores
+nuevos junto a los 7 ya existentes (`horasTrabajadas`, `completas`, `incompletas`,
+`ausencias`, `llegadasTarde`, `retirosAnticipados`, `correcciones`):
+
+| Columna | Cómo se cuenta | Notas |
+|---|---|---|
+| `feriado` | días del período con `clasificacion === 'Feriado'` | Ya calculado por 004; hoy no tenía columna propia en la fila de 011. |
+| `licencia` | días con una Justificación vigente `tipoPago === 'Paga'` | Nueva; NO se suma también a `ausencias`. |
+| `ausencias` (existente, sin cambio de criterio) | días con `estado === 'Sin fichadas'` | Sigue siendo el mismo criterio de 011; ahora puede incluir días con Justificación `No paga` vigente, que no tienen columna propia (spec FR-012). |
+
+Un día no puede sumar a la vez a `feriado` y a `licencia`/`ausencias`: un día
+`Feriado` nunca es `Laborable`, así que nunca tiene una Justificación vigente
+(FR-002 lo rechaza). Un día no puede sumar a la vez a `licencia` y a `ausencias`:
+son mutuamente excluyentes por el `tipoPago` de la única Justificación vigente
+posible por día (FR-008).
+
+`detalleDeJornada` (mismo módulo) agrega un campo opcional por día:
+
+```json
+{ "fecha": "2026-07-22", "...": "...", "justificacion": { "motivoId": "vacaciones", "etiquetaMotivo": "Vacaciones", "tipoPago": "Paga" } }
+```
+
+`justificacion` es `null` cuando el día no tiene una Justificación vigente. Este
+mismo campo es lo que `view-model.js` traduce hacia `VistaDetalleEmpleado` (dentro de
+cada elemento de `dias[]`) y hacia `VistaResumenPeriodo` (los dos contadores nuevos en
+cada fila), sin introducir una estructura de respuesta nueva — ver
+`contracts/web-api.md`.

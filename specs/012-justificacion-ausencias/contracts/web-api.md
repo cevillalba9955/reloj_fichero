@@ -93,6 +93,13 @@ Respuestas:
   `justificacion: { motivoId, etiquetaMotivo, tipoPago } | null` cuando corresponde
   (FR-011). Los clientes existentes que ignoran campos desconocidos no se rompen; no
   se elimina ni renombra ningún campo previo.
+- `GET /api/resumen-periodo` agrega, en cada fila de `filas[]`, dos contadores
+  nuevos junto a los 7 existentes (`horasTrabajadas`, `completas`, `incompletas`,
+  `ausencias`, `llegadasTarde`, `retirosAnticipados`, `correcciones`): `feriado`
+  (días `Feriado` del período) y `licencia` (días con Justificación vigente `Paga`)
+  (FR-012, data-model.md "Proyección en el resumen del período"). `ausencias`
+  conserva su criterio actual (`estado === 'Sin fichadas'`) sin campo nuevo: un día
+  con Justificación `No paga` sigue sumando ahí.
 - El acumulado de horas esperadas/trabajadas de `GET /api/resumen-periodo` refleja el
   crédito de un día `Paga` (FR-013) de la misma forma que ya refleja un `Feriado`; no
   se agrega un campo nuevo para eso, es el mismo número ya expuesto.
@@ -107,3 +114,6 @@ Respuestas:
   en ese día (SC-002, trazabilidad: el registro revertido sigue existiendo pero no
   vigente — no se expone como justificación activa).
 - Sin datos biométricos ni `rawHex` en ninguna respuesta (mismo criterio que 010/011).
+- Un mismo día nunca suma a la vez a `feriado` y a `licencia`/`ausencias` (un día
+  `Feriado` nunca es `Laborable`, FR-002), ni a la vez a `licencia` y a `ausencias`
+  (una única Justificación vigente por día, con un solo `tipoPago`, FR-008).
