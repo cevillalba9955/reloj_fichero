@@ -145,7 +145,7 @@ test('coherencia fila↔detalle (SC-002): la fila es derivable del detalle', () 
   );
 });
 
-test('el detalle expone fecha, clasificación, estado, efectivas, horas y pausas vigentes', () => {
+test('el detalle expone fecha, clasificación, estado, horas fichadas reales y pausas vigentes', () => {
   const r = proyectarResumenPeriodo({
     resumen: resumen([
       jornada('2026-07-02', {
@@ -161,10 +161,27 @@ test('el detalle expone fecha, clasificación, estado, efectivas, horas y pausas
   assert.equal(d.fecha, '2026-07-02');
   assert.equal(d.clasificacion, 'Laborable');
   assert.equal(d.estado, 'Completa');
-  assert.equal(d.entrada, 420);
-  assert.equal(d.salida, 960);
+  assert.equal(d.entrada, 425, 'la hora REAL fichada, no la efectiva ajustada por tolerancia');
+  assert.equal(d.salida, 958, 'la hora REAL fichada, no la efectiva ajustada por tolerancia');
   assert.equal(d.horas, 540);
   assert.equal(d.pausas.length, 1, 'solo pausas vigentes');
+});
+
+test('el detalle muestra la hora corregida cuando hay corrección vigente', () => {
+  const r = proyectarResumenPeriodo({
+    resumen: resumen([
+      jornada('2026-07-02', {
+        entrada: { hora: 490 },
+        correccionVigente: true,
+        correccion: { entradaCorregida: 430, salidaCorregida: null },
+      }),
+    ]),
+    hoy: HOY,
+  });
+  const [d] = r.detalle;
+  assert.equal(d.entrada, 430, 'la corrección de entrada prevalece sobre la fichada');
+  assert.equal(d.salida, 958, 'sin corrección de salida, se muestra la fichada real');
+  assert.equal(d.corregida, true);
 });
 
 test('esLlegadaTarde: sin entrada no hay tarde; solo aplica a Laborable', () => {

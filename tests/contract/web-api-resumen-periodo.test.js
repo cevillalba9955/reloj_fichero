@@ -111,9 +111,9 @@ test('GET /api/resumen-periodo/{legajo} → 200 con VistaDetalleEmpleado', async
     assert.equal(v.nombre, 'Ana Pérez');
     assert.ok(Array.isArray(v.dias));
     const dia = v.dias.find((d) => d.fecha === FECHA);
-    // 07:05 cae dentro del margen de tolerancia (07:00 + 30 min): la entrada
-    // EFECTIVA (lo que expone el detalle) se ajusta a la apertura oficial.
-    assert.equal(dia.entrada, '07:00', 'horas en HH:MM, nunca minutos crudos');
+    // El detalle muestra la hora REAL fichada (07:05), no la efectiva ajustada
+    // por tolerancia; con corrección vigente mostraría la corregida.
+    assert.equal(dia.entrada, '07:05', 'hora real fichada, en HH:MM');
     assert.ok(!/rawHex|template|huella/i.test(JSON.stringify(v)));
   } finally {
     e.close();
@@ -148,6 +148,93 @@ test('GET /api/resumen-periodo/{legajo}?periodo= sin calendario → 404 CALENDAR
     const res = await fetch(`${e.base}/api/resumen-periodo/1?periodo=209912`);
     assert.equal(res.status, 404);
     assert.equal((await res.json()).error.codigo, 'CALENDARIO_NO_GENERADO');
+  } finally {
+    e.close();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Modo QUINCENAL (FR-013) — PRESENTISMO_RESUMEN_PERIODO=QUINCENAL en .env:
+// los períodos seleccionables son quincenas 'YYYYMM-Q1' / 'YYYYMM-Q2'.
+// ---------------------------------------------------------------------------
+
+const ENV_QUINCENAL = { PRESENTISMO_RESUMEN_PERIODO: 'QUINCENAL' };
+
+test('QUINCENAL: los períodos ofrecidos son quincenas y el default es la quincena en curso', async () => {
+  const e = await crearEntornoFichadasHoy({ padron: PADRON, envExtra: ENV_QUINCENAL });
+  try {
+    const res = await fetch(`${e.base}/api/resumen-periodo`);
+    assert.equal(res.status, 200);
+    const v = await res.json();
+
+    const mes = mesActualPeriodo();
+    assert.deepEqual(v.periodos, [`${mes}-Q1`, `${mes}-Q2`]);
+    const quincenaHoy = new Date().getDate() <= 15 ? 'Q1' : 'Q2';
+    assert.equal(v.periodo, `${mes}-${quincenaHoy}`);
+  } finally {
+    e.close();
+  }
+});
+
+test('QUINCENAL: el detalle de una quincena solo incluye sus días', async () => {
+  const e = await crearEntornoFichadasHoy({
+    padron: PADRON,
+    clasificaciones: { [FECHA]: 'Laborable' },
+    fichadas: [{ legajo: 1, fecha: FECHA, hora: '07:05:00' }],
+    envExtra: ENV_QUINCENAL,
+  });
+  try {
+    const mes = mesActualPeriodo();
+
+    const q1 = await (await fetch(`${e.base}/api/resumen-periodo/1?periodo=${mes}-Q1`)).json();
+    assert.ok(q1.dias.some((d) => d.fecha === FECHA), 'el día 1 pertenece a la 1ra quincena');
+    assert.ok(q1.dias.every((d) => Number(d.fecha.slice(8, 10)) <= 15));
+
+    const q2 = await (await fetch(`${e.base}/api/resumen-periodo/1?periodo=${mes}-Q2`)).json();
+    assert.ok(q2.dias.every((d) => Number(d.fecha.slice(8, 10)) >= 16), 'la 2da quincena no incluye días 1–15');
+  } finally {
+    e.close();
+  }
+});
+
+test('QUINCENAL: el resumen de la quincena acumula solo sus días (fila↔detalle coherentes)', async () => {
+  const e = await crearEntornoFichadasHoy({
+    padron: PADRON,
+    clasificaciones: { [FECHA]: 'Laborable' },
+    fichadas: [{ legajo: 1, fecha: FECHA, hora: '07:05:00' }],
+    envExtra: ENV_QUINCENAL,
+  });
+  try {
+    const mes = mesActualPeriodo();
+    const res = await fetch(`${e.base}/api/resumen-periodo?periodo=${mes}-Q2`);
+    assert.equal(res.status, 200);
+    const v = await res.json();
+    assert.equal(v.periodo, `${mes}-Q2`);
+    const fila1 = v.filas.find((f) => f.legajo === 1);
+    // La fichada del día 1 (Q1) no aporta a la Q2: sin jornadas incompletas.
+    assert.equal(fila1.incompletas, 0);
+  } finally {
+    e.close();
+  }
+});
+
+test('QUINCENAL: ?periodo=YYYYMM (mes completo) sigue siendo válido', async () => {
+  const e = await crearEntornoFichadasHoy({ padron: PADRON, envExtra: ENV_QUINCENAL });
+  try {
+    const res = await fetch(`${e.base}/api/resumen-periodo?periodo=${mesActualPeriodo()}`);
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).periodo, mesActualPeriodo());
+  } finally {
+    e.close();
+  }
+});
+
+test('MENSUAL (default): ?periodo=YYYYMM-Q1 → 400 PERIODO_INVALIDO', async () => {
+  const e = await crearEntornoFichadasHoy({ padron: PADRON });
+  try {
+    const res = await fetch(`${e.base}/api/resumen-periodo?periodo=${mesActualPeriodo()}-Q1`);
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error.codigo, 'PERIODO_INVALIDO');
   } finally {
     e.close();
   }

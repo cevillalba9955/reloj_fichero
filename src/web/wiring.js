@@ -24,6 +24,14 @@ export function crearContextoWeb(env = process.env) {
   const padronFile = env.PRESENTISMO_PADRON_FILE ?? `${repoDir}/padron.json`;
   const fichadasDir = env.PRESENTISMO_FICHADAS_DIR ?? `${repoDir}/fichadas`;
   const controlUrl = env.FICHADAS_CONTROL_URL ?? 'http://127.0.0.1:5006';
+  // feature 011 (FR-013): granularidad del "Resumen del Período". Variable
+  // vacía cae al default (misma convención que FICHADAS_*, spec 002).
+  const modoResumenPeriodo = (env.PRESENTISMO_RESUMEN_PERIODO || 'MENSUAL').toUpperCase();
+  if (modoResumenPeriodo !== 'MENSUAL' && modoResumenPeriodo !== 'QUINCENAL') {
+    throw new Error(
+      `presentismo: PRESENTISMO_RESUMEN_PERIODO inválido "${env.PRESENTISMO_RESUMEN_PERIODO}" (se espera MENSUAL o QUINCENAL)`,
+    );
+  }
 
   const categoriasConfig = loadCategoriasConfig(configPath);
   const repo = createFilePresentismoRepository({ repoDir });
@@ -49,5 +57,6 @@ export function crearContextoWeb(env = process.env) {
     categoryProvider,
     activeEmployeesProvider,
     consultarReloj,
+    modoResumenPeriodo,
   };
 }

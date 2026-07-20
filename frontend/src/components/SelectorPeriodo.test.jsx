@@ -12,6 +12,25 @@ test('ofrece las opciones de período recibidas, más recientes primero', () => 
   expect(screen.getByLabelText('Período')).toHaveValue('202607');
 });
 
+test('en modo quincenal ofrece las quincenas recibidas, etiquetadas y más recientes primero', () => {
+  render(
+    <SelectorPeriodo
+      periodos={['202606-Q1', '202606-Q2', '202607-Q1', '202607-Q2']}
+      periodo="202607-Q1"
+      onCambiar={vi.fn()}
+    />,
+  );
+  const opciones = screen.getAllByRole('option');
+  expect(opciones.map((o) => o.value)).toEqual(['202607-Q2', '202607-Q1', '202606-Q2', '202606-Q1']);
+  expect(opciones.map((o) => o.textContent)).toEqual([
+    'Julio 2026 · 2da quincena',
+    'Julio 2026 · 1ra quincena',
+    'Junio 2026 · 2da quincena',
+    'Junio 2026 · 1ra quincena',
+  ]);
+  expect(screen.getByLabelText('Período')).toHaveValue('202607-Q1');
+});
+
 test('cambiar la selección invoca onCambiar con el período elegido', () => {
   const onCambiar = vi.fn();
   render(<SelectorPeriodo periodos={['202606', '202607']} periodo="202607" onCambiar={onCambiar} />);

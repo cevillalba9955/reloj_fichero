@@ -1,5 +1,5 @@
 import { generarCalendario, reclasificarDia } from '../domain/calendario-mes.js';
-import { recortar, tramosParaTipo } from '../domain/periodo-liquidacion.js';
+import { recortar, tramosParaTipo, fechaEnTramo } from '../domain/periodo-liquidacion.js';
 import { calcularJornadaAuto, aplicarAjustes } from '../domain/jornada.js';
 import { construirResumen } from '../domain/resumen-presentismo.js';
 import { correccionVigenteDe, crearCorreccion } from '../domain/correccion.js';
@@ -220,8 +220,10 @@ export function createCalcularPresentismoService({
   // "Resumen del Período". Reutiliza calcularEmpleado (auto + ajustes); para
   // quincenales suma los tramos Q1+Q2 en una fila mensual única concatenando
   // sus jornadas (research.md §3). `hoy` en 'YYYY-MM-DD' (FR-008; inyectable
-  // para tests, default hoyLocal del servidor vía el caller).
-  async function calcularResumenPeriodo(periodo, legajos, hoy) {
+  // para tests, default hoyLocal del servidor vía el caller). `tramo` (Q1/Q2)
+  // recorta el resumen a esa quincena (modo QUINCENAL, FR-013): aplica a TODOS
+  // los empleados, sea cual sea su modalidad.
+  async function calcularResumenPeriodo(periodo, legajos, hoy, { tramo = null } = {}) {
     const filas = [];
     for (const legajo of legajos) {
       const resúmenes = await calcularEmpleado(legajo, periodo);
@@ -230,7 +232,9 @@ export function createCalcularPresentismoService({
         continue;
       }
       const params = resúmenes[0].params;
-      const jornadas = resúmenes.flatMap((r) => r.jornadas ?? []);
+      const jornadas = resúmenes
+        .flatMap((r) => r.jornadas ?? [])
+        .filter((j) => tramo == null || fechaEnTramo(j.fecha, tramo));
       const proyeccion = proyectarResumenPeriodo({ resumen: { legajo, params, jornadas }, hoy });
       filas.push({ ...proyeccion, anomalia: null });
     }

@@ -43,8 +43,11 @@ DetalleJornada {
   clasificacion: 'Laborable' | 'No Laborable' | 'Feriado'
   estado: EstadoJornada         # 'Completa' | 'Incompleta' | 'Sin fichadas' |
                                  # 'Feriado cumplido' | 'No aplica'  (004)
-  entrada: string | null        # 'HH:MM' efectiva (corregida si corresponde)
-  salida: string | null         # 'HH:MM' efectiva (corregida si corresponde)
+  entrada: string | null        # 'HH:MM' REAL fichada, o la corregida si hay
+                                 # corrección vigente (nunca la "efectiva"
+                                 # ajustada por tolerancia)
+  salida: string | null         # 'HH:MM' REAL fichada, o la corregida si hay
+                                 # corrección vigente
   horas: number                 # minutos (totalDiario)
   llegadaTarde: boolean
   corregida: boolean            # correccionVigente (FR-005)
@@ -59,8 +62,12 @@ DetalleJornada {
 
 ```text
 VistaResumenPeriodo {
-  periodo: string               # YYYYMM efectivo (query o el más reciente, FR-002)
-  periodos: string[]            # períodos con calendario generado (selector, FR-002)
+  periodo: string               # id efectivo (query o el más reciente, FR-002):
+                                 # 'YYYYMM' o, en modo QUINCENAL (FR-013),
+                                 # 'YYYYMM-Q1' / 'YYYYMM-Q2'
+  periodos: string[]            # ids seleccionables (selector, FR-002): meses con
+                                 # calendario generado; en modo QUINCENAL, sus
+                                 # quincenas Q1/Q2
   filas: FilaResumenPeriodo[]
 }
 

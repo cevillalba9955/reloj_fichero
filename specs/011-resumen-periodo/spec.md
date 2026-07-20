@@ -29,6 +29,22 @@
   indicador propio de la fila (señala días que requieren revisión antes de
   liquidar).
 
+### Session 2026-07-20
+
+- Q: ¿El resumen se acota siempre al mes completo? → A: No: la granularidad
+  del período es configurable por instalación mediante la variable de entorno
+  `PRESENTISMO_RESUMEN_PERIODO` (`MENSUAL`, default, o `QUINCENAL`). En modo
+  `QUINCENAL` los períodos seleccionables son las quincenas de cada mes con
+  calendario generado (`YYYYMM-Q1`: días 1–15; `YYYYMM-Q2`: 16–fin), el
+  período por defecto es la quincena en curso, y los acumulados y el detalle
+  se recortan a los días de la quincena elegida para TODOS los empleados,
+  sea cual sea su modalidad.
+- Q: ¿Qué hora muestran las columnas entrada/salida del detalle? → A: La hora
+  real fichada, o la corregida si hay corrección vigente. Nunca la hora
+  "efectiva" ajustada por el margen de tolerancia: ese ajuste solo interviene
+  en el cálculo de horas trabajadas, no en lo que se muestra (mismo criterio
+  que la pantalla de fichadas diarias, feature 010).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Ver el resumen del período por empleado (Priority: P1)
@@ -184,7 +200,9 @@ ambos y verificar que la tabla refleja los acumulados de cada uno.
 - **FR-004**: El sistema MUST abrir, al seleccionar un empleado del resumen,
   un diálogo modal con el detalle día por día del período: fecha,
   clasificación del día, entrada, salida, pausas (con su tipo), horas del día
-  y estado de la jornada.
+  y estado de la jornada. Entrada y salida muestran la hora real fichada, o
+  la corregida si hay corrección vigente (nunca la "efectiva" ajustada por
+  tolerancia; ver Clarifications 2026-07-20).
 - **FR-005**: El sistema MUST señalar en el detalle qué días tienen
   corrección manual vigente y qué pausas son retiros anticipados,
   distinguibles del dato automático.
@@ -211,6 +229,14 @@ ambos y verificar que la tabla refleja los acumulados de cada uno.
   constitución), los períodos cerrados MUST leerse del registro de cierre
   (que persistirá el padrón activo del período y sus cálculos), sin
   recalcular en vivo; esta feature no implementa ese cierre.
+- **FR-013**: La granularidad del período MUST ser configurable por
+  instalación vía `PRESENTISMO_RESUMEN_PERIODO` en `.env`: `MENSUAL`
+  (default) ofrece meses `YYYYMM`; `QUINCENAL` ofrece quincenas
+  `YYYYMM-Q1`/`YYYYMM-Q2` de cada mes con calendario generado, con la
+  quincena en curso como default. En modo quincenal los acumulados (FR-001)
+  y el detalle (FR-004) se calculan solo sobre los días de la quincena
+  seleccionada; las demás reglas (FR-003, FR-008) aplican sin cambios dentro
+  del recorte.
 
 ### Key Entities
 
@@ -224,9 +250,11 @@ ambos y verificar que la tabla refleja los acumulados de cada uno.
   fecha, clasificación, entrada/salida efectivas, pausas con tipo, horas del
   día, estado de la jornada y marca de corrección; misma fuente de cálculo
   que el resumen.
-- **Período de liquidación**: mes con calendario generado (feature 004/008),
-  identificado como `YYYYMM`; esta pantalla solo lo consume para seleccionar
-  y acotar el cálculo.
+- **Período de liquidación**: recorte de un mes con calendario generado
+  (feature 004/008). En modo `MENSUAL` es el mes completo (`YYYYMM`); en modo
+  `QUINCENAL` es una quincena (`YYYYMM-Q1`: días 1–15, `YYYYMM-Q2`: 16–fin),
+  derivada del mismo calendario (tramos de la feature 004, FR-013). Esta
+  pantalla solo lo consume para seleccionar y acotar el cálculo.
 - **Empleado esperado del período**: legajo y nombre del padrón de RRHH
   (feature 003), de solo lectura, con su categoría de presentismo
   (feature 004). En esta primera versión el universo es el padrón vigente al
@@ -267,10 +295,11 @@ ambos y verificar que la tabla refleja los acumulados de cada uno.
   apertura de la modalidad vigente ese día, donde la entrada efectiva es la
   corregida si hay corrección vigente, o la fichada real si no (la corrección
   prevalece, ver Clarifications).
-- El período se selecciona a nivel de mes (`YYYYMM`), consistente con el
-  calendario de 004/008; para empleados de modalidad quincenal el detalle
-  diario permite distinguir los tramos, sin un selector propio de quincena en
-  esta primera versión.
+- La granularidad del selector la define la instalación
+  (`PRESENTISMO_RESUMEN_PERIODO`, FR-013): a nivel de mes (`YYYYMM`,
+  default) o de quincena (`YYYYMM-Q1`/`YYYYMM-Q2`). El recorte quincenal es
+  institucional: aplica a todos los empleados por igual, independientemente
+  de la modalidad (Mensual/Quincenal) de su categoría.
 - El acceso sigue el mismo esquema operativo que el resto de la aplicación
   web (sin capa de autenticación propia; deuda ya documentada en la feature
   010 para una futura feature de roles).

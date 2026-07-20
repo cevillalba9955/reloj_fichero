@@ -9,15 +9,28 @@ import { TipoPausa } from './pausa.js';
 // `fecha <= hoy` (FR-008: días futuros no cuentan). La corrección vigente
 // prevalece en TODOS los contadores (Clarifications del spec).
 
+// Hora considerada de entrada/salida: la corregida si hay corrección vigente,
+// la fichada REAL si no. Nunca la "efectiva" ajustada por tolerancia: el
+// ajuste solo afecta el cálculo de horas, no lo que se muestra ni lo que se
+// evalúa como llegada tarde (misma regla que construirFilaFichadaHoy, 010).
+function entradaConsiderada(jornada) {
+  return jornada.correccionVigente
+    ? jornada.correccion?.entradaCorregida ?? jornada.entrada?.hora ?? null
+    : jornada.entrada?.hora ?? null;
+}
+
+function salidaConsiderada(jornada) {
+  return jornada.correccionVigente
+    ? jornada.correccion?.salidaCorregida ?? jornada.salida?.hora ?? null
+    : jornada.salida?.hora ?? null;
+}
+
 // jornada: { fecha, clasificacion, estado, entrada, salida, entradaEfectiva,
 //   salidaEfectiva, totalDiario, correccionVigente, correccion, pausas }
 // (misma forma que resumen.jornadas de calcularEmpleado, 004).
 export function esLlegadaTarde(jornada, params) {
   if (jornada.clasificacion !== Clasificacion.LABORABLE) return false;
-  const entradaConsiderada = jornada.correccionVigente
-    ? jornada.correccion?.entradaCorregida ?? jornada.entrada?.hora ?? null
-    : jornada.entrada?.hora ?? null;
-  return esEntradaTarde(entradaConsiderada, params);
+  return esEntradaTarde(entradaConsiderada(jornada), params);
 }
 
 function detalleDeJornada(jornada, params) {
@@ -26,8 +39,8 @@ function detalleDeJornada(jornada, params) {
     fecha: jornada.fecha,
     clasificacion: jornada.clasificacion,
     estado: jornada.estado,
-    entrada: jornada.entradaEfectiva ?? null,
-    salida: jornada.salidaEfectiva ?? null,
+    entrada: entradaConsiderada(jornada),
+    salida: salidaConsiderada(jornada),
     horas: jornada.totalDiario ?? 0,
     llegadaTarde: esLlegadaTarde(jornada, params),
     corregida: Boolean(jornada.correccionVigente),

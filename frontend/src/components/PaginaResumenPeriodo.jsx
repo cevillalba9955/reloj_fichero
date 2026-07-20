@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { crearClienteResumenPeriodo } from '../api/resumen-periodo-client.js';
 import TablaResumenPeriodo from './TablaResumenPeriodo.jsx';
-import SelectorPeriodo from './SelectorPeriodo.jsx';
+import SelectorPeriodo, { etiquetaPeriodo } from './SelectorPeriodo.jsx';
 import DialogoDetalleEmpleado from './DialogoDetalleEmpleado.jsx';
 
 // feature 011 — Página "Resumen del Período": carga la vista del período al
@@ -51,7 +51,7 @@ export default function PaginaResumenPeriodo({ cliente = clientePorDefecto }) {
       {estado.tipo === 'con-datos' && (
         <>
           <header className="resumen-encabezado">
-            <h2>Resumen del período {estado.vista.periodo}</h2>
+            <h2>Resumen del período {etiquetaPeriodo(estado.vista.periodo)}</h2>
             <SelectorPeriodo
               periodos={estado.vista.periodos}
               periodo={estado.vista.periodo}

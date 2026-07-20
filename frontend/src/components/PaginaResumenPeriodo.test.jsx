@@ -62,7 +62,7 @@ test('carga el resumen al montar y muestra la tabla', async () => {
   render(<PaginaResumenPeriodo cliente={cliente} />);
   expect(await screen.findByRole('table')).toBeInTheDocument();
   expect(cliente.obtenerResumen).toHaveBeenCalledWith(null);
-  expect(screen.getByText(/Resumen del período 202607/)).toBeInTheDocument();
+  expect(screen.getByText(/Resumen del período Julio 2026/)).toBeInTheDocument();
   expect(screen.getByText('Ana Pérez')).toBeInTheDocument();
 });
 
@@ -88,7 +88,7 @@ test('cambiar el período en el selector recarga la tabla con ese período (US3)
 
   fireEvent.change(screen.getByLabelText('Período'), { target: { value: '202606' } });
   await waitFor(() => expect(cliente.obtenerResumen).toHaveBeenLastCalledWith('202606'));
-  expect(await screen.findByText(/Resumen del período 202606/)).toBeInTheDocument();
+  expect(await screen.findByText(/Resumen del período Junio 2026/)).toBeInTheDocument();
 });
 
 test('clic en una fila abre el diálogo de detalle (US2)', async () => {

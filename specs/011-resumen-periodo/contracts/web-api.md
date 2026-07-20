@@ -4,22 +4,37 @@ Mismo estilo que los contratos de 008/010: router propio (`src/web/api/router.js
 errores uniformes `{ error: { codigo, mensaje } }` vía `ApiError`. Rutas registradas
 en `src/web/api/resumen-periodo-handlers.js` con `registrarRutas(router, ctx)`; `ctx`
 es el contexto web existente (`repo`, `service`, `activeEmployeesProvider`,
-`categoryProvider`, `logger`). **Ambos endpoints son de solo lectura** (FR-010): no
-existe ningún POST/PUT/DELETE en esta feature.
+`categoryProvider`, `logger`, `modoResumenPeriodo`). **Ambos endpoints son de solo
+lectura** (FR-010): no existe ningún POST/PUT/DELETE en esta feature.
+
+## Granularidad del período (FR-013)
+
+`ctx.modoResumenPeriodo` viene de `PRESENTISMO_RESUMEN_PERIODO` en `.env`
+(`MENSUAL` default | `QUINCENAL`; valor inválido aborta el arranque). Define el
+identificador de período que la API ofrece y acepta:
+
+- **MENSUAL**: `periodos[]` son meses `YYYYMM`; `periodo=YYYYMM-Q1` → 400.
+- **QUINCENAL**: `periodos[]` expande cada mes generado a `YYYYMM-Q1` (días 1–15)
+  y `YYYYMM-Q2` (16–fin). El default es la quincena en curso si el mes de hoy
+  tiene calendario; si no, la `Q2` del último mes generado. `periodo=YYYYMM` a
+  secas sigue siendo válido (mes completo). El cálculo recorta acumulados y
+  detalle a los días del tramo para todos los empleados.
 
 ## `GET /api/resumen-periodo`
 
 Devuelve la `VistaResumenPeriodo` (data-model.md) del período pedido.
 
 Query:
-- `periodo` (opcional, `YYYYMM`): por defecto, el período más reciente con calendario
-  generado (FR-002).
+- `periodo` (opcional, `YYYYMM` o — solo modo QUINCENAL — `YYYYMM-Q1`/`YYYYMM-Q2`):
+  por defecto, el período más reciente con calendario generado (FR-002; en
+  QUINCENAL, la quincena en curso, ver arriba).
 
 Respuestas:
 - **200** `VistaResumenPeriodo` — incluye `periodos` (para el selector), el `periodo`
   efectivo y `filas[]` ordenadas por legajo. Un empleado sin categoría configurada va
   con `anomalia` y acumulados en 0 (FR-007), sin abortar la vista.
-- **400** `PERIODO_INVALIDO` — formato distinto de `YYYYMM`.
+- **400** `PERIODO_INVALIDO` — formato distinto de `YYYYMM` (o `YYYYMM-Q1/Q2` en
+  modo QUINCENAL).
 - **404** `CALENDARIO_NO_GENERADO` — el período pedido no tiene calendario (también
   cuando no existe ningún período generado y no hay default posible).
 - **500** `ERROR_CALCULANDO_RESUMEN` — fallo de cálculo no atribuible a un legajo
@@ -33,7 +48,7 @@ que `GET /api/fichadas-hoy`).
 Devuelve la `VistaDetalleEmpleado` (data-model.md) para el diálogo de detalle (US2).
 
 Query:
-- `periodo` (opcional, `YYYYMM`): mismo default y validación que el GET anterior.
+- `periodo` (opcional): mismo formato, default y validación que el GET anterior.
 
 Respuestas:
 - **200** `VistaDetalleEmpleado` — `dias[]` ordenados por fecha ascendente, solo días

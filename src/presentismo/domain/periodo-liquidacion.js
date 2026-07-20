@@ -20,3 +20,9 @@ export function recortar(calendario, tramo) {
   const dias = calendario.dias.filter((d) => diaEnTramo(d.dd, tramo));
   return { periodo: calendario.periodo, tramo, dias };
 }
+
+// ¿La fecha ISO ('YYYY-MM-DD') cae dentro del tramo? (feature 011: recorte
+// del resumen del período a una quincena, modo QUINCENAL).
+export function fechaEnTramo(fecha, tramo) {
+  return diaEnTramo(Number(fecha.slice(8, 10)), tramo);
+}
