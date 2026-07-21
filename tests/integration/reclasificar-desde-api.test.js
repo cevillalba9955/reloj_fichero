@@ -61,7 +61,7 @@ test('POST reclasificar persiste y el GET refleja la nueva clasificación', asyn
   assert.equal(v2.dias.find((d) => d.fecha === '2026-07-06').clasificacion, 'Feriado');
 
   // Persistido en disco con reclasificadoManual: true.
-  const state = JSON.parse(readFileSync(join(repoDir, '202607.json'), 'utf8'));
+  const state = JSON.parse(readFileSync(join(repoDir, 'P202607', 'calendario.json'), 'utf8'));
   const persistido = state.calendario.dias.find((d) => d.fecha === '2026-07-06');
   assert.equal(persistido.clasificacion, 'Feriado');
   assert.equal(persistido.reclasificadoManual, true);

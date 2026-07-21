@@ -5,9 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createFilePresentismoRepository } from '../../src/presentismo/adapters/file-presentismo-repository.js';
 
-// T005 (feature 007): listarPeriodos() devuelve los YYYYMM con calendario
-// persistido, ordenados; ignora archivos que no matchean ^\d{6}\.json$ o sin
-// calendario; [] si el directorio está vacío. Sin acceso a Oracle.
+// T005 (feature 007) + 013 (reestructurar-data-periodos): listarPeriodos()
+// devuelve los YYYYMM con calendario persistido, ordenados; ignora entradas
+// que no matchean `^P\d{6}$` o carpetas `P<periodo>` sin calendario. Sin
+// acceso a Oracle. Layout: `<repoDir>/P<periodo>/calendario.json`.
 
 function tmpRepo() {
   const dir = mkdtempSync(join(tmpdir(), 'presentismo-listar-'));
@@ -16,7 +17,9 @@ function tmpRepo() {
 
 function escribirCalendario(dir, periodo) {
   const cal = { periodo, esquemaSemanal: [1, 2, 3, 4, 5], dias: [] };
-  writeFileSync(join(dir, `${periodo}.json`), JSON.stringify({ calendario: cal, correcciones: [], pausas: [] }));
+  const carpeta = join(dir, `P${periodo}`);
+  mkdirSync(carpeta, { recursive: true });
+  writeFileSync(join(carpeta, 'calendario.json'), JSON.stringify({ calendario: cal, correcciones: [], pausas: [] }));
 }
 
 test('listarPeriodos: directorio vacío → []', async () => {
@@ -40,26 +43,40 @@ test('listarPeriodos: devuelve los YYYYMM ordenados ascendentemente', async () =
   }
 });
 
-test('listarPeriodos: ignora archivos que no son ^\\d{6}\\.json$ y subdirectorios', async () => {
+test('listarPeriodos: reporta el período SIN el prefijo "P" (invariante data-model.md)', async () => {
   const { dir, repo } = tmpRepo();
   try {
     escribirCalendario(dir, '202607');
-    writeFileSync(join(dir, 'padron.json'), '{}');
-    writeFileSync(join(dir, '2026070.json'), '{}'); // 7 dígitos
-    writeFileSync(join(dir, '20260.json'), '{}'); // 5 dígitos
+    const periodos = await repo.listarPeriodos();
+    assert.deepEqual(periodos, ['202607']);
+    assert.ok(periodos.every((p) => !p.startsWith('P')));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('listarPeriodos: ignora entradas que no matchean ^P\\d{6}$ (archivos sueltos, carpetas mal formadas)', async () => {
+  const { dir, repo } = tmpRepo();
+  try {
+    escribirCalendario(dir, '202607');
+    writeFileSync(join(dir, 'padron.json'), '{}'); // archivo suelto en la raíz
+    mkdirSync(join(dir, 'P2026070')); // 7 dígitos
+    mkdirSync(join(dir, 'P20260')); // 5 dígitos
+    mkdirSync(join(dir, '202607')); // sin el prefijo "P"
     writeFileSync(join(dir, 'notas.txt'), 'x');
-    mkdirSync(join(dir, 'fichadas'));
     assert.deepEqual(await repo.listarPeriodos(), ['202607']);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('listarPeriodos: ignora archivos NNNNNN.json sin calendario (calendario null)', async () => {
+test('listarPeriodos: ignora carpetas P<periodo> sin calendario (calendario null)', async () => {
   const { dir, repo } = tmpRepo();
   try {
     escribirCalendario(dir, '202607');
-    writeFileSync(join(dir, '202605.json'), JSON.stringify({ calendario: null, correcciones: [], pausas: [] }));
+    const vacia = join(dir, 'P202605');
+    mkdirSync(vacia, { recursive: true });
+    writeFileSync(join(vacia, 'calendario.json'), JSON.stringify({ calendario: null, correcciones: [], pausas: [] }));
     assert.deepEqual(await repo.listarPeriodos(), ['202607']);
   } finally {
     rmSync(dir, { recursive: true, force: true });

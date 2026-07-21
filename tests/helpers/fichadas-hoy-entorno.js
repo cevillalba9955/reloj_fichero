@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:http';
@@ -6,6 +6,7 @@ import { crearApp } from '../../src/web/server.js';
 import { generarCalendario, reclasificarDia, periodoSiguiente } from '../../src/presentismo/domain/calendario-mes.js';
 import { createFilePresentismoRepository } from '../../src/presentismo/adapters/file-presentismo-repository.js';
 import { registrarFichadas } from '../../src/presentismo/adapters/file-fichadas-archive.js';
+import { rutaCarpetaPeriodo, ARCHIVO_PADRON } from '../../src/presentismo/domain/periodo-storage.js';
 
 // Entorno de pruebas de la feature 010 (contract + integration): servidor web
 // real (crearApp) sobre directorios temporales, con calendario del período
@@ -58,9 +59,11 @@ export async function crearEntornoFichadasHoy({
   const raiz = mkdtempSync(join(tmpdir(), 'fichadas-hoy-'));
   const repoDir = join(raiz, 'repo');
   const logDir = join(raiz, 'logs');
-  const fichadasDir = join(raiz, 'fichadas');
-  const padronFile = join(raiz, 'padron.json');
   const periodo = mesActualPeriodo();
+  // 013-reestructurar-data-periodos (FR-004): el padrón vive en
+  // `P<mesActualPeriodo()>/padron.json`, bajo el mismo `repoDir` (ya no un
+  // archivo aparte fuera del repositorio).
+  const padronFile = join(rutaCarpetaPeriodo(repoDir, periodo), ARCHIVO_PADRON);
 
   // Calendario del mes actual (esquema lun-vie) + reclasificaciones explícitas
   // para que cada escenario controle la clasificación del día bajo prueba.
@@ -84,18 +87,17 @@ export async function crearEntornoFichadasHoy({
     await repo.guardarCalendario(calSig);
   }
 
+  mkdirSync(rutaCarpetaPeriodo(repoDir, periodo), { recursive: true });
   writeFileSync(padronFile, JSON.stringify({ empleados: padron }, null, 2), 'utf8');
 
   if (fichadas.length > 0) {
-    registrarFichadas({ archiveDir: fichadasDir, periodo, fichadas: fichadas.map(fichadaCruda) });
+    registrarFichadas({ repoDir, periodo, fichadas: fichadas.map(fichadaCruda) });
   }
 
   const env = {
     PRESENTISMO_REPO_DIR: repoDir,
     PRESENTISMO_LOG_DIR: logDir,
     PRESENTISMO_CATEGORIAS_CONFIG: './config/categorias.json',
-    PRESENTISMO_PADRON_FILE: padronFile,
-    PRESENTISMO_FICHADAS_DIR: fichadasDir,
     ...envExtra,
   };
   const app = crearApp({ env });
@@ -113,11 +115,10 @@ export async function crearEntornoFichadasHoy({
     periodo,
     repoDir,
     logDir,
-    fichadasDir,
     padronFile,
     // Agrega fichadas "nuevas del reloj" al archivo del período en caliente.
     agregarFichadas(nuevas) {
-      registrarFichadas({ archiveDir: fichadasDir, periodo, fichadas: nuevas.map(fichadaCruda) });
+      registrarFichadas({ repoDir, periodo, fichadas: nuevas.map(fichadaCruda) });
     },
     close() {
       server.close();

@@ -19,6 +19,10 @@ const TIPOS = new Set([
   'anomalia',
   'justificacion_alta',
   'justificacion_reversion',
+  // 013-reestructurar-data-periodos (US3)
+  'periodo_cerrado',
+  'periodo_reabierto',
+  'fichadas_rechazadas_periodo_cerrado',
 ]);
 
 // Campos que jamás deben aparecer en un evento (defensa en profundidad).

@@ -6,10 +6,10 @@ import { cargarFichadasArchivadas } from './file-fichadas-archive.js';
 // fichada cruda ({legajo, fecha:'YYYY-MM-DD', hora:'HH:MM:SS', rawHex}) a la
 // forma del dominio ({legajo, fecha, hora:minutos, id}), deduplica por rawHex y
 // NUNCA expone el rawHex hacia el dominio ni los reportes (Principio V).
-export function createArchiveFichadasProvider({ archiveDir }) {
+export function createArchiveFichadasProvider({ repoDir }) {
   return {
     async obtenerFichadasDelMes(legajo, periodo) {
-      const todas = cargarFichadasArchivadas({ archiveDir, periodo });
+      const todas = cargarFichadasArchivadas({ repoDir, periodo });
       const prefijoFecha = `${periodo.slice(0, 4)}-${periodo.slice(4, 6)}`;
       const rawVistos = new Set();
       const salida = [];

@@ -41,5 +41,21 @@ export function crearClienteCalendario({ fetchImpl, base = '/api' } = {}) {
         body: JSON.stringify({ fecha, clasificacion, autor }),
       });
     },
+    // 013-reestructurar-data-periodos (US3) — POST /api/calendarios/:periodo/cerrar
+    // y /reabrir → VistaCalendarioMes actualizada, con `cerrado` reflejado.
+    cerrarPeriodo(periodo, { autor = null } = {}) {
+      return pedir(`/calendarios/${periodo}/cerrar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ autor }),
+      });
+    },
+    reabrirPeriodo(periodo, { autor = null } = {}) {
+      return pedir(`/calendarios/${periodo}/reabrir`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ autor }),
+      });
+    },
   };
 }

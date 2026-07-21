@@ -30,9 +30,14 @@ function validarFecha(fecha, campo = 'fecha') {
 // status HTTP correspondiente. Cualquier otro error del dominio (motivo
 // inválido, etc.) cae en 400 JUSTIFICACION_INVALIDA.
 function relanzarComoApiError(err) {
-  const status = { JUSTIFICACION_NO_APLICABLE: 409, RANGO_SIN_DIAS_ELEGIBLES: 409, JUSTIFICACION_NO_ENCONTRADA: 404 }[
-    err.httpCode
-  ];
+  // 013-reestructurar-data-periodos (FR-006): PERIODO_CERRADO también aplica
+  // acá (alta y reversión de Justificación).
+  const status = {
+    JUSTIFICACION_NO_APLICABLE: 409,
+    RANGO_SIN_DIAS_ELEGIBLES: 409,
+    JUSTIFICACION_NO_ENCONTRADA: 404,
+    PERIODO_CERRADO: 409,
+  }[err.httpCode];
   if (status) throw new ApiError(status, err.httpCode, err.message);
   throw new ApiError(400, 'JUSTIFICACION_INVALIDA', err.message);
 }

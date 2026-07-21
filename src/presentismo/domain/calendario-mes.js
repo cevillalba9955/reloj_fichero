@@ -40,6 +40,27 @@ export function periodoAnterior(periodo) {
   return desplazarPeriodo(periodo, -1);
 }
 
+// Período 'YYYYMM' del mes actual según un reloj dado (`now`, inyectable para
+// tests; por defecto el reloj real del proceso). Único punto de verdad para
+// "el mes en curso" (013-reestructurar-data-periodos, FR-004): reutilizado por
+// `src/web/view-model.js` y por los adaptadores de padrón/roster, que deben
+// resolverlo en cada llamada (nunca cachearlo a nivel de proceso, un backend
+// web es de larga vida).
+export function mesActualPeriodo(now = new Date()) {
+  return `${String(now.getFullYear()).padStart(4, '0')}${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// Fecha 'YYYY-MM-DD' de hoy según un reloj dado (`now`, inyectable para
+// tests; por defecto el reloj real del proceso). Único punto de verdad,
+// reutilizado por `src/web/view-model.js` y por el servicio de presentismo
+// (`calcularHoy`, para distinguir un día ya transcurrido de "hoy en curso").
+export function hoyLocal(now = new Date()) {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function diasEnMes(anio, mes) {
   // Día 0 del mes siguiente = último día de este mes.
   return new Date(Date.UTC(anio, mes, 0)).getUTCDate();
@@ -58,6 +79,10 @@ function diaSemana(anio, mes, dd) {
 // - esquemaSemanalDias: Set de números de día de semana laborables (0..6).
 // - previo: calendario existente cuyas reclasificaciones manuales se preservan
 //   (FR-006). Al regenerar, un día con reclasificadoManual conserva su valor.
+//   013-reestructurar-data-periodos (FR-009): el estado de cierre (`cerrado`,
+//   `cierre`, `reapertura`) también se preserva al regenerar — regenerar NO es
+//   una escritura sobre el período (no se pasa por exigirPeriodoAbierto) ni
+//   reabre un período que estaba cerrado.
 export function generarCalendario(periodo, esquemaSemanalDias, previo = null) {
   const { anio, mes } = parsePeriodo(periodo);
   const total = diasEnMes(anio, mes);
@@ -81,7 +106,14 @@ export function generarCalendario(periodo, esquemaSemanalDias, previo = null) {
     }
   }
 
-  return { periodo, esquemaSemanal: [...esquemaSemanalDias].sort(), dias };
+  return {
+    periodo,
+    esquemaSemanal: [...esquemaSemanalDias].sort(),
+    dias,
+    cerrado: previo?.cerrado ?? false,
+    cierre: previo?.cierre ?? null,
+    reapertura: previo?.reapertura ?? null,
+  };
 }
 
 // Reclasifica un día. Devuelve un NUEVO calendario (inmutable); marca el día
@@ -103,4 +135,36 @@ export function reclasificarDia(calendario, fecha, clasificacion) {
 
 export function diaDe(calendario, fecha) {
   return calendario.dias.find((d) => d.fecha === fecha) ?? null;
+}
+
+// 013-reestructurar-data-periodos (US3, data-model.md/research.md §3) — ciclo
+// de vida cerrado/abierto de un período. Mismo patrón inmutable que
+// `reclasificarDia`: devuelven un calendario NUEVO, nunca mutan el original.
+// Cerrar un calendario ya cerrado (o reabrir uno ya abierto) es un no-op
+// idempotente a nivel de dominio: no lanza, pero SÍ actualiza `cierre`/
+// `reapertura` con el autor/fecha del intento más reciente (edge case del
+// spec: evita un "doble cierre" confuso sin bloquear al responsable que repite
+// la acción por las dudas). `cierre` no se borra al reabrir: queda como
+// historial del último cierre (FR-008).
+export function cerrarCalendario(calendario, autor) {
+  return { ...calendario, cerrado: true, cierre: { autor: autor ?? null, fechaHora: new Date().toISOString() } };
+}
+
+export function reabrirCalendario(calendario, autor) {
+  return { ...calendario, cerrado: false, reapertura: { autor: autor ?? null, fechaHora: new Date().toISOString() } };
+}
+
+// Único punto que las operaciones de escritura consultan (research.md §4):
+// lanza si el período está cerrado, con `err.httpCode = 'PERIODO_CERRADO'`
+// para que los handlers web (contracts/web-api.md) y el CLI lo distingan del
+// resto de errores de validación sin parsear el mensaje.
+export function exigirPeriodoAbierto(calendario) {
+  if (calendario?.cerrado === true) {
+    const err = new Error(
+      `calendario-mes: el período ${calendario.periodo} está cerrado` +
+        (calendario.cierre?.fechaHora ? ` desde ${calendario.cierre.fechaHora}` : ''),
+    );
+    err.httpCode = 'PERIODO_CERRADO';
+    throw err;
+  }
 }

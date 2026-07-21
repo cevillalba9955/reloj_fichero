@@ -70,6 +70,31 @@ test('POST /api/justificaciones — día único Sin fichadas → 200 registrada 
   }
 });
 
+// 013-reestructurar-data-periodos (US3, FR-006) — un período cerrado rechaza
+// la Justificación con 409 PERIODO_CERRADO en vez de registrarla.
+test('POST /api/justificaciones sobre un período cerrado → 409 PERIODO_CERRADO', async () => {
+  const e = await entorno();
+  try {
+    const cierre = await fetch(`${e.base}/api/calendarios/${e.periodo}/cerrar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ autor: 'x' }),
+    });
+    assert.equal(cierre.status, 200);
+
+    const res = await fetch(`${e.base}/api/justificaciones`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ legajo: 1, fecha: FECHA_SIN_FICHADAS, motivoId: 'enfermedad', autor: 'rrhh' }),
+    });
+    assert.equal(res.status, 409);
+    const body = await res.json();
+    assert.equal(body.error.codigo, 'PERIODO_CERRADO');
+  } finally {
+    e.close();
+  }
+});
+
 test('POST /api/justificaciones sin motivoId → 400 JUSTIFICACION_INVALIDA', async () => {
   const e = await entorno();
   try {

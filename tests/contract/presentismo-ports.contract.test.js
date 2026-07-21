@@ -127,4 +127,60 @@ for (const [nombre, fabrica] of Object.entries(fabricas)) {
       cleanup();
     }
   });
+
+  // 013-reestructurar-data-periodos (US1, Acceptance Scenario 3): un período
+  // no lee ni modifica a otro. Escribe calendario/corrección/pausa/
+  // justificación en 202607 Y en 202608 y verifica que cada listado/lectura
+  // solo ve lo propio de su período.
+  test(`[${nombre}] un período no mezcla sus datos con los de otro`, async () => {
+    const { repo, cleanup } = fabrica();
+    try {
+      await repo.guardarCalendario({ periodo: '202607', dias: [{ fecha: '2026-07-01' }] });
+      await repo.guardarCalendario({ periodo: '202608', dias: [{ fecha: '2026-08-01' }, { fecha: '2026-08-02' }] });
+      await repo.guardarCorreccion({ periodo: '202607', legajo: 1, fecha: '2026-07-10', valorCorregido: 480, motivo: 'julio' });
+      await repo.guardarCorreccion({ periodo: '202608', legajo: 1, fecha: '2026-08-10', valorCorregido: 500, motivo: 'agosto' });
+      await repo.guardarPausa({ periodo: '202607', legajo: 1, fecha: '2026-07-13', desde: 720, hasta: 780, motivo: 'julio' });
+      await repo.guardarPausa({ periodo: '202608', legajo: 1, fecha: '2026-08-13', desde: 600, hasta: 660, motivo: 'agosto' });
+      await repo.guardarJustificacion({
+        periodo: '202607',
+        legajo: 1,
+        fecha: '2026-07-20',
+        motivoId: 'vacaciones',
+        etiquetaMotivo: 'Vacaciones',
+        tipoPago: 'Paga',
+        autor: 'a',
+        fechaHora: '2026-07-01T00:00:00.000Z',
+      });
+
+      const cal607 = await repo.cargarCalendario('202607');
+      const cal608 = await repo.cargarCalendario('202608');
+      assert.equal(cal607.dias.length, 1);
+      assert.equal(cal608.dias.length, 2);
+
+      const corr607 = await repo.listarCorrecciones('202607', 1);
+      const corr608 = await repo.listarCorrecciones('202608', 1);
+      assert.equal(corr607.length, 1);
+      assert.equal(corr607[0].valorCorregido, 480);
+      assert.equal(corr608.length, 1);
+      assert.equal(corr608[0].valorCorregido, 500);
+
+      const pausas607 = await repo.listarPausas('202607', 1);
+      const pausas608 = await repo.listarPausas('202608', 1);
+      assert.equal(pausas607.length, 1);
+      assert.equal(pausas608.length, 1);
+      assert.notEqual(pausas607[0].fecha, pausas608[0].fecha);
+
+      assert.equal((await repo.listarJustificaciones('202607', 1)).length, 1);
+      assert.equal((await repo.listarJustificaciones('202608', 1)).length, 0);
+
+      // Modificar 202607 no debe alterar 202608.
+      await repo.revertirCorreccion('202607', 1, '2026-07-10');
+      assert.equal((await repo.listarCorrecciones('202607', 1)).filter((c) => c.vigente).length, 0);
+      assert.equal((await repo.listarCorrecciones('202608', 1)).filter((c) => c.vigente).length, 1);
+
+      assert.deepEqual((await repo.listarPeriodos()).sort(), ['202607', '202608']);
+    } finally {
+      cleanup();
+    }
+  });
 }

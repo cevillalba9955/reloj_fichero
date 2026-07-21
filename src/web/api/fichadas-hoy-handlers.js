@@ -116,6 +116,16 @@ function conNombre(filas, nombres) {
   return filas.map((f) => ({ ...f, nombre: nombres.get(f.legajo) ?? null }));
 }
 
+// 013-reestructurar-data-periodos (FR-006, contracts/web-api.md): un intento
+// de escritura sobre un período cerrado responde 409 PERIODO_CERRADO en vez
+// del 400 de validación por defecto de cada endpoint.
+function relanzarErrorEscritura(err, codigoDefault) {
+  if (err.httpCode === 'PERIODO_CERRADO') {
+    throw new ApiError(409, 'PERIODO_CERRADO', err.message);
+  }
+  throw new ApiError(400, codigoDefault, err.message);
+}
+
 // Arma la VistaFichadasHoy completa de una fecha. `hoy`/`periodos` (de
 // exigirFechaNavegable) alimentan el bloque `navegacion` (iteración 2).
 async function vistaHoy(ctx, fecha, { hoy, periodos }) {
@@ -194,7 +204,7 @@ export function registrarRutas(router, ctx) {
         motivo,
       });
     } catch (err) {
-      throw new ApiError(400, 'CORRECCION_INVALIDA', err.message);
+      relanzarErrorEscritura(err, 'CORRECCION_INVALIDA');
     }
     return { status: 200, body: await filaDe(ctx, fecha, legajo) };
   });
@@ -226,7 +236,7 @@ export function registrarRutas(router, ctx) {
         motivo,
       });
     } catch (err) {
-      throw new ApiError(400, 'PAUSA_INVALIDA', err.message);
+      relanzarErrorEscritura(err, 'PAUSA_INVALIDA');
     }
     return { status: 200, body: await filaDe(ctx, fecha, legajo) };
   });
@@ -255,7 +265,7 @@ export function registrarRutas(router, ctx) {
         motivo,
       });
     } catch (err) {
-      throw new ApiError(400, 'RETIRO_INVALIDO', err.message);
+      relanzarErrorEscritura(err, 'RETIRO_INVALIDO');
     }
     return { status: 200, body: await filaDe(ctx, fecha, legajo) };
   });

@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
+import { rutaCarpetaPeriodo, ARCHIVO_FICHADAS } from '../domain/periodo-storage.js';
 
 // Archivo acumulativo de fichadas por período (trazabilidad, FR — registro de
 // fichadas obtenidas). A DIFERENCIA del presentismo.ndjson (que nunca lleva
@@ -9,12 +10,13 @@ import { join } from 'node:path';
 // exportador de sesiones de la feature 001/002. Deduplica por rawHex (identidad
 // cruda, FR-017 de la feature 002).
 //
-// Un archivo por período: <archiveDir>/<periodo>.json
+// 013-reestructurar-data-periodos: una carpeta por período bajo `repoDir`
+// (contracts/storage-layout.md): <repoDir>/P<periodo>/fichadas.json
 //   { "periodo": "YYYYMM", "actualizadoEn": "ISO",
 //     "fichadas": [ { "legajo", "fecha", "hora", "metodo", "rawHex" } ] }
 
-function rutaPeriodo(archiveDir, periodo) {
-  return join(archiveDir, `${periodo}.json`);
+function rutaPeriodo(repoDir, periodo) {
+  return join(rutaCarpetaPeriodo(repoDir, periodo), ARCHIVO_FICHADAS);
 }
 
 // Campos que se conservan de cada fichada cruda (los del export de sesión).
@@ -29,10 +31,10 @@ function normalizarFichadaCruda(f) {
 }
 
 // Lee el archivo acumulativo del período. Si no existe, devuelve [].
-export function cargarFichadasArchivadas({ archiveDir, periodo }) {
+export function cargarFichadasArchivadas({ repoDir, periodo }) {
   let contenido;
   try {
-    contenido = readFileSync(rutaPeriodo(archiveDir, periodo), 'utf8');
+    contenido = readFileSync(rutaPeriodo(repoDir, periodo), 'utf8');
   } catch {
     return [];
   }
@@ -40,15 +42,15 @@ export function cargarFichadasArchivadas({ archiveDir, periodo }) {
   try {
     datos = JSON.parse(contenido);
   } catch {
-    throw new Error(`archivo de fichadas "${rutaPeriodo(archiveDir, periodo)}" no es JSON válido`);
+    throw new Error(`archivo de fichadas "${rutaPeriodo(repoDir, periodo)}" no es JSON válido`);
   }
   return Array.isArray(datos?.fichadas) ? datos.fichadas : [];
 }
 
 // Registra (upsert) las fichadas obtenidas en el archivo del período,
 // deduplicando por rawHex contra lo ya guardado. Devuelve el conteo.
-export function registrarFichadas({ archiveDir, periodo, fichadas, now = () => new Date() }) {
-  const existentes = cargarFichadasArchivadas({ archiveDir, periodo });
+export function registrarFichadas({ repoDir, periodo, fichadas, now = () => new Date() }) {
+  const existentes = cargarFichadasArchivadas({ repoDir, periodo });
   const vistos = new Set();
   const acumulado = [];
   for (const f of existentes) {
@@ -89,10 +91,10 @@ export function registrarFichadas({ archiveDir, periodo, fichadas, now = () => n
   });
 
   const datos = { periodo, actualizadoEn: now().toISOString(), fichadas: acumulado };
-  mkdirSync(archiveDir, { recursive: true });
+  mkdirSync(rutaCarpetaPeriodo(repoDir, periodo), { recursive: true });
   // Escritura atómica (temp + rename): un lector concurrente (`calcular`) nunca ve
   // un archivo truncado ni a medio escribir. El rename es atómico en el mismo FS.
-  const final = rutaPeriodo(archiveDir, periodo);
+  const final = rutaPeriodo(repoDir, periodo);
   const tmp = `${final}.${process.pid}.tmp`;
   writeFileSync(tmp, JSON.stringify(datos, null, 2) + '\n', 'utf8');
   renameSync(tmp, final);

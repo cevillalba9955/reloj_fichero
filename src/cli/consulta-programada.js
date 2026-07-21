@@ -9,6 +9,8 @@ import { createOracleActiveEmployeesProvider } from '../roster/oracle-active-emp
 import { createDailyCachedActiveEmployeesProvider } from '../roster/daily-cached-active-employees-provider.js';
 import { createRosterFetchLogger } from '../logging/roster-fetch-logger.js';
 import { registrarFichadas } from '../presentismo/adapters/file-fichadas-archive.js';
+import { createFilePresentismoRepository } from '../presentismo/adapters/file-presentismo-repository.js';
+import { createPresentismoLogger } from '../presentismo/logging/presentismo-logger.js';
 
 export class InvalidArgsError extends Error {}
 
@@ -59,7 +61,7 @@ export function parseCliArgs(argv, env = process.env) {
         'status-interval-ms': { type: 'string' },
         'entrada-hora': { type: 'string' },
         'entrada-duracion': { type: 'string' },
-        'fichadas-archive-dir': { type: 'string' },
+        'repo-dir': { type: 'string' },
         'control-port': { type: 'string' },
         'full-handshake': { type: 'boolean', default: false },
       },
@@ -129,9 +131,10 @@ export function parseCliArgs(argv, env = process.env) {
     padron,
     rosterConfigPath: pick(values['roster-config'], env.FICHADAS_ROSTER_CONFIG, './config/active-employees.json'),
     logDir: pick(values['log-dir'], env.FICHADAS_LOG_DIR, './logs'),
-    // spec 005: destino de la persistencia durable de fichadas; la MISMA ruta
-    // que consume `calcular` (PRESENTISMO_FICHADAS_DIR).
-    fichadasArchiveDir: pick(values['fichadas-archive-dir'], env.PRESENTISMO_FICHADAS_DIR, './data/presentismo/fichadas'),
+    // spec 005 + 013-reestructurar-data-periodos: destino de la persistencia
+    // durable de fichadas; la MISMA raíz que consume `calcular`
+    // (PRESENTISMO_REPO_DIR), resuelta por período (P<periodo>/fichadas.json).
+    repoDir: pick(values['repo-dir'], env.PRESENTISMO_REPO_DIR, './data/presentismo'),
     timeoutMs,
     tickIntervalMs,
     statusIntervalMs,
@@ -179,8 +182,16 @@ function periodoDeFichada(fichada, now) {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-export function createFichadasSink({ archiveDir, now = () => new Date() }) {
-  return function persistirFichadas(fichadas) {
+// 013-reestructurar-data-periodos (FR-006, research.md §4): este sink NO pasa
+// por el servicio, así que repite la misma guarda de `exigirPeriodoAbierto`
+// antes de escribir. A diferencia de un endpoint HTTP, no hay un llamador
+// esperando una respuesta 409: un período cerrado simplemente se omite (no se
+// escribe, no se pierde — las fichadas del reloj se re-reportan como
+// pendientes en el próximo ciclo), y se deja constancia en el logger si se
+// provee uno.
+export function createFichadasSink({ repoDir, now = () => new Date(), logger = null }) {
+  const repo = createFilePresentismoRepository({ repoDir });
+  return async function persistirFichadas(fichadas) {
     const porPeriodo = new Map();
     for (const f of fichadas) {
       const periodo = periodoDeFichada(f, now);
@@ -188,7 +199,12 @@ export function createFichadasSink({ archiveDir, now = () => new Date() }) {
       porPeriodo.get(periodo).push(f);
     }
     for (const [periodo, grupo] of porPeriodo) {
-      registrarFichadas({ archiveDir, periodo, fichadas: grupo, now });
+      const calendario = await repo.cargarCalendario(periodo);
+      if (calendario?.cerrado === true) {
+        logger?.evento('fichadas_rechazadas_periodo_cerrado', { periodo, omitidas: grupo.length });
+        continue;
+      }
+      registrarFichadas({ repoDir, periodo, fichadas: grupo, now });
     }
   };
 }
@@ -262,8 +278,12 @@ export function runService(
   const rosterProvider = createRosterProvider(options);
 
   // spec 005: por defecto el servicio persiste las fichadas en el archivo por
-  // período (fuente de `calcular`). Inyectable para tests.
-  const sink = persistirFichadas ?? createFichadasSink({ archiveDir: options.fichadasArchiveDir });
+  // período (fuente de `calcular`). Inyectable para tests. El logger de
+  // presentismo (013-reestructurar-data-periodos) deja constancia si algún
+  // grupo se omite por período cerrado (FR-006).
+  const sink =
+    persistirFichadas ??
+    createFichadasSink({ repoDir: options.repoDir, logger: createPresentismoLogger({ logDir: options.logDir }) });
 
   const handle = startService({
     host: options.host,
@@ -293,7 +313,7 @@ export function runService(
   print(`Padron de empleados activos: ${origenPadron}`);
   print(`Sondeo cada ${options.tickIntervalMs}ms; timeout por consulta ${options.timeoutMs}ms`);
   print(`Log de ciclos: ${options.logDir}`);
-  print(`Fichadas persistidas en: ${options.fichadasArchiveDir}`);
+  print(`Fichadas persistidas en: ${options.repoDir} (P<periodo>/fichadas.json)`);
   print(formatEstadoResumen(handle.getState()));
 
   const statusTimer = setInterval(() => {

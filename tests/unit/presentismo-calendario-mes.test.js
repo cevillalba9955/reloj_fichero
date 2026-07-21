@@ -8,6 +8,9 @@ import {
   periodoSiguiente,
   Clasificacion,
   diaDe,
+  cerrarCalendario,
+  reabrirCalendario,
+  exigirPeriodoAbierto,
 } from '../../src/presentismo/domain/calendario-mes.js';
 
 // Lunes a viernes = {1,2,3,4,5} (domingo=0..sábado=6).
@@ -81,4 +84,63 @@ test('periodoSiguiente/periodoAnterior validan el formato YYYYMM', () => {
   assert.throws(() => periodoSiguiente('2026-07'), /período inválido/);
   assert.throws(() => periodoAnterior('202613'), /mes inválido/);
   assert.throws(() => periodoSiguiente('20267'), /período inválido/);
+});
+
+// 013-reestructurar-data-periodos (US3) — ciclo de vida cerrado/reabierto.
+
+test('generarCalendario: cerrado=false, cierre=null, reapertura=null por defecto (Acceptance Scenario 4)', () => {
+  const cal = generarCalendario('202607', LV);
+  assert.equal(cal.cerrado, false);
+  assert.equal(cal.cierre, null);
+  assert.equal(cal.reapertura, null);
+});
+
+test('cerrarCalendario devuelve un calendario NUEVO cerrado, con auditoría, sin mutar el original', () => {
+  const cal = generarCalendario('202607', LV);
+  const cerrado = cerrarCalendario(cal, 'rrhh.mgomez');
+  assert.equal(cerrado.cerrado, true);
+  assert.equal(cerrado.cierre.autor, 'rrhh.mgomez');
+  assert.ok(typeof cerrado.cierre.fechaHora === 'string' && cerrado.cierre.fechaHora.length > 0);
+  // Inmutabilidad: el original no cambió.
+  assert.equal(cal.cerrado, false);
+  assert.notEqual(cerrado, cal);
+});
+
+test('reabrirCalendario revierte el cierre, conserva el historial de "cierre" y agrega "reapertura"', () => {
+  const cal = generarCalendario('202607', LV);
+  const cerrado = cerrarCalendario(cal, 'rrhh.mgomez');
+  const reabierto = reabrirCalendario(cerrado, 'rrhh.otra');
+  assert.equal(reabierto.cerrado, false);
+  assert.equal(reabierto.reapertura.autor, 'rrhh.otra');
+  assert.ok(reabierto.cierre, 'conserva el registro histórico del último cierre');
+  assert.equal(reabierto.cierre.autor, 'rrhh.mgomez');
+});
+
+test('cerrar un período ya cerrado (o reabrir uno ya abierto) es idempotente: no lanza, actualiza autor/fecha (edge case del spec)', () => {
+  const cal = generarCalendario('202607', LV);
+  const cerrado1 = cerrarCalendario(cal, 'primero');
+  const cerrado2 = cerrarCalendario(cerrado1, 'segundo');
+  assert.equal(cerrado2.cerrado, true);
+  assert.equal(cerrado2.cierre.autor, 'segundo', 'el segundo intento actualiza el autor/fecha');
+
+  const reabierto1 = reabrirCalendario(cal, 'x'); // ya estaba abierto
+  assert.equal(reabierto1.cerrado, false);
+  const reabierto2 = reabrirCalendario(reabierto1, 'y'); // reabrir de nuevo
+  assert.equal(reabierto2.cerrado, false);
+  assert.equal(reabierto2.reapertura.autor, 'y');
+});
+
+test('exigirPeriodoAbierto no lanza si el período está abierto (cerrado ausente o false)', () => {
+  const cal = generarCalendario('202607', LV);
+  assert.doesNotThrow(() => exigirPeriodoAbierto(cal));
+  assert.doesNotThrow(() => exigirPeriodoAbierto({ ...cal, cerrado: undefined }));
+});
+
+test('exigirPeriodoAbierto lanza con httpCode PERIODO_CERRADO si el período está cerrado', () => {
+  const cal = generarCalendario('202607', LV);
+  const cerrado = cerrarCalendario(cal, 'a');
+  assert.throws(() => exigirPeriodoAbierto(cerrado), (err) => {
+    assert.equal(err.httpCode, 'PERIODO_CERRADO');
+    return true;
+  });
 });

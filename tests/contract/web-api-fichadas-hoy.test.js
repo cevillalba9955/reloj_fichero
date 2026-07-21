@@ -491,3 +491,26 @@ test('POST correcciones — éxito → 200 con la FilaFichadaHoy recalculada', a
     e.close();
   }
 });
+
+// 013-reestructurar-data-periodos (US3, FR-006) — un período cerrado rechaza
+// la corrección con 409 PERIODO_CERRADO en vez de aplicar el cambio.
+test('POST correcciones sobre un período cerrado → 409 PERIODO_CERRADO', async () => {
+  const e = await crearEntornoFichadasHoy({
+    padron: PADRON,
+    clasificaciones: { [FECHA]: 'Laborable' },
+    fichadas: [{ legajo: 1, fecha: FECHA, hora: '08:10:00' }],
+  });
+  try {
+    const cierre = await postJson(e.base, `/api/calendarios/${e.periodo}/cerrar`, { autor: 'x' });
+    assert.equal(cierre.status, 200);
+
+    const res = await postJson(e.base, '/api/fichadas-hoy/correcciones', {
+      legajo: 1, fecha: FECHA, entrada: '07:05', autor: 'admin@utn', motivo: 'motivo',
+    });
+    assert.equal(res.status, 409);
+    const body = await res.json();
+    assert.equal(body.error.codigo, 'PERIODO_CERRADO');
+  } finally {
+    e.close();
+  }
+});

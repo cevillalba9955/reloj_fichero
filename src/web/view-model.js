@@ -1,4 +1,4 @@
-import { parsePeriodo, periodoAnterior, periodoSiguiente } from '../presentismo/domain/calendario-mes.js';
+import { parsePeriodo, periodoAnterior, periodoSiguiente, mesActualPeriodo, hoyLocal } from '../presentismo/domain/calendario-mes.js';
 import { recortar, Tramo } from '../presentismo/domain/periodo-liquidacion.js';
 import { formatHoraMinuto } from '../presentismo/domain/tiempo.js';
 
@@ -24,17 +24,10 @@ function diaSemanaDe(fechaISO) {
 }
 
 // Fecha "hoy" del servidor en hora local del establecimiento (YYYY-MM-DD).
-export function hoyLocal(now = new Date()) {
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
 // Período 'YYYYMM' del mes actual según el reloj del servidor (feature 008).
-export function mesActualPeriodo(now = new Date()) {
-  return `${String(now.getFullYear()).padStart(4, '0')}${String(now.getMonth() + 1).padStart(2, '0')}`;
-}
+// 013-reestructurar-data-periodos: reexportan el único punto de verdad de
+// calendario-mes.js (dedup, research.md nota de la fase US2).
+export { hoyLocal, mesActualPeriodo };
 
 // Calcula la frontera generable (feature 008): los períodos habilitados para
 // generar ahora, garantizando contigüidad (sin tope de mes futuro: corrección
@@ -266,5 +259,11 @@ export function construirVistaCalendario({ calendario, periodos = [], hoy = hoyL
     periodoActivo,
     leyenda: construirLeyenda(),
     dias,
+    // 013-reestructurar-data-periodos (US3, contracts/web-api.md): campo nuevo
+    // al nivel raíz; los clientes existentes que ignoran campos desconocidos
+    // no se rompen.
+    cerrado: Boolean(calendario.cerrado),
+    cierre: calendario.cierre ?? null,
+    reapertura: calendario.reapertura ?? null,
   };
 }

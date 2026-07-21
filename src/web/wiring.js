@@ -23,8 +23,6 @@ export function crearContextoWeb(env = process.env) {
   const logDir = env.PRESENTISMO_LOG_DIR ?? './logs';
   const configPath = env.PRESENTISMO_CATEGORIAS_CONFIG ?? './config/categorias.json';
   const motivosAusenciaConfigPath = env.PRESENTISMO_MOTIVOS_AUSENCIA_CONFIG ?? './config/motivos-ausencia.json';
-  const padronFile = env.PRESENTISMO_PADRON_FILE ?? `${repoDir}/padron.json`;
-  const fichadasDir = env.PRESENTISMO_FICHADAS_DIR ?? `${repoDir}/fichadas`;
   const controlUrl = env.FICHADAS_CONTROL_URL ?? 'http://127.0.0.1:5006';
   // feature 011 (FR-013): granularidad del "Resumen del Período". Variable
   // vacía cae al default (misma convención que FICHADAS_*, spec 002).
@@ -39,9 +37,13 @@ export function crearContextoWeb(env = process.env) {
   const motivosAusenciaConfig = loadMotivosAusenciaConfig(motivosAusenciaConfigPath);
   const repo = createFilePresentismoRepository({ repoDir });
   const logger = createPresentismoLogger({ logDir });
-  const categoryProvider = createFilePadronCategoryProvider({ filePath: padronFile });
-  const fichadasProvider = createArchiveFichadasProvider({ archiveDir: fichadasDir });
-  const activeEmployeesProvider = createLocalFileActiveEmployeesProvider({ filePath: padronFile });
+  // 013-reestructurar-data-periodos (FR-004): el padrón es por período
+  // (`P<periodo>/padron.json`); ambos proveedores resuelven el mes en curso en
+  // cada llamada (research.md §5), nunca un `filePath` fijo cacheado al
+  // arrancar el servidor.
+  const categoryProvider = createFilePadronCategoryProvider({ repoDir });
+  const fichadasProvider = createArchiveFichadasProvider({ repoDir });
+  const activeEmployeesProvider = createLocalFileActiveEmployeesProvider({ repoDir });
   const consultarReloj = createConsultarRelojCliente({ baseUrl: controlUrl });
   const service = createCalcularPresentismoService({
     repo,
