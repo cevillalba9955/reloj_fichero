@@ -23,11 +23,11 @@ const TITULOS = {
 export default function AppShell({ seccion, onCambiarSeccion, children }) {
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Header style={{ display: 'flex', alignItems: 'center' }}>
-        <Typography.Title level={4} style={{ color: '#fff', margin: 0 }}>
-          Presentismo
-        </Typography.Title>
-      </Header>
+      {/* <Header style={{ display: 'flex', alignItems: 'center' }}>
+        // <Typography.Title level={4} style={{ color: '#fff', margin: 0 }}>
+        //   Presentismo
+        // </Typography.Title> 
+      </Header> */}
       <Layout>
         <Sider width={220} style={{ borderRight: '1px solid #d9dee3' }}>
           <Menu
@@ -39,10 +39,10 @@ export default function AppShell({ seccion, onCambiarSeccion, children }) {
           />
         </Sider>
         <Layout style={{ padding: '16px 24px' }}>
-          <Breadcrumb
+          {/* <Breadcrumb
             items={[{ title: 'Presentismo' }, { title: TITULOS[seccion] }]}
             style={{ marginBottom: 12 }}
-          />
+          /> */}
           <Content
             style={{
               background: '#fff',
