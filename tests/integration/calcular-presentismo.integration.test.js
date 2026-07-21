@@ -262,3 +262,29 @@ test('[US3] recálculo con corrección vigente la marca para revisión (US3-4/FR
   assert.equal(j.requiereRevision, true);
   assert.equal(j.totalDiario, 540, 'la corrección sigue prevaleciendo');
 });
+
+// Regresión (feature 010, "Fichadas de hoy") — un día YA PASADO sin fichadas
+// debe ser AUSENTE, nunca ESPERANDO, sin importar qué hora del día sea
+// "ahora": la ventana de entrada de un día que ya terminó está siempre
+// vencida. Antes de este fix, calcularHoy usaba `ahora` (hora del reloj)
+// contra la ventana del día SIN considerar si `fecha` ya había pasado.
+test('[US1] calcularHoy: un día laborable ya pasado sin fichadas es AUSENTE, no ESPERANDO', async () => {
+  const { svc } = await armar({ categorias: { 1234: 'ADMIN' }, fichadas: {} });
+  // 2026-07-06 es lunes (Laborable); "hoy" es dos semanas después, y "ahora"
+  // (400 min = 06:40) sigue dentro de la ventana de apertura de ADMIN/mensual
+  // (05:00–12:00) si se la evaluara como si fuese el día de hoy.
+  const resultado = await svc.calcularHoy('202607', '2026-07-06', [1234], {
+    ahora: 400,
+    hoy: '2026-07-20',
+  });
+  assert.equal(resultado.filas[0].situacion, 'AUSENTE');
+});
+
+test('[US1] calcularHoy: el día de HOY sigue en ESPERANDO mientras la ventana de entrada no venció', async () => {
+  const { svc } = await armar({ categorias: { 1234: 'ADMIN' }, fichadas: {} });
+  const resultado = await svc.calcularHoy('202607', '2026-07-06', [1234], {
+    ahora: 400,
+    hoy: '2026-07-06',
+  });
+  assert.equal(resultado.filas[0].situacion, 'ESPERANDO');
+});

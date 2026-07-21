@@ -1,4 +1,4 @@
-import { parsePeriodo, periodoAnterior, periodoSiguiente, mesActualPeriodo } from '../presentismo/domain/calendario-mes.js';
+import { parsePeriodo, periodoAnterior, periodoSiguiente, mesActualPeriodo, hoyLocal } from '../presentismo/domain/calendario-mes.js';
 import { recortar, Tramo } from '../presentismo/domain/periodo-liquidacion.js';
 import { formatHoraMinuto } from '../presentismo/domain/tiempo.js';
 
@@ -24,17 +24,10 @@ function diaSemanaDe(fechaISO) {
 }
 
 // Fecha "hoy" del servidor en hora local del establecimiento (YYYY-MM-DD).
-export function hoyLocal(now = new Date()) {
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
 // Período 'YYYYMM' del mes actual según el reloj del servidor (feature 008).
-// 013-reestructurar-data-periodos: reexporta el único punto de verdad de
+// 013-reestructurar-data-periodos: reexportan el único punto de verdad de
 // calendario-mes.js (dedup, research.md nota de la fase US2).
-export { mesActualPeriodo };
+export { hoyLocal, mesActualPeriodo };
 
 // Calcula la frontera generable (feature 008): los períodos habilitados para
 // generar ahora, garantizando contigüidad (sin tope de mes futuro: corrección

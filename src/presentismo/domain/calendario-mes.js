@@ -50,6 +50,17 @@ export function mesActualPeriodo(now = new Date()) {
   return `${String(now.getFullYear()).padStart(4, '0')}${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+// Fecha 'YYYY-MM-DD' de hoy según un reloj dado (`now`, inyectable para
+// tests; por defecto el reloj real del proceso). Único punto de verdad,
+// reutilizado por `src/web/view-model.js` y por el servicio de presentismo
+// (`calcularHoy`, para distinguir un día ya transcurrido de "hoy en curso").
+export function hoyLocal(now = new Date()) {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function diasEnMes(anio, mes) {
   // Día 0 del mes siguiente = último día de este mes.
   return new Date(Date.UTC(anio, mes, 0)).getUTCDate();

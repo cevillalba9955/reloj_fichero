@@ -6,6 +6,7 @@ import {
   cerrarCalendario,
   reabrirCalendario,
   exigirPeriodoAbierto,
+  hoyLocal,
 } from '../domain/calendario-mes.js';
 import { recortar, tramosParaTipo, fechaEnTramo } from '../domain/periodo-liquidacion.js';
 import { calcularJornadaAuto, aplicarAjustes } from '../domain/jornada.js';
@@ -228,8 +229,13 @@ export function createCalcularPresentismoService({
   // feature 010 (US1): proyección del día en curso para la página "Fichadas de
   // hoy". Por cada legajo esperado, reutiliza calcularEmpleado (auto + ajustes,
   // FR-002), ubica la jornada de `fecha` y le aplica calcularSituacionHoy.
-  // `ahora` en minutos-del-día (inyectable para tests; default reloj del server).
-  async function calcularHoy(periodo, fecha, legajos, { ahora = minutosAhora() } = {}) {
+  // `ahora` en minutos-del-día (inyectable para tests; default reloj del
+  // server) SOLO tiene sentido para el día de hoy: si `fecha` ya pasó (es
+  // anterior a `hoy`), la ventana de entrada está siempre vencida sin importar
+  // la hora real del servidor — de lo contrario un legajo sin fichar en un día
+  // anterior queda incorrectamente en ESPERANDO en vez de AUSENTE mientras el
+  // reloj del servidor todavía no llegó a esa hora-del-día.
+  async function calcularHoy(periodo, fecha, legajos, { ahora = minutosAhora(), hoy = hoyLocal() } = {}) {
     const calendario = await repo.cargarCalendario(periodo);
     if (!calendario) {
       throw new Error(`presentismo: no existe calendario para ${periodo}; generalo primero`);
@@ -238,6 +244,7 @@ export function createCalcularPresentismoService({
     if (!diaCal) {
       throw new Error(`presentismo: la fecha ${fecha} no pertenece al período ${periodo}`);
     }
+    const ahoraEfectiva = fecha < hoy ? Infinity : ahora;
 
     const filas = [];
     for (const legajo of legajos) {
@@ -263,7 +270,7 @@ export function createCalcularPresentismoService({
             clasificacion: jornada.clasificacion,
             auto: jornada,
             ajustado: jornada,
-            ahora,
+            ahora: ahoraEfectiva,
             params: modalidad,
           })
         : SituacionDia.NO_APLICA;
