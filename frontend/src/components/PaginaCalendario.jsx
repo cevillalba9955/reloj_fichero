@@ -50,6 +50,10 @@ export default function PaginaCalendario({ cliente, inicializarDesdeApp }) {
   }, [inicializar]);
 
   const periodoMostrado = estado.vista?.periodo ?? estado.periodo ?? null;
+  // "Cerrar período" solo tiene sentido una vez que el período ya pasó (el mes
+  // actual es posterior); "Reabrir período" sigue disponible siempre que el
+  // período esté cerrado, sin importar la fecha.
+  const periodoYaPaso = Boolean(mesActual && periodoMostrado && periodoMostrado < mesActual);
 
   async function generarCalendarioDelPeriodo(periodo) {
     if (!periodo) return;
@@ -167,9 +171,11 @@ export default function PaginaCalendario({ cliente, inicializarDesdeApp }) {
                 Período cerrado
               </span>
             )}
-            <button type="button" onClick={cerrarOReabrirPeriodo}>
-              {estado.vista.cerrado ? 'Reabrir período' : 'Cerrar período'}
-            </button>
+            {(estado.vista.cerrado || periodoYaPaso) && (
+              <button type="button" onClick={cerrarOReabrirPeriodo}>
+                {estado.vista.cerrado ? 'Reabrir período' : 'Cerrar período'}
+              </button>
+            )}
           </div>
           <GrillaMes dias={estado.vista.dias} onReclasificar={pedirReclasificar} />
         </section>
