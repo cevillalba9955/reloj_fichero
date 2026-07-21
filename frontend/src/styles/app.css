@@ -10,6 +10,15 @@
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
+/* El navegador aplica 8px de margen por defecto al body; sumado a los
+   `min-height: 100vh` del AppShell, eso excede la altura de la ventana en
+   16px y dispara un scroll vertical aunque el contenido entre perfecto. */
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
 /* --- Encabezado del período (Fichadas de hoy / Calendario) --- */
 .fichadas-encabezado {
   display: flex;
