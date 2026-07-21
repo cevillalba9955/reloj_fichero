@@ -1,9 +1,18 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import TablaFichadasHoy from './TablaFichadasHoy.jsx';
 
 // T015 (feature 010, US1) — la tabla muestra por fila los datos del
 // data-model (legajo, nombre, entrada, salida, horas, situación) con la
 // situación correcta y distinguible, sin datos personales de más (FR-015).
+//
+// El encabezado de "Pausa" agrupa 2 subcolumnas (antd Table `children`), así
+// que hay 2 filas de encabezado en <thead>; las filas de datos se toman de
+// <tbody> para no depender de cuántas filas tenga el encabezado.
+
+function filasDeDatos() {
+  const [tabla] = screen.getAllByRole('table');
+  return within(tabla.querySelector('tbody')).getAllByRole('row');
+}
 
 function fila(over = {}) {
   return {
@@ -37,7 +46,7 @@ test('muestra una fila por empleado con su situación', () => {
       ]}
     />,
   );
-  const filas = screen.getAllByRole('row').slice(1); // sin el encabezado
+  const filas = filasDeDatos();
   expect(filas).toHaveLength(4);
   expect(filas[0]).toHaveTextContent('PRESENTE');
   expect(filas[1]).toHaveTextContent('ESPERANDO');
@@ -64,7 +73,7 @@ test('una anomalía se señala distinguida, con su explicación (FR-014)', () =>
       ]}
     />,
   );
-  const [datos] = screen.getAllByRole('row').slice(1);
+  const [datos] = filasDeDatos();
   expect(datos.className).toContain('situacion-anomalia');
   expect(datos).toHaveTextContent('Anomalía');
   expect(datos).toHaveTextContent('categoría "XXX" no configurada');
@@ -102,8 +111,7 @@ function pausaIntermedia(desde, hasta) {
 test('las columnas de pausa existen y una fila sin pausas muestra —', () => {
   render(<TablaFichadasHoy empleados={[fila()]} />);
   expect(screen.getByText('Pausa')).toBeInTheDocument();
-  //expect(screen.getByText('Fin pausa')).toBeInTheDocument();
-  const celdas = screen.getAllByRole('row')[1].querySelectorAll('td');
+  const celdas = filasDeDatos()[0].querySelectorAll('td');
   // legajo, nombre, entrada, inicio pausa, fin pausa, salida, horas, situación
   expect(celdas[3]).toHaveTextContent('—');
   expect(celdas[4]).toHaveTextContent('—');
@@ -113,7 +121,7 @@ test('una pausa intermedia se muestra en sus columnas', () => {
   render(
     <TablaFichadasHoy empleados={[fila({ pausas: [pausaIntermedia('12:00', '13:00')] })]} />,
   );
-  const celdas = screen.getAllByRole('row')[1].querySelectorAll('td');
+  const celdas = filasDeDatos()[0].querySelectorAll('td');
   expect(celdas[3]).toHaveTextContent('12:00');
   expect(celdas[4]).toHaveTextContent('13:00');
 });
@@ -126,7 +134,7 @@ test('con dos pausas intermedias muestra la primera por desde, con indicador +1'
       ]}
     />,
   );
-  const celdas = screen.getAllByRole('row')[1].querySelectorAll('td');
+  const celdas = filasDeDatos()[0].querySelectorAll('td');
   expect(celdas[3]).toHaveTextContent('12:00', 'la primera por desde, no por orden de alta');
   expect(celdas[4]).toHaveTextContent('13:00');
   expect(celdas[4]).toHaveTextContent('+1');
@@ -143,9 +151,9 @@ test('un retiro anticipado no aparece en las columnas de pausa', () => {
       ]}
     />,
   );
-  const celdas = screen.getAllByRole('row')[1].querySelectorAll('td');
+  const celdas = filasDeDatos()[0].querySelectorAll('td');
+  expect(celdas[3]).toHaveTextContent('—');
   expect(celdas[4]).toHaveTextContent('—');
-  expect(celdas[5]).toHaveTextContent('—');
 });
 
 // "Excepcion" (pausa intermedia/retiro anticipado) no aplica sin fichadas: no
@@ -161,7 +169,7 @@ test('el botón "Excepcion" se oculta cuando la fila no tiene entrada (sin ficha
       onPausaRetiro={vi.fn()}
     />,
   );
-  const filas = screen.getAllByRole('row').slice(1);
+  const filas = filasDeDatos();
   expect(filas[0]).not.toHaveTextContent('Excepcion');
   expect(filas[1]).not.toHaveTextContent('Excepcion');
   expect(filas[2]).toHaveTextContent('Excepcion');
@@ -180,11 +188,11 @@ test('el botón "Justificación" solo aparece en filas AUSENTE sin justificació
       onJustificar={onJustificar}
     />,
   );
-  const filas = screen.getAllByRole('row').slice(1);
+  const filas = filasDeDatos();
   expect(filas[0]).toHaveTextContent('Justificación');
   expect(filas[1]).not.toHaveTextContent('Justificación');
 
-  fireEvent.click(filas[0].querySelector('button'));
+  fireEvent.click(within(filas[0]).getByRole('button'));
   expect(onJustificar).toHaveBeenCalledWith(expect.objectContaining({ legajo: 1 }));
 });
 
@@ -204,7 +212,7 @@ test('una fila con justificación vigente muestra el motivo, el botón de revert
       onRevertirJustificacion={onRevertirJustificacion}
     />,
   );
-  const [datos] = screen.getAllByRole('row').slice(1);
+  const [datos] = filasDeDatos();
   expect(datos).toHaveTextContent('Vacaciones');
   expect(datos).toHaveTextContent('LICENCIA'); // motivo Paga: la situación se etiqueta como Licencia
   expect(datos).not.toHaveTextContent('AUSENTE');
@@ -226,7 +234,7 @@ test('un motivo No paga conserva la etiqueta de situación original (no se muest
       ]}
     />,
   );
-  const [datos] = screen.getAllByRole('row').slice(1);
+  const [datos] = filasDeDatos();
   expect(datos).toHaveTextContent('AUSENTE');
   expect(datos).toHaveTextContent('Sin Aviso');
   expect(datos).not.toHaveTextContent('LICENCIA');

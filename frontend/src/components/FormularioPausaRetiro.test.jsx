@@ -20,9 +20,9 @@ test('sin motivo, "Guardar" está deshabilitado en ambos modos', () => {
   const onGuardar = vi.fn();
   render(<FormularioPausaRetiro fila={fila} onGuardar={onGuardar} onCancelar={vi.fn()} />);
 
-  expect(screen.getByText('Guardar')).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Guardar' })).toBeDisabled();
   fireEvent.click(screen.getByLabelText('Retiro anticipado'));
-  expect(screen.getByText('Guardar')).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Guardar' })).toBeDisabled();
   expect(onGuardar).not.toHaveBeenCalled();
 });
 

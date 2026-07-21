@@ -1,18 +1,29 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import SelectorPeriodo from './SelectorPeriodo.jsx';
+import { seleccionarOpcion } from '../test-utils/antd.js';
 
 // T024 (feature 011, US3) — ofrece únicamente los períodos recibidos del
 // servidor (los que tienen calendario generado, FR-002), con el valor actual
 // seleccionado, y notifica el cambio.
 
-test('ofrece las opciones de período recibidas, más recientes primero', () => {
+async function abrirOpciones() {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('combobox', { name: 'Período' }));
+  // El listbox accesible que antd expone (0x0) no contiene el texto visible;
+  // las opciones reales viven en `.ant-select-item-option-content`, en un
+  // dropdown hermano montado en el body.
+  await screen.findByRole('listbox');
+  return [...document.querySelectorAll('.ant-select-item-option-content')].map((el) => el.textContent);
+}
+
+test('ofrece las opciones de período recibidas, más recientes primero', async () => {
   render(<SelectorPeriodo periodos={['202606', '202607']} periodo="202607" onCambiar={vi.fn()} />);
-  const opciones = screen.getAllByRole('option').map((o) => o.value);
-  expect(opciones).toEqual(['202607', '202606']);
-  expect(screen.getByLabelText('Período')).toHaveValue('202607');
+  expect(await abrirOpciones()).toEqual(['Julio 2026', 'Junio 2026']);
+  expect(document.querySelector('.ant-select-content')).toHaveTextContent('Julio 2026');
 });
 
-test('en modo quincenal ofrece las quincenas recibidas, etiquetadas y más recientes primero', () => {
+test('en modo quincenal ofrece las quincenas recibidas, etiquetadas y más recientes primero', async () => {
   render(
     <SelectorPeriodo
       periodos={['202606-Q1', '202606-Q2', '202607-Q1', '202607-Q2']}
@@ -20,20 +31,18 @@ test('en modo quincenal ofrece las quincenas recibidas, etiquetadas y más recie
       onCambiar={vi.fn()}
     />,
   );
-  const opciones = screen.getAllByRole('option');
-  expect(opciones.map((o) => o.value)).toEqual(['202607-Q2', '202607-Q1', '202606-Q2', '202606-Q1']);
-  expect(opciones.map((o) => o.textContent)).toEqual([
+  expect(await abrirOpciones()).toEqual([
     'Julio 2026 · 2da quincena',
     'Julio 2026 · 1ra quincena',
     'Junio 2026 · 2da quincena',
     'Junio 2026 · 1ra quincena',
   ]);
-  expect(screen.getByLabelText('Período')).toHaveValue('202607-Q1');
+  expect(document.querySelector('.ant-select-content')).toHaveTextContent('Julio 2026 · 1ra quincena');
 });
 
-test('cambiar la selección invoca onCambiar con el período elegido', () => {
+test('cambiar la selección invoca onCambiar con el período elegido', async () => {
   const onCambiar = vi.fn();
   render(<SelectorPeriodo periodos={['202606', '202607']} periodo="202607" onCambiar={onCambiar} />);
-  fireEvent.change(screen.getByLabelText('Período'), { target: { value: '202606' } });
+  await seleccionarOpcion('Período', 'Junio 2026');
   expect(onCambiar).toHaveBeenCalledWith('202606');
 });

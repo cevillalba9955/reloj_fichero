@@ -1,56 +1,15 @@
-/* feature 007 — Estilos de la pantalla de calendario. Las distinciones NO
-   dependen solo del color (FR-004): cada estado tiene además etiqueta textual
-   (en el markup) y/o forma (borde, patrón). Verificable en escala de grises. */
+/* Layout residual no cubierto por Ant Design: la grilla del calendario (widget
+   propio, ver spec 007) y los encabezados de página. La semántica de dominio
+   (colores/estados de negocio) vive en estados-dominio.css; el shell general
+   (header, navegación lateral, tablas, diálogos, formularios) usa componentes
+   de antd configurados en theme/tokens.js. */
 
 :root {
   --gap: 6px;
-  --habil-bg: #e6f0ff;
-  --habil-borde: #3366cc;
-  --feriado-bg: #fff2d9;
-  --feriado-borde: #cc8800;
-  --nolab-bg: #f0f0f0;
-  --nolab-borde: #bbbbbb;
-  --hoy-anillo: #d6336c;
-  --texto: #1a1a1a;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  color: var(--texto);
 }
 
-.app {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 1rem;
-}
-
-.app-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--gap);
-}
-
-.app-header h1 {
-  font-size: 1.3rem;
-  margin: 0;
-}
-
-/* --- Navegación --- */
-.navegacion {
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
-}
-.navegacion button {
-  cursor: pointer;
-}
-.nav-periodo {
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-
-/* --- Fichadas de hoy: encabezado con navegación a la derecha (feature 012),
-   mismo patrón que .app-header / NavegacionMes --- */
+/* --- Encabezado del período (Fichadas de hoy / Calendario) --- */
 .fichadas-encabezado {
   display: flex;
   flex-wrap: wrap;
@@ -64,11 +23,6 @@
 .fichadas-titulo h2 {
   margin: 0;
 }
-.navegacion-dia {
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
-}
 .fichadas-acciones {
   display: flex;
   align-items: center;
@@ -76,68 +30,22 @@
   margin: 0.5rem 0;
 }
 
-/* --- Encabezado del período activo --- */
-.periodo-activo {
-  display: flex;
-  gap: 0.75rem;
-  align-items: baseline;
-  margin: 0.75rem 0;
-  padding: 0.5rem 0.75rem;
-  border-left: 4px solid var(--habil-borde);
-  background: #fafafa;
-}
-.periodo-etiqueta {
-  font-weight: 700;
-}
-.periodo-activo.sin-periodo {
-  border-left-color: var(--nolab-borde);
-  color: #666;
-  font-style: italic;
-}
-
-/* --- Leyenda --- */
-.leyenda {
-  list-style: none;
-  padding: 0;
-  margin: 0.75rem 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-.leyenda-item {
+.navegacion {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.85rem;
+  gap: var(--gap);
 }
-.leyenda-muestra {
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--nolab-borde);
-  border-radius: 3px;
-  display: inline-block;
+.navegacion-dia {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
 }
-.clave-habil .leyenda-muestra {
-  background: var(--habil-bg);
-  border-color: var(--habil-borde);
-}
-.clave-feriado .leyenda-muestra {
-  background: var(--feriado-bg);
-  border-color: var(--feriado-borde);
-  border-style: dashed;
-}
-.clave-no-laborable .leyenda-muestra {
-  background: var(--nolab-bg);
-}
-.clave-hoy .leyenda-muestra {
-  border-color: var(--hoy-anillo);
-  border-style: double;
-}
-.clave-periodo-activo .leyenda-muestra {
-  box-shadow: inset 0 -3px 0 var(--habil-borde);
+.nav-periodo {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
-/* --- Grilla --- */
+/* --- Grilla del calendario (feature 007) --- */
 .grilla {
   margin-top: 0.5rem;
 }
@@ -174,42 +82,6 @@
 }
 .dia-clasificacion {
   font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-/* Resaltado de hábiles y feriados vs. no laborables (FR-005): color + borde. */
-.resaltado-habil {
-  background: var(--habil-bg);
-  border-color: var(--habil-borde);
-}
-.resaltado-feriado {
-  background: var(--feriado-bg);
-  border-color: var(--feriado-borde);
-  border-style: dashed; /* forma: distingue feriado sin depender del color */
-}
-.resaltado-no-laborable {
-  background: var(--nolab-bg);
-  color: #666;
-}
-
-/* Hoy: anillo (forma), no solo color (FR-007). */
-.celda.es-hoy {
-  outline: 3px double var(--hoy-anillo);
-  outline-offset: 1px;
-}
-.marca-hoy {
-  position: absolute;
-  top: 2px;
-  right: 4px;
-  color: var(--hoy-anillo);
-  font-size: 0.7rem;
-}
-
-/* Pertenencia al período activo: banda inferior (estructura), diferente de la
-   clasificación (FR-009). */
-.celda.en-periodo {
-  box-shadow: inset 0 -4px 0 var(--habil-borde);
 }
 
 .reclasificar select {
@@ -218,41 +90,15 @@
   width: 100%;
 }
 
-/* --- Estados --- */
+/* --- Estado vacío --- */
 .estado-vacio {
   margin: 2rem 0;
   padding: 1.5rem;
   border: 2px dashed var(--nolab-borde);
   border-radius: 6px;
-  text-align: center;
-  color: #555;
-}
-.aviso {
-  background: #fff2d9;
-  border: 1px solid var(--feriado-borde);
-  padding: 0.5rem 0.75rem;
-  border-radius: 4px;
-}
-.error {
-  color: #a61e4d;
 }
 
-/* --- Diálogo --- */
-.dialogo-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.dialogo {
-  background: #fff;
-  padding: 1.25rem;
-  border-radius: 8px;
-  max-width: 760px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
-}
+/* --- Diálogo de confirmación (acciones) --- */
 .dialogo-acciones {
   display: flex;
   justify-content: flex-end;
@@ -261,84 +107,6 @@
 }
 .btn-confirmar {
   font-weight: 700;
-}
-
-/* --- Situación (Fichadas de hoy, feature 010/012) — color + texto, nunca
-   solo color (mismo criterio que la leyenda del calendario). --- */
-.situacion {
-  display: inline-block;
-  padding: 0.1rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  border: 1px solid transparent;
-  white-space: nowrap;
-}
-.situacion.clave-esperando {
-  background: var(--nolab-bg);
-  color: #555;
-  border-color: var(--nolab-borde);
-}
-.situacion.clave-presente,
-.situacion.clave-completa {
-  background: #e6f7ec;
-  color: #1b7a3d;
-  border-color: #4caf50;
-}
-.situacion.clave-tarde {
-  background: var(--feriado-bg);
-  color: #915b00;
-  border-color: var(--feriado-borde);
-}
-.situacion.clave-ausente {
-  background: #fde8e8;
-  color: #b3261e;
-  border-color: #d64545;
-}
-.situacion.clave-retiro-anticipado {
-  background: #f1e9fb;
-  color: #6a3fb5;
-  border-color: #8a5fd6;
-}
-.situacion.clave-feriado-cumplido {
-  background: var(--feriado-bg);
-  color: #915b00;
-  border-color: var(--feriado-borde);
-  border-style: dashed;
-}
-.situacion.clave-no-aplica {
-  background: var(--nolab-bg);
-  color: #666;
-  border-color: var(--nolab-borde);
-}
-.situacion.clave-anomalia {
-  background: #fde8e8;
-  color: #7d1116;
-  border-color: #b3261e;
-  font-weight: 700;
-}
-/* Licencia (Justificación Paga, feature 012): distinta del rojo de una
-   ausencia sin cubrir — se lee como "cubierto", no como alerta. */
-.situacion.clave-licencia {
-  background: var(--habil-bg);
-  color: #1d4ed8;
-  border-color: var(--habil-borde);
-}
-.situacion.clave-desconocida {
-  background: var(--nolab-bg);
-  color: #555;
-  border-color: var(--nolab-borde);
-}
-
-/* Tinte suave de fila para las situaciones que más necesitan atención. */
-.fila-fichada.situacion-ausente {
-  background: #fff7f7;
-}
-.fila-fichada.situacion-anomalia {
-  background: #fff0f0;
-}
-.fila-fichada.situacion-licencia {
-  background: #f5f8ff;
 }
 
 /* Accesibilidad: etiqueta solo para lectores de pantalla. */

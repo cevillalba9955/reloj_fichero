@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Button, Alert, Space } from 'antd';
 
 // feature 010 (US4) — Botón "Consultar reloj": dispara la consulta manual de
 // fichadas nuevas, se deshabilita mientras está en curso (además del
@@ -30,20 +31,21 @@ export default function BotonConsultarReloj({ onConsultar }) {
   }
 
   return (
-    <div className="consultar-reloj">
-      <button type="button" onClick={consultar} disabled={enCurso}>
+    <Space className="consultar-reloj">
+      <Button onClick={consultar} disabled={enCurso} loading={enCurso}>
         {enCurso ? 'Consultando…' : 'Consultar reloj'}
-      </button>
+      </Button>
       {aviso && (
-        <span className="aviso" role="status">
-          {aviso}
-        </span>
+        <Alert type="success" showIcon message={aviso} role="status" />
       )}
       {error && (
-        <span className="error" role="alert">
-          No se pudo consultar el reloj: {error}
-        </span>
+        <Alert
+          type="error"
+          showIcon
+          message={`No se pudo consultar el reloj: ${error}`}
+          role="alert"
+        />
       )}
-    </div>
+    </Space>
   );
 }

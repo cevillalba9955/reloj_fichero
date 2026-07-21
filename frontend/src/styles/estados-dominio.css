@@ -1,0 +1,110 @@
+/* feature 007+ — Semántica de dominio (no de UI): colores/clases que
+   representan estados del negocio (hábil/feriado/no laborable/hoy, período
+   activo, situaciones críticas de fichadas). Las distinciones NO dependen solo
+   del color (FR-004): cada estado tiene además etiqueta textual y/o forma
+   (borde, patrón). Se mantienen separadas de los tokens de antd (`theme/
+   tokens.js`) porque representan conceptos de negocio, no severidad de UI
+   (un feriado no es un "warning"). */
+
+:root {
+  --habil-bg: #e6f0ff;
+  --habil-borde: #3366cc;
+  --feriado-bg: #fff2d9;
+  --feriado-borde: #cc8800;
+  --nolab-bg: #f0f0f0;
+  --nolab-borde: #bbbbbb;
+  --hoy-anillo: #d6336c;
+}
+
+/* --- Calendario: resaltado de hábiles/feriados/no laborables (FR-005) --- */
+.resaltado-habil {
+  background: var(--habil-bg);
+  border-color: var(--habil-borde);
+}
+.resaltado-feriado {
+  background: var(--feriado-bg);
+  border-color: var(--feriado-borde);
+  border-style: dashed; /* forma: distingue feriado sin depender del color */
+}
+.resaltado-no-laborable {
+  background: var(--nolab-bg);
+  color: #666;
+}
+
+/* Hoy: anillo (forma), no solo color (FR-007). */
+.celda.es-hoy {
+  outline: 3px double var(--hoy-anillo);
+  outline-offset: 1px;
+}
+.marca-hoy {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  color: var(--hoy-anillo);
+  font-size: 0.7rem;
+}
+
+/* Pertenencia al período activo: banda inferior (estructura), diferente de la
+   clasificación (FR-009). */
+.celda.en-periodo {
+  box-shadow: inset 0 -4px 0 var(--habil-borde);
+}
+
+/* --- Encabezado del período activo --- */
+.periodo-activo {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid var(--habil-borde);
+  background: #fafafa;
+}
+.periodo-activo.sin-periodo {
+  border-left-color: var(--nolab-borde);
+  color: #666;
+  font-style: italic;
+}
+
+/* --- Leyenda --- */
+.leyenda {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.leyenda-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}
+.leyenda-desc {
+  color: #555;
+}
+
+/* Tinte suave de fila para las situaciones de fichadas que más necesitan
+   atención (el color del Tag ya distingue la situación; esto además marca la
+   fila completa). */
+.fila-fichada.situacion-ausente {
+  background: #fff7f7;
+}
+.fila-fichada.situacion-anomalia {
+  background: #fff0f0;
+}
+.fila-fichada.situacion-licencia {
+  background: #f5f8ff;
+}
+
+/* --- Avisos y errores de dominio --- */
+.aviso {
+  background: #fff2d9;
+  border: 1px solid var(--feriado-borde);
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+}
+.error {
+  color: #a61e4d;
+}

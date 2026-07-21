@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Input, Button, Alert, Space } from 'antd';
 
 // feature 010 (US2) — Corrección manual de entrada/salida con justificación
 // OBLIGATORIA (FR-004): "Guardar" queda deshabilitado sin motivo. Componente de
@@ -40,8 +41,7 @@ export default function FormularioCorreccion({ fila, onGuardar, onCancelar }) {
       <h3>Corregir horarios — {fila.nombre ?? `legajo ${fila.legajo}`}</h3>
       <label>
         Entrada
-        <input
-          type="text"
+        <Input
           placeholder="HH:MM"
           value={entrada}
           onChange={(ev) => setEntrada(ev.target.value)}
@@ -49,8 +49,7 @@ export default function FormularioCorreccion({ fila, onGuardar, onCancelar }) {
       </label>
       <label>
         Salida
-        <input
-          type="text"
+        <Input
           placeholder="HH:MM"
           value={salida}
           onChange={(ev) => setSalida(ev.target.value)}
@@ -58,21 +57,15 @@ export default function FormularioCorreccion({ fila, onGuardar, onCancelar }) {
       </label>
       <label>
         Motivo (obligatorio)
-        <textarea value={motivo} onChange={(ev) => setMotivo(ev.target.value)} />
+        <Input.TextArea value={motivo} onChange={(ev) => setMotivo(ev.target.value)} />
       </label>
-      {error && (
-        <p className="error" role="alert">
-          No se pudo guardar: {error}
-        </p>
-      )}
-      <div className="acciones">
-        <button type="submit" disabled={!puedeGuardar}>
+      {error && <Alert type="error" showIcon role="alert" message={`No se pudo guardar: ${error}`} />}
+      <Space className="acciones">
+        <Button type="primary" htmlType="submit" disabled={!puedeGuardar}>
           Guardar
-        </button>
-        <button type="button" onClick={onCancelar}>
-          Cancelar
-        </button>
-      </div>
+        </Button>
+        <Button onClick={onCancelar}>Cancelar</Button>
+      </Space>
     </form>
   );
 }

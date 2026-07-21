@@ -13,7 +13,7 @@ test('mientras la consulta está en curso, el botón queda deshabilitado', async
   render(<BotonConsultarReloj onConsultar={onConsultar} />);
 
   fireEvent.click(screen.getByText('Consultar reloj'));
-  expect(screen.getByText('Consultando…')).toBeDisabled();
+  expect(screen.getByRole('button', { name: /Consultando/ })).toBeDisabled();
   // Un segundo clic no dispara otra consulta.
   fireEvent.click(screen.getByText('Consultando…'));
   expect(onConsultar).toHaveBeenCalledTimes(1);

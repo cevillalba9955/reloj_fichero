@@ -5,6 +5,7 @@ import PaginaFichadasHoy from './components/PaginaFichadasHoy.jsx';
 import { crearClienteFichadasHoy } from './api/fichadas-hoy-client.js';
 import PaginaResumenPeriodo from './components/PaginaResumenPeriodo.jsx';
 import { crearClienteResumenPeriodo } from './api/resumen-periodo-client.js';
+import AppShell from './components/AppShell.jsx';
 
 // feature 007 — Pantalla principal. Orquesta la carga del último mes generado,
 // los estados (cargando / con datos / vacío global / vacío de un mes / error),
@@ -28,42 +29,12 @@ export default function App({
   const [pestania, setPestania] = useState('fichadas-hoy');
 
   return (
-    <main className="app">
-      <header className="app-header">
-        <h1>Presentismo</h1>
-        <nav className="pestanias" aria-label="Secciones">
-          <button
-            type="button"
-            className={pestania === 'calendario' ? 'pestania activa' : 'pestania'}
-            aria-pressed={pestania === 'calendario'}
-            onClick={() => setPestania('calendario')}
-          >
-            Calendario
-          </button>
-          <button
-            type="button"
-            className={pestania === 'fichadas-hoy' ? 'pestania activa' : 'pestania'}
-            aria-pressed={pestania === 'fichadas-hoy'}
-            onClick={() => setPestania('fichadas-hoy')}
-          >
-            Fichadas de hoy
-          </button>
-          <button
-            type="button"
-            className={pestania === 'resumen-periodo' ? 'pestania activa' : 'pestania'}
-            aria-pressed={pestania === 'resumen-periodo'}
-            onClick={() => setPestania('resumen-periodo')}
-          >
-            Resumen período
-          </button>
-        </nav>
-      </header>
-
+    <AppShell seccion={pestania} onCambiarSeccion={setPestania}>
       {pestania === 'fichadas-hoy' && <PaginaFichadasHoy cliente={clienteFichadas} />}
 
       {pestania === 'calendario' && <PaginaCalendario cliente={clienteCalendario} />}
 
       {pestania === 'resumen-periodo' && <PaginaResumenPeriodo cliente={clienteResumenPeriodo} />}
-    </main>
+    </AppShell>
   );
 }

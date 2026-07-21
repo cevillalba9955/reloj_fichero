@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import PaginaFichadasHoy from './PaginaFichadasHoy.jsx';
+import { seleccionarOpcion } from '../test-utils/antd.js';
 
 // T016 (feature 010, US1) — la página carga la vista al montar, muestra el
 // error con reintento, y renderiza la tabla con los datos recibidos.
@@ -62,7 +63,7 @@ test('navegar al día anterior recarga la vista de esa fecha', async () => {
   render(<PaginaFichadasHoy cliente={cliente} />);
   expect(await screen.findByText(/Fichadas del 2026-07-16/)).toBeInTheDocument();
 
-  fireEvent.click(screen.getByText('← Día anterior'));
+  fireEvent.click(screen.getByText('Día anterior'));
   expect(await screen.findByText(/Fichadas del 2026-07-15/)).toBeInTheDocument();
   expect(cliente.obtenerFichadasHoy).toHaveBeenLastCalledWith('2026-07-15');
 });
@@ -131,7 +132,7 @@ test('"Justificar ausencia" abre el diálogo, carga motivos recién al abrir y g
 
   fireEvent.change(within(dialogo).getByLabelText('Legajo'), { target: { value: '5' } });
   fireEvent.change(within(dialogo).getByLabelText(/^Fecha/), { target: { value: '2026-08-03' } });
-  fireEvent.change(within(dialogo).getByLabelText(/Motivo/), { target: { value: 'vacaciones' } });
+  await seleccionarOpcion(/Motivo/, 'Vacaciones (Paga)');
   fireEvent.click(within(dialogo).getByText('Guardar'));
 
   await waitFor(() =>
@@ -177,7 +178,7 @@ test('el botón "Justificación" de una fila precarga legajo y la fecha del día
   // verificación manual — la fila solo tiene legajo/nombre/entrada/salida/...).
   expect(within(dialogo).getByLabelText(/^Fecha/)).toHaveValue('2026-07-20');
 
-  fireEvent.change(within(dialogo).getByLabelText(/Motivo/), { target: { value: 'vacaciones' } });
+  await seleccionarOpcion(/Motivo/, 'Vacaciones (Paga)');
   fireEvent.click(within(dialogo).getByText('Guardar'));
 
   await waitFor(() =>

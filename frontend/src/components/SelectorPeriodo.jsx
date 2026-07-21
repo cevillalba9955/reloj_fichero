@@ -1,3 +1,5 @@
+import { Select } from 'antd';
+
 // feature 011 (US3) — Selector de período: solo ofrece los períodos con
 // calendario generado (FR-002), recibidos del servidor. En modo quincenal
 // (FR-013) el servidor manda quincenas 'YYYYMM-Q1'/'YYYYMM-Q2'; el componente
@@ -21,19 +23,20 @@ export function etiquetaPeriodo(periodo) {
 }
 
 export default function SelectorPeriodo({ periodos, periodo, onCambiar }) {
+  const opciones = [...periodos]
+    .sort()
+    .reverse()
+    .map((p) => ({ value: p, label: etiquetaPeriodo(p) }));
   return (
     <label className="selector-periodo">
       Período
-      <select value={periodo} onChange={(ev) => onCambiar(ev.target.value)}>
-        {[...periodos]
-          .sort()
-          .reverse()
-          .map((p) => (
-            <option key={p} value={p}>
-              {etiquetaPeriodo(p)}
-            </option>
-          ))}
-      </select>
+      <Select
+        aria-label="Período"
+        value={periodo}
+        onChange={(valor) => onCambiar(valor)}
+        options={opciones}
+        style={{ minWidth: 220 }}
+      />
     </label>
   );
 }

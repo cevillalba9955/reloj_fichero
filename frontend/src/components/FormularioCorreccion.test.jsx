@@ -20,14 +20,14 @@ test('sin motivo, "Guardar" está deshabilitado y no se envía nada', () => {
   const onGuardar = vi.fn();
   render(<FormularioCorreccion fila={fila} onGuardar={onGuardar} onCancelar={vi.fn()} />);
 
-  const guardar = screen.getByText('Guardar');
+  const guardar = screen.getByRole('button', { name: 'Guardar' });
   expect(guardar).toBeDisabled();
   fireEvent.click(guardar);
   expect(onGuardar).not.toHaveBeenCalled();
 
   // Un motivo de solo espacios tampoco habilita.
   fireEvent.change(screen.getByLabelText(/Motivo/), { target: { value: '   ' } });
-  expect(screen.getByText('Guardar')).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Guardar' })).toBeDisabled();
 });
 
 test('con motivo, envía entrada/salida y el motivo recortado', async () => {

@@ -1,8 +1,12 @@
+import { Table, Tag, Button, Space, Empty } from 'antd';
+import { ESTADOS_FICHADA } from '../theme/estados.js';
+
 // feature 010 (US1) — Tabla de fichadas del día: una fila por empleado esperado
 // con legajo, nombre, entrada, salida, horas trabajadas y situación. La
-// distinción visual de la situación va por clase CSS + texto legible (mismo
-// criterio de accesibilidad que Leyenda.jsx: el significado nunca depende solo
-// del color). Componente de presentación puro: no llama a la API (Principio I).
+// distinción visual de la situación va por `Tag` (color + ícono) + texto
+// legible (mismo criterio de accesibilidad que Leyenda.jsx: el significado
+// nunca depende solo del color). Componente de presentación puro: no llama a
+// la API (Principio I).
 
 const CLAVE_SITUACION = {
   ESPERANDO: 'esperando',
@@ -54,85 +58,119 @@ export default function TablaFichadasHoy({
   onRevertirJustificacion = null,
 }) {
   if (!empleados || empleados.length === 0) {
-    return <p className="fichadas-vacio">No hay empleados esperados para hoy.</p>;
+    return <Empty description="No hay empleados esperados para hoy." />;
   }
-  const conAcciones = Boolean(onCorregir || onPausaRetiro || onJustificar);
-  return (
-    <table width="100%" border="1" style={{ textAlign: 'center' }} className="tabla-fichadas" aria-label="Fichadas de hoy">
-      <thead>
-        <tr>
-          <th scope="col">Leg</th>
-          <th scope="col">Empleado</th>
-          <th scope="col">Entrada</th>
-          <th scope="col" colSpan="2">Pausa</th>
-          <th scope="col">Salida</th>
-          <th scope="col">Horas</th>
-          <th scope="col">Situación</th>
-          {conAcciones && <th scope="col">Acciones</th>}
-        </tr>
-      </thead>
-      <tbody>
-        {empleados.map((fila) => {
-          const licencia = esLicencia(fila);
-          const clave = licencia ? 'licencia' : CLAVE_SITUACION[fila.situacion] ?? 'desconocida';
-          const etiquetaSituacion = licencia ? 'LICENCIA' : ETIQUETA_SITUACION[fila.situacion] ?? fila.situacion;
-          const { principal, adicionales } = pausaPrincipalDe(fila.pausas);
-          return (
-            <tr key={fila.legajo} className={`fila-fichada situacion-${clave}`}>
-              <td>{fila.legajo}</td>
-              <td>{fila.nombre ?? '—'}</td>
-              <td>{fila.entrada ?? '—'}</td>
-              <td>{principal?.desde ?? '—'}</td>
-              <td>
+  const conAcciones = Boolean(onCorregir || onPausaRetiro || onJustificar || onRevertirJustificacion);
+
+  const columnas = [
+    { title: 'Leg', dataIndex: 'legajo', key: 'legajo' },
+    { title: 'Empleado', key: 'nombre', render: (_, fila) => fila.nombre ?? '—' },
+    { title: 'Entrada', key: 'entrada', render: (_, fila) => fila.entrada ?? '—' },
+    {
+      title: 'Pausa',
+      children: [
+        {
+          title: '',
+          key: 'pausaDesde',
+          render: (_, fila) => pausaPrincipalDe(fila.pausas).principal?.desde ?? '—',
+        },
+        {
+          title: '',
+          key: 'pausaHasta',
+          render: (_, fila) => {
+            const { principal, adicionales } = pausaPrincipalDe(fila.pausas);
+            return (
+              <>
                 {principal?.hasta ?? '—'}
                 {adicionales > 0 && <span className="pausas-adicionales"> +{adicionales}</span>}
-              </td>
-              <td>{fila.salida ?? '—'}</td>
-              <td>{formatoHoras(fila.horasTrabajadas)}</td>
-              <td>
-                <span className={`situacion clave-${clave}`}>
-                  {!fila.justificacion && etiquetaSituacion}
-                  {fila.justificacion && fila.justificacion.etiquetaMotivo}
-                </span>
-                {fila.correccionVigente && <span className="marca-correccion"> (*)</span>}
-                {fila.requiereJustificacionRevision && (
-                  <span className="marca-revision" role="alert">
-                    {' '}
-                    ⚠ revisar: llegaron fichadas sobre un día justificado
-                  </span>
-                )}
-                {fila.anomalias?.length > 0 && (
-                  <span className="anomalias"> {fila.anomalias.join('; ')}</span>
-                )}
-              </td>
-              {conAcciones && (
-                <td>
-                  {onCorregir && fila.situacion !== 'ANOMALIA' && !fila.justificacion && (
-                    <button type="button" onClick={() => onCorregir(fila)}>
-                      Corregir
-                    </button>
-                  )}
-                  {onPausaRetiro && fila.situacion !== 'ANOMALIA' && fila.entrada != null && (
-                    <button type="button" onClick={() => onPausaRetiro(fila)}>
-                      Excepcion
-                    </button>
-                  )}
-                  {onJustificar && fila.situacion === 'AUSENTE' && !fila.justificacion && (
-                    <button type="button" onClick={() => onJustificar(fila)}>
-                      Justificación
-                    </button>
-                  )}
-                  {onRevertirJustificacion && fila.justificacion && (
-                    <button type="button" onClick={() => onRevertirJustificacion(fila)}>
-                      Revertir justificación
-                    </button>
-                  )}
-                </td>
-              )}
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+              </>
+            );
+          },
+        },
+      ],
+    },
+    { title: 'Salida', key: 'salida', render: (_, fila) => fila.salida ?? '—' },
+    {
+      title: 'Horas',
+      key: 'horas',
+      render: (_, fila) => formatoHoras(fila.horasTrabajadas),
+    },
+    {
+      title: 'Situación',
+      key: 'situacion',
+      render: (_, fila) => {
+        const licencia = esLicencia(fila);
+        const clave = licencia ? 'licencia' : CLAVE_SITUACION[fila.situacion] ?? 'desconocida';
+        const etiquetaSituacion = licencia ? 'LICENCIA' : ETIQUETA_SITUACION[fila.situacion] ?? fila.situacion;
+        const { color, icon: Icon } = ESTADOS_FICHADA[clave] ?? ESTADOS_FICHADA.desconocida;
+        return (
+          <>
+            <Tag color={color} icon={<Icon />}>
+              {etiquetaSituacion}
+            </Tag>
+            {fila.justificacion && <span> {fila.justificacion.etiquetaMotivo}</span>}
+            {fila.correccionVigente && <span className="marca-correccion"> (*)</span>}
+            {fila.requiereJustificacionRevision && (
+              <span className="marca-revision" role="alert">
+                {' '}
+                ⚠ revisar: llegaron fichadas sobre un día justificado
+              </span>
+            )}
+            {fila.anomalias?.length > 0 && (
+              <span className="anomalias"> {fila.anomalias.join('; ')}</span>
+            )}
+          </>
+        );
+      },
+    },
+  ];
+
+  if (conAcciones) {
+    columnas.push({
+      title: 'Acciones',
+      key: 'acciones',
+      render: (_, fila) => (
+        <Space size="small">
+          {onCorregir && fila.situacion !== 'ANOMALIA' && !fila.justificacion && (
+            <Button size="small" onClick={() => onCorregir(fila)}>
+              Corregir
+            </Button>
+          )}
+          {onPausaRetiro && fila.situacion !== 'ANOMALIA' && fila.entrada != null && (
+            <Button size="small" onClick={() => onPausaRetiro(fila)}>
+              Excepcion
+            </Button>
+          )}
+          {onJustificar && fila.situacion === 'AUSENTE' && !fila.justificacion && (
+            <Button size="small" onClick={() => onJustificar(fila)}>
+              Justificación
+            </Button>
+          )}
+          {onRevertirJustificacion && fila.justificacion && (
+            <Button size="small" onClick={() => onRevertirJustificacion(fila)}>
+              Revertir justificación
+            </Button>
+          )}
+        </Space>
+      ),
+    });
+  }
+
+  return (
+    <Table
+      aria-label="Fichadas de hoy"
+      className="tabla-fichadas"
+      size="small"
+      bordered
+      pagination={false}
+      rowKey="legajo"
+      columns={columnas}
+      dataSource={empleados}
+      rowClassName={(fila) => {
+        const licencia = esLicencia(fila);
+        const clave = licencia ? 'licencia' : CLAVE_SITUACION[fila.situacion] ?? 'desconocida';
+        return `fila-fichada situacion-${clave}`;
+      }}
+    />
   );
 }

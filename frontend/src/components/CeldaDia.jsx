@@ -1,3 +1,6 @@
+import { Tag } from 'antd';
+import { ESTADOS_CALENDARIO } from '../theme/estados.js';
+
 // feature 007 — Celda de un día en la grilla (US1/US2/US3). Muestra la
 // clasificación con color + un 2º recurso perceptible (etiqueta textual +
 // aria-label), FR-003/004. Resalta hábiles/feriados (FR-005), marca hoy por
@@ -34,7 +37,9 @@ export default function CeldaDia({ dia, onReclasificar }) {
       data-en-periodo={dia.enPeriodoActivo ? 'true' : 'false'}
     >
       <span className="dia-numero">{dia.dd}</span>
-      <span className="dia-clasificacion">{etiqueta}</span>
+      <Tag className="dia-clasificacion" color={ESTADOS_CALENDARIO[dia.resaltado]?.color}>
+        {etiqueta}
+      </Tag>
       {dia.esHoy && (
         <span className="marca-hoy" aria-hidden="true" title="Hoy">
           ●

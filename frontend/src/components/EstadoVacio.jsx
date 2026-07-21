@@ -1,3 +1,5 @@
+import { Empty, Button, Typography } from 'antd';
+
 // feature 007/008 — Estado vacío. Se usa cuando no hay ningún calendario
 // generado o cuando el mes navegado no tiene calendario. No ofrece reclasificar
 // (FR-018). La generación (feature 008) solo se ofrece si el período es
@@ -11,19 +13,19 @@ export default function EstadoVacio({ mensaje, periodo = null, generables = [], 
 
   return (
     <div className="estado-vacio" role="status">
-      <p>{mensaje}</p>
+      <Empty description={mensaje}>
+        {esGenerable && onGenerar && (
+          <Button type="primary" onClick={onGenerar}>
+            Generar calendario
+          </Button>
+        )}
 
-      {esGenerable && onGenerar && (
-        <button type="button" onClick={onGenerar}>
-          Generar calendario
-        </button>
-      )}
-
-      {periodo != null && !esGenerable && hayFrontera && (
-        <p className="estado-vacio-hint">
-          Para no dejar huecos, primero generá: {lista.join(' o ')}.
-        </p>
-      )}
+        {periodo != null && !esGenerable && hayFrontera && (
+          <Typography.Paragraph className="estado-vacio-hint" type="secondary">
+            Para no dejar huecos, primero generá: {lista.join(' o ')}.
+          </Typography.Paragraph>
+        )}
+      </Empty>
     </div>
   );
 }

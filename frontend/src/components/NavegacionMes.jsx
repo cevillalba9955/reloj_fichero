@@ -1,3 +1,6 @@
+import { Space, Button } from 'antd';
+import { LeftOutlined, RightOutlined, UndoOutlined } from '@ant-design/icons';
+
 // feature 007/008 — Navegación entre meses (US4 feature 007; US3 feature 008).
 // Calcula el YYYYMM adyacente y permite volver al mes en curso (hoy). La feature
 // 008 acota la navegación: solo se puede pisar un mes ya generado o un mes de la
@@ -25,32 +28,30 @@ export default function NavegacionMes({ periodo, mesActual = null, periodos = []
   const volverDeshabilitado = !mesActual || periodo === mesActual || !alcanzable(mesActual);
 
   return (
-    <nav className="navegacion" aria-label="Navegación de meses" style={{ justifyContent: 'end' }}>
-      <button
-        type="button"
-        aria-label="Mes anterior"
-        disabled={!alcanzable(anterior)}
-        onClick={() => onIr(anterior)}
-      >
-        ◀
-      </button>
-      <span className="nav-periodo">{periodo}</span>
-      <button
-        type="button"
-        aria-label="Mes siguiente"
-        disabled={!alcanzable(siguiente)}
-        onClick={() => onIr(siguiente)}
-      >
-        ▶
-      </button>
-      <button
-        type="button"
-        className="btn-volver"
-        disabled={volverDeshabilitado}
-        onClick={() => mesActual && onIr(mesActual)}
-      >
-        Volver ({mesActual ?? '—'})
-      </button>
+    <nav className="navegacion" aria-label="Navegación de meses" style={{ display: 'flex', justifyContent: 'end' }}>
+      <Space>
+        <Button
+          aria-label="Mes anterior"
+          icon={<LeftOutlined />}
+          disabled={!alcanzable(anterior)}
+          onClick={() => onIr(anterior)}
+        />
+        <span className="nav-periodo">{periodo}</span>
+        <Button
+          aria-label="Mes siguiente"
+          icon={<RightOutlined />}
+          disabled={!alcanzable(siguiente)}
+          onClick={() => onIr(siguiente)}
+        />
+        <Button
+          className="btn-volver"
+          icon={<UndoOutlined />}
+          disabled={volverDeshabilitado}
+          onClick={() => mesActual && onIr(mesActual)}
+        >
+          Volver ({mesActual ?? '—'})
+        </Button>
+      </Space>
     </nav>
   );
 }

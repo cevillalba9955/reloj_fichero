@@ -13,9 +13,9 @@ test('con anterior y siguiente disponibles, ambos botones navegan a su destino',
       onNavegar={onNavegar}
     />,
   );
-  fireEvent.click(screen.getByText('← Día anterior'));
+  fireEvent.click(screen.getByText('Día anterior'));
   expect(onNavegar).toHaveBeenCalledWith('2026-07-16');
-  fireEvent.click(screen.getByText('Día siguiente →'));
+  fireEvent.click(screen.getByText('Día siguiente'));
   expect(onNavegar).toHaveBeenCalledWith('2026-07-18');
 });
 
@@ -26,8 +26,8 @@ test('en hoy, "Día siguiente" queda deshabilitado (siguiente: null)', () => {
       onNavegar={vi.fn()}
     />,
   );
-  expect(screen.getByText('Día siguiente →')).toBeDisabled();
-  expect(screen.getByText('← Día anterior')).toBeEnabled();
+  expect(screen.getByRole('button', { name: /Día siguiente/ })).toBeDisabled();
+  expect(screen.getByRole('button', { name: /Día anterior/ })).toBeEnabled();
 });
 
 test('sin día anterior navegable, "Día anterior" queda deshabilitado', () => {
@@ -37,7 +37,7 @@ test('sin día anterior navegable, "Día anterior" queda deshabilitado', () => {
       onNavegar={vi.fn()}
     />,
   );
-  expect(screen.getByText('← Día anterior')).toBeDisabled();
+  expect(screen.getByRole('button', { name: /Día anterior/ })).toBeDisabled();
 });
 
 test('sin bloque navegacion no renderiza nada', () => {

@@ -29,7 +29,7 @@ test('la tecla Escape cierra el diálogo', () => {
 
 test('el click en el backdrop cierra; el click dentro del contenido no', () => {
   const onCerrar = vi.fn();
-  const { container } = render(
+  render(
     <Dialogo etiqueta="x" onCerrar={onCerrar}>
       <p>contenido</p>
     </Dialogo>,
@@ -37,6 +37,11 @@ test('el click en el backdrop cierra; el click dentro del contenido no', () => {
   fireEvent.click(screen.getByText('contenido'));
   expect(onCerrar).not.toHaveBeenCalled();
 
-  fireEvent.click(container.querySelector('.dialogo-backdrop'));
+  // El Modal se monta en un portal (document.body); el cierre por click-afuera
+  // de antd requiere que el mousedown Y el click ocurran sobre el wrapper
+  // mismo (no sobre el contenido), igual que el backdrop manual anterior.
+  const wrap = document.querySelector('.dialogo-backdrop');
+  fireEvent.mouseDown(wrap);
+  fireEvent.click(wrap);
   expect(onCerrar).toHaveBeenCalledTimes(1);
 });

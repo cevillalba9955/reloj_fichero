@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Input, Select, Button, Alert, Space } from 'antd';
 
 // feature 012 (US1) — Registra el motivo de una ausencia para un día o un
 // rango de días, con motivo OBLIGATORIO elegido de una lista cerrada (FR-003,
@@ -57,8 +58,7 @@ export default function FormularioJustificacion({ fila = null, motivos = [], onG
       {!fila && (
         <label>
           Legajo
-          <input
-            type="text"
+          <Input
             inputMode="numeric"
             value={legajo}
             onChange={(ev) => setLegajo(ev.target.value)}
@@ -67,7 +67,7 @@ export default function FormularioJustificacion({ fila = null, motivos = [], onG
       )}
       <label>
         Fecha{!fila && ' (o desde, para un rango)'}
-        <input
+        <Input
           type="date"
           value={fecha}
           onChange={(ev) => setFecha(ev.target.value)}
@@ -76,39 +76,36 @@ export default function FormularioJustificacion({ fila = null, motivos = [], onG
       </label>
       <label>
         Hasta (opcional, para varios días)
-        <input type="date" value={hasta} onChange={(ev) => setHasta(ev.target.value)} />
+        <Input type="date" value={hasta} onChange={(ev) => setHasta(ev.target.value)} />
       </label>
       <label>
         Motivo (obligatorio)
-        <select value={motivoId} onChange={(ev) => setMotivoId(ev.target.value)}>
-          <option value="">Seleccioná un motivo…</option>
-          {motivos.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.etiqueta} ({m.tipoPago})
-            </option>
-          ))}
-        </select>
+        <Select
+          aria-label="Motivo (obligatorio)"
+          value={motivoId || undefined}
+          placeholder="Seleccioná un motivo…"
+          onChange={(valor) => setMotivoId(valor)}
+          options={motivos.map((m) => ({ value: m.id, label: `${m.etiqueta} (${m.tipoPago})` }))}
+          style={{ minWidth: 240 }}
+        />
       </label>
-      {error && (
-        <p className="error" role="alert">
-          No se pudo guardar: {error}
-        </p>
-      )}
+      {error && <Alert type="error" showIcon role="alert" message={`No se pudo guardar: ${error}`} />}
       {resultado && (
-        <p className="resultado-justificacion" role="status">
-          {resultado.registradas.length} día(s) justificado(s)
-          {resultado.omitidas?.length > 0 && `, ${resultado.omitidas.length} omitido(s) (no laborables)`}
-          {resultado.noAplicables?.length > 0 && `, ${resultado.noAplicables.length} no aplicable(s)`}.
-        </p>
+        <Alert
+          type="success"
+          showIcon
+          role="status"
+          message={`${resultado.registradas.length} día(s) justificado(s)${
+            resultado.omitidas?.length > 0 ? `, ${resultado.omitidas.length} omitido(s) (no laborables)` : ''
+          }${resultado.noAplicables?.length > 0 ? `, ${resultado.noAplicables.length} no aplicable(s)` : ''}.`}
+        />
       )}
-      <div className="acciones">
-        <button type="submit" disabled={!puedeGuardar}>
+      <Space className="acciones">
+        <Button type="primary" htmlType="submit" disabled={!puedeGuardar}>
           Guardar
-        </button>
-        <button type="button" onClick={onCancelar}>
-          {resultado ? 'Cerrar' : 'Cancelar'}
-        </button>
-      </div>
+        </Button>
+        <Button onClick={onCancelar}>{resultado ? 'Cerrar' : 'Cancelar'}</Button>
+      </Space>
     </form>
   );
 }

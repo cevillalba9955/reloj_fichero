@@ -39,7 +39,7 @@ test('"volver al mes en curso" queda deshabilitado si ya estamos en el mes actua
   render(
     <NavegacionMes periodo="202607" mesActual="202607" periodos={['202607']} onIr={onIr} />,
   );
-  expect(screen.getByText(/Volver/)).toBeDisabled();
+  expect(screen.getByRole('button', { name: /Volver/ })).toBeDisabled();
 });
 
 test('"volver al mes en curso" deshabilitado si el mes actual no es alcanzable (evita callejón sin salida)', () => {
@@ -54,7 +54,7 @@ test('"volver al mes en curso" deshabilitado si el mes actual no es alcanzable (
       onIr={onIr}
     />,
   );
-  expect(screen.getByText(/Volver/)).toBeDisabled();
+  expect(screen.getByRole('button', { name: /Volver/ })).toBeDisabled();
 });
 
 // US3 (feature 008) — el "siguiente" se puede pisar hasta la frontera generable,

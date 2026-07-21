@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import PaginaResumenPeriodo from './PaginaResumenPeriodo.jsx';
+import { seleccionarOpcion } from '../test-utils/antd.js';
 
 // T013/T024 (feature 011) — la página carga el resumen al montar, permite
 // reintentar tras un error, cambiar de período (US3) y abrir el detalle de
@@ -86,7 +87,7 @@ test('cambiar el período en el selector recarga la tabla con ese período (US3)
   render(<PaginaResumenPeriodo cliente={cliente} />);
   await screen.findByRole('table');
 
-  fireEvent.change(screen.getByLabelText('Período'), { target: { value: '202606' } });
+  await seleccionarOpcion('Período', 'Junio 2026');
   await waitFor(() => expect(cliente.obtenerResumen).toHaveBeenLastCalledWith('202606'));
   expect(await screen.findByText(/Resumen del período Junio 2026/)).toBeInTheDocument();
 });

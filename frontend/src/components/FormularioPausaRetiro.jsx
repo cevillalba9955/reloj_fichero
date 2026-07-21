@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Input, Radio, Button, Alert, Space } from 'antd';
 
 // feature 010 (US3) — Alta de pausa intermedia o retiro anticipado, ambos con
 // motivo OBLIGATORIO (FR-004): "Guardar" queda deshabilitado sin motivo.
@@ -44,79 +45,42 @@ export default function FormularioPausaRetiro({ fila, onGuardar, onCancelar }) {
 
       <fieldset>
         <legend>Tipo de registro</legend>
-        <label>
-          <input
-            type="radio"
-            name="modo"
-            value="pausa"
-            checked={modo === 'pausa'}
-            onChange={() => setModo('pausa')}
-          />
-          Pausa intermedia
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="modo"
-            value="retiro"
-            checked={modo === 'retiro'}
-            onChange={() => setModo('retiro')}
-          />
-          Retiro anticipado
-        </label>
+        <Radio.Group value={modo} onChange={(ev) => setModo(ev.target.value)}>
+          <Radio value="pausa">Pausa intermedia</Radio>
+          <Radio value="retiro">Retiro anticipado</Radio>
+        </Radio.Group>
       </fieldset>
 
       {modo === 'pausa' ? (
         <>
           <label>
             Desde
-            <input
-              type="text"
-              placeholder="HH:MM"
-              value={desde}
-              onChange={(ev) => setDesde(ev.target.value)}
-            />
+            <Input placeholder="HH:MM" value={desde} onChange={(ev) => setDesde(ev.target.value)} />
           </label>
           <label>
             Hasta
-            <input
-              type="text"
-              placeholder="HH:MM"
-              value={hasta}
-              onChange={(ev) => setHasta(ev.target.value)}
-            />
+            <Input placeholder="HH:MM" value={hasta} onChange={(ev) => setHasta(ev.target.value)} />
           </label>
         </>
       ) : (
         <label>
           Hora del retiro
-          <input
-            type="text"
-            placeholder="HH:MM"
-            value={hora}
-            onChange={(ev) => setHora(ev.target.value)}
-          />
+          <Input placeholder="HH:MM" value={hora} onChange={(ev) => setHora(ev.target.value)} />
         </label>
       )}
 
       <label>
         Motivo (obligatorio)
-        <textarea value={motivo} onChange={(ev) => setMotivo(ev.target.value)} />
+        <Input.TextArea value={motivo} onChange={(ev) => setMotivo(ev.target.value)} />
       </label>
 
-      {error && (
-        <p className="error" role="alert">
-          No se pudo guardar: {error}
-        </p>
-      )}
-      <div className="acciones">
-        <button type="submit" disabled={!puedeGuardar}>
+      {error && <Alert type="error" showIcon role="alert" message={`No se pudo guardar: ${error}`} />}
+      <Space className="acciones">
+        <Button type="primary" htmlType="submit" disabled={!puedeGuardar}>
           Guardar
-        </button>
-        <button type="button" onClick={onCancelar}>
-          Cancelar
-        </button>
-      </div>
+        </Button>
+        <Button onClick={onCancelar}>Cancelar</Button>
+      </Space>
     </form>
   );
 }
