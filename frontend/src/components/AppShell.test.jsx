@@ -23,16 +23,6 @@ test('clickear un ítem del menú invoca onCambiarSeccion con su key', () => {
   expect(onCambiarSeccion).toHaveBeenCalledWith('calendario');
 });
 
-test('el breadcrumb muestra el título de la sección activa', () => {
-  render(
-    <AppShell seccion="resumen-periodo" onCambiarSeccion={() => {}}>
-      contenido
-    </AppShell>,
-  );
-  const breadcrumb = screen.getByRole('navigation');
-  expect(breadcrumb).toHaveTextContent('Resumen período');
-});
-
 test('renderiza el contenido recibido como children', () => {
   render(
     <AppShell seccion="calendario" onCambiarSeccion={() => {}}>

@@ -1,10 +1,10 @@
-import { theme } from 'antd';
-
-// Paleta y densidad inspiradas en Oracle APEX (Universal Theme): header azul
-// marino oscuro, navegación lateral clara, bordes rectos y tablas densas con
-// líneas grises definidas, en vez del estilo redondeado por defecto de antd.
+// Paleta inspirada en Oracle APEX (Universal Theme): header azul marino
+// oscuro, navegación lateral clara, bordes rectos y tablas con líneas grises
+// definidas. Nota: NO se usa `theme.compactAlgorithm` — ese algoritmo deriva
+// todos los tamaños de fuente a partir de una escala reducida fija (~2px
+// menos que la base), así que ignora cualquier `fontSize` más grande que se
+// configure aquí.
 export const themeConfig = {
-  algorithm: theme.compactAlgorithm,
   token: {
     colorPrimary: '#2c5f8a',
     colorInfo: '#2c5f8a',
@@ -12,7 +12,7 @@ export const themeConfig = {
     colorBgLayout: '#f2f4f6',
     colorBorderSecondary: '#d9dee3',
     borderRadius: 2,
-    fontSize: 13,
+    fontSize: 16,
     fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
   },
   components: {
