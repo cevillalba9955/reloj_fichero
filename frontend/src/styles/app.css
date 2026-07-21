@@ -26,6 +26,7 @@
 .fichadas-acciones {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--gap);
   margin: 0.5rem 0;
 }

@@ -16,7 +16,7 @@ import {
 // el texto de la situación como children, nunca solo el color.
 export const ESTADOS_FICHADA = {
   esperando: { color: 'default', icon: ClockCircleOutlined },
-  presente: { color: 'processing', icon: ClockCircleOutlined },
+  presente: { color: 'success', icon: ClockCircleOutlined },
   completa: { color: 'success', icon: CheckCircleOutlined },
   tarde: { color: 'warning', icon: ExclamationCircleOutlined },
   ausente: { color: 'error', icon: CloseCircleOutlined },

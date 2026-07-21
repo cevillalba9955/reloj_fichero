@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { crearClienteFichadasHoy } from '../api/fichadas-hoy-client.js';
 import { crearClienteJustificaciones } from '../api/justificaciones-client.js';
+import { Button } from 'antd';
+
 import TablaFichadasHoy from './TablaFichadasHoy.jsx';
 import FormularioCorreccion from './FormularioCorreccion.jsx';
 import FormularioPausaRetiro from './FormularioPausaRetiro.jsx';
@@ -176,13 +178,19 @@ export default function PaginaFichadasHoy({
           </header>
           <div className="fichadas-acciones">
             {/* La consulta manual al reloj solo aplica al día actual (FR-008). */}
-            {estado.vista.navegacion?.esHoy && <BotonConsultarReloj onConsultar={consultarReloj} />}
+            {estado.vista.navegacion?.esHoy ? (
+              <BotonConsultarReloj onConsultar={consultarReloj} />
+            ) : (
+              <Button onClick={() => setFechaSeleccionada(null)}>
+                Volver al dia actual
+              </Button>
+            )}
             {/* feature 012 — entrada general para justificar un día/rango que
                 todavía no aparece en la tabla (por ejemplo, una licencia
                 futura planificada con anticipación). */}
-            <button type="button" onClick={() => abrirJustificacion({})}>
+            <Button onClick={() => abrirJustificacion({})}>
               Justificar ausencia
-            </button>
+            </Button>
           </div>
           <TablaFichadasHoy
             empleados={estado.vista.empleados}
