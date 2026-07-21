@@ -122,3 +122,17 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* --- Resumen Periodo --- */
+.resumen-periodo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.resumen-encabezado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+}
