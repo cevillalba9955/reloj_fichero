@@ -254,7 +254,7 @@ test('scheduler: consulta al reloj mientras el checkpoint esta abierto, acumula 
 
 test('scheduler: persiste las fichadas del ciclo en el archivo por período, legible por el consumidor (spec 005/US1)', async () => {
   await withTempLogDir(async (logDir) => {
-    const archiveDir = mkdtempSync(join(tmpdir(), 'rs596-fichadas-'));
+    const repoDir = mkdtempSync(join(tmpdir(), 'rs596-fichadas-'));
     const registros = [
       construirFichadaBuffer({ legajo: 1, year: 2026, month: 7, day: 7, hour: 7, minute: 0 }),
       construirFichadaBuffer({ legajo: 2, year: 2026, month: 7, day: 7, hour: 7, minute: 1 }),
@@ -273,7 +273,7 @@ test('scheduler: persiste las fichadas del ciclo en el archivo por período, leg
       logDir,
       now,
       timeoutMs: 2000,
-      persistirFichadas: createFichadasSink({ archiveDir, now }),
+      persistirFichadas: createFichadasSink({ repoDir, now }),
     });
 
     try {
@@ -282,7 +282,7 @@ test('scheduler: persiste las fichadas del ciclo en el archivo por período, leg
 
       // El consumidor (archive-fichadas-provider) lee lo que el servicio escribió,
       // en forma de dominio y sin rawHex.
-      const provider = createArchiveFichadasProvider({ archiveDir });
+      const provider = createArchiveFichadasProvider({ repoDir });
       const f1 = await provider.obtenerFichadasDelMes(1, '202607');
       const f2 = await provider.obtenerFichadasDelMes(2, '202607');
       assert.equal(f1.length, 1);
@@ -290,11 +290,11 @@ test('scheduler: persiste las fichadas del ciclo en el archivo por período, leg
       assert.ok([...f1, ...f2].every((f) => f.rawHex === undefined), 'el dominio no ve rawHex');
 
       // El archivo durable SÍ guarda rawHex (trazabilidad técnica).
-      const guardadas = cargarFichadasArchivadas({ archiveDir, periodo: '202607' });
+      const guardadas = cargarFichadasArchivadas({ repoDir, periodo: '202607' });
       assert.equal(guardadas.length, 2);
       assert.ok(guardadas.every((f) => typeof f.rawHex === 'string'));
     } finally {
-      rmSync(archiveDir, { recursive: true, force: true });
+      rmSync(repoDir, { recursive: true, force: true });
       server.close();
     }
   });
@@ -302,7 +302,7 @@ test('scheduler: persiste las fichadas del ciclo en el archivo por período, leg
 
 test('scheduler: un fallo de persistencia registra el ciclo como error y se reintenta sin perder fichadas (spec 005/FR-004)', async () => {
   await withTempLogDir(async (logDir) => {
-    const archiveDir = mkdtempSync(join(tmpdir(), 'rs596-fichadas-'));
+    const repoDir = mkdtempSync(join(tmpdir(), 'rs596-fichadas-'));
     const registros = [construirFichadaBuffer({ legajo: 1, year: 2026, month: 7, day: 7, hour: 7, minute: 0 })];
     const server = await startSchedulerMockServerConRegistros(() => registros);
     const { port } = server.address();
@@ -310,7 +310,7 @@ test('scheduler: un fallo de persistencia registra el ciclo como error y se rein
     const store = createFichadasMemoryStore();
     const checkpoint = new Checkpoint({ id: 'entrada', horaEsperada: '07:00', duracionMinutos: 30 });
 
-    const realSink = createFichadasSink({ archiveDir, now });
+    const realSink = createFichadasSink({ repoDir, now });
     let fallar = true;
     const persistirFichadas = (fichadas) => {
       if (fallar) {
@@ -334,14 +334,14 @@ test('scheduler: un fallo de persistencia registra el ciclo como error y se rein
       // Tick 1: la persistencia falla → ciclo error, nada persistido.
       await scheduler.tick();
       assert.equal(scheduler.getUltimoCiclo().resultado, 'error');
-      assert.equal(cargarFichadasArchivadas({ archiveDir, periodo: '202607' }).length, 0);
+      assert.equal(cargarFichadasArchivadas({ repoDir, periodo: '202607' }).length, 0);
 
       // Tick 2: el reloj re-reporta la misma fichada; se persiste (dedup por rawHex).
       await scheduler.tick();
       assert.equal(scheduler.getUltimoCiclo().resultado, 'success');
-      assert.equal(cargarFichadasArchivadas({ archiveDir, periodo: '202607' }).length, 1);
+      assert.equal(cargarFichadasArchivadas({ repoDir, periodo: '202607' }).length, 1);
     } finally {
-      rmSync(archiveDir, { recursive: true, force: true });
+      rmSync(repoDir, { recursive: true, force: true });
       server.close();
     }
   });

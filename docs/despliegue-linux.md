@@ -88,15 +88,21 @@ Editar `.env` con al menos:
 ```dotenv
 FICHADAS_HOST=<ip-del-reloj>            # obligatorio
 FICHADAS_PADRON=archivo
-FICHADAS_ROSTER_CONFIG=./data/presentismo/padron.json   # snapshot local del padrón
-# PRESENTISMO_FICHADAS_DIR=./data/presentismo/fichadas  # destino de la persistencia (default)
+FICHADAS_ROSTER_CONFIG=./config/active-employees.json   # padrón fijo del servicio de fichadas (no ligado a períodos)
 ```
+
+> 013-reestructurar-data-periodos: el padrón de presentismo ya NO es un archivo
+> único (`PRESENTISMO_PADRON_FILE` fue retirado); ahora es por período, siempre
+> `<PRESENTISMO_REPO_DIR>/P<periodo>/padron.json`, y las fichadas viven en
+> `<PRESENTISMO_REPO_DIR>/P<periodo>/fichadas.json` (`PRESENTISMO_FICHADAS_DIR`
+> también fue retirado). No hay nada que configurar aparte de
+> `PRESENTISMO_REPO_DIR`.
 
 Generar el **snapshot del padrón** (una vez; requiere Oracle — completar `RRHH_ORACLE_*` en
 `.env` para este paso):
 
 ```bash
-sudo -u rs956 env "PATH=$PATH" npm run presentismo -- sincronizar-padron   # crea data/presentismo/padron.json
+sudo -u rs956 env "PATH=$PATH" npm run presentismo -- sincronizar-padron   # crea data/presentismo/P<mes-en-curso>/padron.json
 ```
 
 > Alternativa sin Oracle en el servidor: generar el snapshot en otra máquina y copiar
@@ -281,10 +287,11 @@ Con el servicio de fichadas caído (o sin `FICHADAS_CONTROL_PORT`), la API web r
 `502 ERROR_CONSULTANDO_RELOJ` y la página conserva los datos ya mostrados. El puerto de control
 **no debe exponerse** fuera del host (no abrirlo en el firewall ni proxyearlo).
 
-Además, la página necesita que el contexto web lea el **snapshot del padrón**
-(`PRESENTISMO_PADRON_FILE`, default `./data/presentismo/padron.json`) para los empleados
-esperados y sus nombres, y el archivo de fichadas del período (`PRESENTISMO_FICHADAS_DIR`) —
-misma configuración `PRESENTISMO_*` de §3.
+Además, la página necesita que el contexto web lea el **snapshot del padrón del
+mes en curso** (`<PRESENTISMO_REPO_DIR>/P<periodo>/padron.json`, resuelto en cada
+petición) para los empleados esperados y sus nombres, y el archivo de fichadas
+del período (`<PRESENTISMO_REPO_DIR>/P<periodo>/fichadas.json`) — misma
+configuración `PRESENTISMO_REPO_DIR` de §3.
 
 Referencias: [research §4](../specs/010-fichadas-hoy/research.md),
 [contrato control-api](../specs/010-fichadas-hoy/contracts/control-api.md),

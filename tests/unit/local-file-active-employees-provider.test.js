@@ -5,11 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createLocalFileActiveEmployeesProvider } from '../../src/roster/local-file-active-employees-provider.js';
 import { RosterNoDisponibleError } from '../../src/roster/active-employees-provider.js';
+import { rutaCarpetaPeriodo } from '../../src/presentismo/domain/periodo-storage.js';
+import { mkdirSync } from 'node:fs';
 
-function withTempDir(fn) {
+async function withTempDir(fn) {
   const dir = mkdtempSync(join(tmpdir(), 'rs596-roster-'));
   try {
-    return fn(dir);
+    return await fn(dir);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -111,5 +113,32 @@ test('LocalFileActiveEmployeesProvider: rechaza si tras normalizar no queda ning
     writeFileSync(filePath, JSON.stringify({ empleados: [{ legajo: 0 }, { legajo: -1 }] }), 'utf8');
     const provider = createLocalFileActiveEmployeesProvider({ filePath });
     await assert.rejects(() => provider.getActiveEmployees(), RosterNoDisponibleError);
+  });
+});
+
+// --- 013-reestructurar-data-periodos (US2, FR-004): modo { repoDir, now } ---
+
+test('lanza si se pasan ambos, filePath y repoDir, o ninguno', () => {
+  assert.throws(() => createLocalFileActiveEmployeesProvider({ filePath: 'x', repoDir: 'y' }));
+  assert.throws(() => createLocalFileActiveEmployeesProvider({}));
+});
+
+test('{ repoDir, now }: resuelve P<mesActualPeriodo(now())>/padron.json en cada llamada', async () => {
+  await withTempDir(async (repoDir) => {
+    const carpetaJulio = rutaCarpetaPeriodo(repoDir, '202607');
+    const carpetaAgosto = rutaCarpetaPeriodo(repoDir, '202608');
+    mkdirSync(carpetaJulio, { recursive: true });
+    mkdirSync(carpetaAgosto, { recursive: true });
+    writeFileSync(join(carpetaJulio, 'padron.json'), JSON.stringify({ empleados: [{ legajo: 1 }] }), 'utf8');
+    writeFileSync(join(carpetaAgosto, 'padron.json'), JSON.stringify({ empleados: [{ legajo: 2 }] }), 'utf8');
+
+    let ahora = new Date(2026, 6, 15); // julio
+    const provider = createLocalFileActiveEmployeesProvider({ repoDir, now: () => ahora });
+
+    assert.deepEqual(await provider.getActiveEmployees(), [{ legajo: 1, activo: true }]);
+
+    // El reloj avanza a agosto sin recrear el provider (proceso de larga vida).
+    ahora = new Date(2026, 7, 1);
+    assert.deepEqual(await provider.getActiveEmployees(), [{ legajo: 2, activo: true }]);
   });
 });

@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { RosterNoDisponibleError } from './active-employees-provider.js';
 import { interpretarLegajo } from './legajo.js';
+import { rutaCarpetaPeriodo, ARCHIVO_PADRON } from '../presentismo/domain/periodo-storage.js';
+import { mesActualPeriodo } from '../presentismo/domain/calendario-mes.js';
 
 // Adapter que lee un archivo JSON local con el padrón de empleados activos.
 // Acepta DOS esquemas de entrada (research §4, spec 005):
@@ -10,14 +13,36 @@ import { interpretarLegajo } from './legajo.js';
 // descarta inválidos, exponiendo la forma del contrato `ActiveEmployeesProvider`
 // (`{ legajo, activo: true }[]`). Así el mismo servicio puede alimentarse del
 // snapshot local del padrón sin depender de Oracle en runtime.
-export function createLocalFileActiveEmployeesProvider({ filePath }) {
+//
+// 013-reestructurar-data-periodos (FR-004, research.md §5): DOS modos
+// mutuamente excluyentes.
+//   - `{ filePath }` (sin cambios): un archivo FIJO, ajeno al ciclo de
+//     períodos — usado por `consulta-programada.js` (`--roster-config`/
+//     `FICHADAS_ROSTER_CONFIG`), que no tiene nada que ver con el padrón por
+//     período de presentismo.
+//   - `{ repoDir, now }` (nuevo): resuelve `P<mesActualPeriodo(now())>/padron.json`
+//     en CADA llamada a `getActiveEmployees` — usado por el backend web
+//     (`activeEmployeesProvider` en `wiring.js`), que es de larga vida y debe
+//     ver el padrón del mes en curso apenas cambia el mes, sin reiniciarse.
+export function createLocalFileActiveEmployeesProvider({ filePath, repoDir, now = () => new Date() }) {
+  if ((filePath == null) === (repoDir == null)) {
+    throw new Error(
+      'createLocalFileActiveEmployeesProvider: pasá exactamente uno de "filePath" o "repoDir"',
+    );
+  }
+
+  function rutaActual() {
+    return filePath ?? join(rutaCarpetaPeriodo(repoDir, mesActualPeriodo(now())), ARCHIVO_PADRON);
+  }
+
   async function getActiveEmployees() {
+    const ruta = rutaActual();
     let contenido;
     try {
-      contenido = readFileSync(filePath, 'utf8');
+      contenido = readFileSync(ruta, 'utf8');
     } catch (err) {
       throw new RosterNoDisponibleError(
-        `No se pudo leer el padron de empleados activos desde "${filePath}": ${err.message}`
+        `No se pudo leer el padron de empleados activos desde "${ruta}": ${err.message}`
       );
     }
 
@@ -26,7 +51,7 @@ export function createLocalFileActiveEmployeesProvider({ filePath }) {
       datos = JSON.parse(contenido);
     } catch (err) {
       throw new RosterNoDisponibleError(
-        `El archivo de padron "${filePath}" no tiene JSON valido: ${err.message}`
+        `El archivo de padron "${ruta}" no tiene JSON valido: ${err.message}`
       );
     }
 
@@ -38,7 +63,7 @@ export function createLocalFileActiveEmployeesProvider({ filePath }) {
       crudos = datos.empleados.map((e) => e?.legajo);
     } else {
       throw new RosterNoDisponibleError(
-        `El archivo de padron "${filePath}" no tiene el formato esperado ` +
+        `El archivo de padron "${ruta}" no tiene el formato esperado ` +
         '({ "legajosActivos": [...] } o { "empleados": [{ "legajo" }] })'
       );
     }
@@ -54,7 +79,7 @@ export function createLocalFileActiveEmployeesProvider({ filePath }) {
 
     if (empleados.length === 0) {
       throw new RosterNoDisponibleError(
-        `El archivo de padron "${filePath}" no contiene ningun legajo activo valido`
+        `El archivo de padron "${ruta}" no contiene ningun legajo activo valido`
       );
     }
 

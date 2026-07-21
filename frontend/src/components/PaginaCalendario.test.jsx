@@ -32,6 +32,8 @@ function clienteMock(over = {}) {
     obtenerCalendario: vi.fn().mockResolvedValue(vista()),
     reclasificar: vi.fn(),
     generarCalendario: vi.fn(),
+    cerrarPeriodo: vi.fn(),
+    reabrirPeriodo: vi.fn(),
     ...over,
   };
 }
@@ -90,4 +92,36 @@ test('reclasificar: cancelar no llama a la API; confirmar sí y refresca la gril
       expect.objectContaining({ fecha: '2026-07-01', clasificacion: 'Feriado' }),
     ),
   );
+});
+
+// 013-reestructurar-data-periodos (US3) — botón cerrar/reabrir + indicador.
+test('un período abierto muestra "Cerrar período"; al hacer clic llama a cliente.cerrarPeriodo y refresca la vista', async () => {
+  const vistaCerrada = vista({ cerrado: true, cierre: { autor: 'ui', fechaHora: '2026-07-20T00:00:00.000Z' } });
+  const cliente = clienteMock({ cerrarPeriodo: vi.fn().mockResolvedValue(vistaCerrada) });
+  render(<PaginaCalendario cliente={cliente} />);
+  await screen.findByRole('grid');
+
+  expect(screen.queryByText('Período cerrado')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText('Cerrar período'));
+
+  await waitFor(() => expect(cliente.cerrarPeriodo).toHaveBeenCalledWith('202607', { autor: 'ui' }));
+  expect(await screen.findByText('Período cerrado')).toBeInTheDocument();
+  expect(screen.getByText('Reabrir período')).toBeInTheDocument();
+});
+
+test('un período cerrado muestra el indicador y "Reabrir período"; al hacer clic llama a cliente.reabrirPeriodo', async () => {
+  const vistaCerrada = vista({ cerrado: true, cierre: { autor: 'ui', fechaHora: '2026-07-20T00:00:00.000Z' } });
+  const vistaReabierta = vista({ cerrado: false });
+  const cliente = clienteMock({
+    obtenerCalendario: vi.fn().mockResolvedValue(vistaCerrada),
+    reabrirPeriodo: vi.fn().mockResolvedValue(vistaReabierta),
+  });
+  render(<PaginaCalendario cliente={cliente} />);
+  await screen.findByRole('grid');
+
+  expect(screen.getByText('Período cerrado')).toBeInTheDocument();
+  fireEvent.click(screen.getByText('Reabrir período'));
+
+  await waitFor(() => expect(cliente.reabrirPeriodo).toHaveBeenCalledWith('202607', { autor: 'ui' }));
+  await waitFor(() => expect(screen.queryByText('Período cerrado')).not.toBeInTheDocument());
 });

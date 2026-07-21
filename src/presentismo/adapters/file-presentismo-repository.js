@@ -1,17 +1,18 @@
 import { mkdirSync, readFileSync, writeFileSync, renameSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import * as ops from './presentismo-repo-ops.js';
+import { rutaCarpetaPeriodo, ARCHIVO_CALENDARIO } from '../domain/periodo-storage.js';
 
-// Adaptador de PresentismoRepository sobre archivos JSON (research §3).
-// Un archivo por período: `${repoDir}/${periodo}.json` con
+// Adaptador de PresentismoRepository sobre archivos JSON (013-reestructurar-data-periodos,
+// research §3, contracts/storage-layout.md). Una carpeta por período:
+// `${repoDir}/P${periodo}/calendario.json` con
 // { calendario, correcciones, pausas, justificaciones }. Escritura atómica
 // (temp + rename) para no corromper el estado ante un corte. NO usa Oracle
-// (Principio II).
+// (Principio II). La carpeta del período se crea de forma perezosa (recién al
+// escribir), nunca de antemano.
 export function createFilePresentismoRepository({ repoDir }) {
-  mkdirSync(repoDir, { recursive: true });
-
   function rutaDe(periodo) {
-    return join(repoDir, `${periodo}.json`);
+    return join(rutaCarpetaPeriodo(repoDir, periodo), ARCHIVO_CALENDARIO);
   }
 
   function leer(periodo) {
@@ -32,6 +33,7 @@ export function createFilePresentismoRepository({ repoDir }) {
 
   function escribir(periodo, state) {
     const ruta = rutaDe(periodo);
+    mkdirSync(rutaCarpetaPeriodo(repoDir, periodo), { recursive: true });
     const tmp = `${ruta}.tmp`;
     writeFileSync(tmp, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
     renameSync(tmp, ruta);
@@ -46,10 +48,12 @@ export function createFilePresentismoRepository({ repoDir }) {
       ops.setCalendario(state, cal);
       escribir(cal.periodo, state);
     },
-    // feature 007: enumera los períodos con calendario persistido (YYYYMM),
-    // ordenados ascendentemente. Escanea el directorio del repo; toma solo
-    // archivos `NNNNNN.json` cuyo estado tenga un `calendario` no nulo. Sin
-    // Oracle (Principios II/VI): es la base de "el último mes generado".
+    // feature 007 (013: layout por carpeta): enumera los períodos con
+    // calendario persistido (YYYYMM), ordenados ascendentemente. Escanea el
+    // directorio del repo; toma solo subcarpetas `P<periodo>` cuyo estado
+    // tenga un `calendario` no nulo, recortando el prefijo `P` al reportar el
+    // período (data-model.md). Sin Oracle (Principios II/VI): es la base de
+    // "el último mes generado".
     async listarPeriodos() {
       let entradas;
       try {
@@ -59,8 +63,8 @@ export function createFilePresentismoRepository({ repoDir }) {
       }
       const periodos = [];
       for (const ent of entradas) {
-        if (!ent.isFile()) continue;
-        const m = /^(\d{6})\.json$/.exec(ent.name);
+        if (!ent.isDirectory()) continue;
+        const m = /^P(\d{6})$/.exec(ent.name);
         if (!m) continue;
         const periodo = m[1];
         if (leer(periodo).calendario != null) periodos.push(periodo);

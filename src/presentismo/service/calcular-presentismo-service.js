@@ -1,4 +1,12 @@
-import { generarCalendario, reclasificarDia, diaDe, Clasificacion } from '../domain/calendario-mes.js';
+import {
+  generarCalendario,
+  reclasificarDia,
+  diaDe,
+  Clasificacion,
+  cerrarCalendario,
+  reabrirCalendario,
+  exigirPeriodoAbierto,
+} from '../domain/calendario-mes.js';
 import { recortar, tramosParaTipo, fechaEnTramo } from '../domain/periodo-liquidacion.js';
 import { calcularJornadaAuto, aplicarAjustes } from '../domain/jornada.js';
 import { construirResumen } from '../domain/resumen-presentismo.js';
@@ -60,6 +68,7 @@ export function createCalcularPresentismoService({
     if (!actual) {
       throw new Error(`presentismo: no existe calendario para ${periodo}; generalo primero`);
     }
+    exigirPeriodoAbierto(actual); // 013-reestructurar-data-periodos (FR-006)
     const clasificacionAnterior = actual.dias.find((d) => d.fecha === fecha)?.clasificacion ?? null;
     const nuevo = reclasificarDia(actual, fecha, clasificacion);
     await repo.guardarCalendario(nuevo);
@@ -71,6 +80,42 @@ export function createCalcularPresentismoService({
       autor: autor ?? null,
     });
     return nuevo;
+  }
+
+  // 013-reestructurar-data-periodos (US3) — cierra/reabre el período. Requiere
+  // que el calendario ya exista (mismo criterio que reclasificarDiaMes); es
+  // idempotente a nivel de dominio (cerrarCalendario/reabrirCalendario nunca
+  // lanzan por un estado ya vigente, solo actualizan autor/fecha).
+  async function cerrarPeriodoMes(periodo, autor) {
+    const actual = await repo.cargarCalendario(periodo);
+    if (!actual) {
+      throw new Error(`presentismo: no existe calendario para ${periodo}; generalo primero`);
+    }
+    const nuevo = cerrarCalendario(actual, autor);
+    await repo.guardarCalendario(nuevo);
+    logger.evento('periodo_cerrado', { periodo, autor: autor ?? null });
+    return nuevo;
+  }
+
+  async function reabrirPeriodoMes(periodo, autor) {
+    const actual = await repo.cargarCalendario(periodo);
+    if (!actual) {
+      throw new Error(`presentismo: no existe calendario para ${periodo}; generalo primero`);
+    }
+    const nuevo = reabrirCalendario(actual, autor);
+    await repo.guardarCalendario(nuevo);
+    logger.evento('periodo_reabierto', { periodo, autor: autor ?? null });
+    return nuevo;
+  }
+
+  // research.md §4 — punto único que las demás operaciones de escritura
+  // (corrección, pausa, justificación, sus reversiones) consultan antes de
+  // persistir. Si el período todavía no tiene calendario generado, no hay
+  // nada que bloquear (mismo criterio laxo que ya regía para esas
+  // operaciones antes de esta feature).
+  async function exigirPeriodoAbiertoDe(periodo) {
+    const cal = await repo.cargarCalendario(periodo);
+    if (cal) exigirPeriodoAbierto(cal);
   }
 
   // Agrupa fichadas por fecha; separa las no imputables (sin fecha, FR-008).
@@ -264,6 +309,7 @@ export function createCalcularPresentismoService({
   // US3 (004): corrección manual del total. Feature 010: acepta además la
   // corrección de la hora de entrada y/o salida en 'HH:MM' (research.md §3).
   async function cargarCorreccion({ periodo, legajo, fecha, valorCorregido, entrada, salida, autor, motivo }) {
+    await exigirPeriodoAbiertoDe(periodo); // 013-reestructurar-data-periodos (FR-006)
     const entradaCorregida = entrada != null ? parseHoraMinuto(entrada) : null;
     const salidaCorregida = salida != null ? parseHoraMinuto(salida) : null;
     // Snapshot del valor calculado actual para detectar revisión futura (FR-029).
@@ -293,6 +339,7 @@ export function createCalcularPresentismoService({
   }
 
   async function revertirCorreccion({ periodo, legajo, fecha, autor }) {
+    await exigirPeriodoAbiertoDe(periodo);
     await repo.revertirCorreccion(periodo, legajo, fecha);
     logger.evento('correccion_reversion', { periodo, legajo, dia: fecha, autor: autor ?? null });
   }
@@ -300,6 +347,7 @@ export function createCalcularPresentismoService({
   // US3 (004): pausa intermedia. Feature 010: acepta `tipo` (default
   // 'intermedia'; 'retiro_anticipado' entra por cargarRetiroAnticipado).
   async function cargarPausa({ periodo, legajo, fecha, desde, hasta, autor, motivo, tipo }) {
+    await exigirPeriodoAbiertoDe(periodo); // 013-reestructurar-data-periodos (FR-006, cubre cargarRetiroAnticipado)
     if (!(Number.isInteger(desde) && Number.isInteger(hasta) && desde < hasta)) {
       throw new Error('presentismo: pausa requiere desde < hasta (minutos-del-día)');
     }
@@ -329,6 +377,7 @@ export function createCalcularPresentismoService({
   // día (research.md §2). La hora debe ser anterior al cierre (si no, no hay
   // nada "anticipado" que descontar).
   async function cargarRetiroAnticipado({ periodo, legajo, fecha, hora, autor, motivo }) {
+    await exigirPeriodoAbiertoDe(periodo); // 013-reestructurar-data-periodos (FR-006)
     if (!Number.isInteger(hora)) {
       throw new Error('presentismo: el retiro anticipado requiere la hora en minutos-del-día');
     }
@@ -354,6 +403,7 @@ export function createCalcularPresentismoService({
   }
 
   async function revertirPausa({ periodo, id, autor }) {
+    await exigirPeriodoAbiertoDe(periodo);
     await repo.revertirPausa(periodo, id);
     logger.evento('pausa_reversion', { periodo, id, autor: autor ?? null });
   }
@@ -454,6 +504,14 @@ export function createCalcularPresentismoService({
       throw err;
     }
 
+    // 013-reestructurar-data-periodos (FR-006, research.md §4): verifica CADA
+    // período distinto entre los días elegibles antes de registrar ninguno —
+    // todo o nada, ningún día se guarda si algún período tocado está cerrado.
+    const periodosElegibles = new Set(elegibles.map((f) => periodoDeFecha(f)));
+    for (const periodo of periodosElegibles) {
+      exigirPeriodoAbierto(calendarios.get(periodo));
+    }
+
     const registradas = [];
     const fechaHora = new Date().toISOString();
     for (const f of elegibles) {
@@ -477,6 +535,7 @@ export function createCalcularPresentismoService({
 
   // feature 012 (US3) — Revierte la Justificación vigente de un legajo/día.
   async function revertirJustificacion({ periodo, legajo, fecha, autor }) {
+    await exigirPeriodoAbiertoDe(periodo); // 013-reestructurar-data-periodos (FR-006)
     const encontrada = await repo.revertirJustificacion(periodo, legajo, fecha, { autor: autor ?? null });
     if (!encontrada) {
       const err = new Error(`justificacion: no hay una Justificación vigente para el ${fecha}`);
@@ -489,6 +548,8 @@ export function createCalcularPresentismoService({
   return {
     generarCalendario: generarCalendarioMes,
     reclasificarDia: reclasificarDiaMes,
+    cerrarPeriodo: cerrarPeriodoMes,
+    reabrirPeriodo: reabrirPeriodoMes,
     calcularEmpleado,
     calcularHoy,
     calcularResumenPeriodo,

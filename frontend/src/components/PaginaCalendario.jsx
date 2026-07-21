@@ -88,7 +88,25 @@ export default function PaginaCalendario({ cliente, inicializarDesdeApp }) {
       setAviso(`No se pudo reclasificar: ${err.message}`);
     }
   }, [dialogo, cliente, periodoMostrado]);
-  
+
+  // 013-reestructurar-data-periodos (US3) — cierra/reabre el período mostrado
+  // según su estado actual; refresca la vista con la respuesta del servidor.
+  const cerrarOReabrirPeriodo = useCallback(async () => {
+    setAviso(null);
+    try {
+      const vista = estado.vista?.cerrado
+        ? await cliente.reabrirPeriodo(periodoMostrado, { autor: 'ui' })
+        : await cliente.cerrarPeriodo(periodoMostrado, { autor: 'ui' });
+      setEstado({ tipo: 'con-datos', vista });
+    } catch (err) {
+      setAviso(
+        estado.vista?.cerrado
+          ? `No se pudo reabrir el período: ${err.message}`
+          : `No se pudo cerrar el período: ${err.message}`,
+      );
+    }
+  }, [cliente, periodoMostrado, estado.vista]);
+
   return (
     <>
       {periodoMostrado && ultimo && (
@@ -142,7 +160,17 @@ export default function PaginaCalendario({ cliente, inicializarDesdeApp }) {
 
       {estado.tipo === 'con-datos' && (
         <section className="calendario">
-          <EncabezadoPeriodo periodoActivo={estado.vista.periodoActivo} />
+          <div className="encabezado-cierre-periodo">
+            <EncabezadoPeriodo periodoActivo={estado.vista.periodoActivo} />
+            {estado.vista.cerrado && (
+              <span className="indicador-periodo-cerrado" role="status">
+                Período cerrado
+              </span>
+            )}
+            <button type="button" onClick={cerrarOReabrirPeriodo}>
+              {estado.vista.cerrado ? 'Reabrir período' : 'Cerrar período'}
+            </button>
+          </div>
           <GrillaMes dias={estado.vista.dias} onReclasificar={pedirReclasificar} />
         </section>
       )}

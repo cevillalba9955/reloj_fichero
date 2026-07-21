@@ -1,5 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
+import { rutaCarpetaPeriodo, ARCHIVO_PADRON } from '../domain/periodo-storage.js';
+import { mesActualPeriodo } from '../domain/calendario-mes.js';
 
 // Snapshot local del padrón (legajo + categoría) para operar SIN conexión a
 // Oracle (Principio VI: estado operativo en archivo JSON; el padrón es dato de
@@ -7,6 +9,13 @@ import { dirname } from 'node:path';
 // conveniencia). Mismo contrato EmployeeCategoryProvider que el adaptador
 // Oracle: obtenerCategoria(legajo) + listar(). El snapshot se produce con
 // `sincronizar-padron` (único momento que consulta Oracle).
+//
+// 013-reestructurar-data-periodos (research.md §5, FR-004): el padrón es por
+// período (`P<periodo>/padron.json`), pero como este puerto no recibe el
+// período que se está calculando, cada llamada resuelve el snapshot del MES EN
+// CURSO (`mesActualPeriodo(now())`), evaluado en cada invocación (nunca
+// cacheado a nivel de proceso: un backend web es de larga vida y puede seguir
+// corriendo cuando el mes cambia).
 //
 // Formato del archivo:
 //   { "generadoEn": "ISO-8601", "vista": "<traza>",
@@ -31,11 +40,12 @@ function construirMapa(empleados) {
   return mapa;
 }
 
-export function createFilePadronCategoryProvider({ filePath }) {
-  let cache = null;
+export function createFilePadronCategoryProvider({ repoDir, now = () => new Date() }) {
+  const cachePorPeriodo = new Map(); // periodo -> Map<legajo, {codigoCategoria, nombre}>
 
-  function asegurarCache() {
-    if (cache) return cache;
+  function asegurarCache(periodo) {
+    if (cachePorPeriodo.has(periodo)) return cachePorPeriodo.get(periodo);
+    const filePath = join(rutaCarpetaPeriodo(repoDir, periodo), ARCHIVO_PADRON);
     let contenido;
     try {
       contenido = readFileSync(filePath, 'utf8');
@@ -57,17 +67,24 @@ export function createFilePadronCategoryProvider({ filePath }) {
           '({ "empleados": [{ "legajo", "categoria" }] })'
       );
     }
-    cache = construirMapa(datos.empleados);
-    return cache;
+    const mapa = construirMapa(datos.empleados);
+    cachePorPeriodo.set(periodo, mapa);
+    return mapa;
+  }
+
+  // Resuelve el mes en curso en CADA llamada (FR-004): nunca cachea el
+  // período a nivel de proceso, solo el contenido ya leído de cada período.
+  function cacheDelMesActual() {
+    return asegurarCache(mesActualPeriodo(now()));
   }
 
   return {
     async obtenerCategoria(legajo) {
-      const mapa = asegurarCache();
+      const mapa = cacheDelMesActual();
       return { legajo, codigoCategoria: mapa.get(Number(legajo))?.codigoCategoria ?? null };
     },
     async listar() {
-      const mapa = asegurarCache();
+      const mapa = cacheDelMesActual();
       return [...mapa.entries()]
         .map(([legajo, { codigoCategoria, nombre }]) => ({ legajo, codigoCategoria, nombre }))
         .sort((a, b) => a.legajo - b.legajo);

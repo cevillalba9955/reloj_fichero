@@ -264,3 +264,119 @@ test('POST /generar con :periodo mal formado → 400 PERIODO_INVALIDO', async ()
     s.close();
   }
 });
+
+// ---------------------------------------------------------------------------
+// 013-reestructurar-data-periodos (US3) — POST /cerrar, /reabrir, y el efecto
+// de un período cerrado sobre /reclasificar (409 PERIODO_CERRADO).
+// ---------------------------------------------------------------------------
+
+test('GET /api/calendarios/:periodo expone cerrado:false por defecto', async () => {
+  const res = await fetch(`${base}/api/calendarios/202607`);
+  const v = await res.json();
+  assert.equal(v.cerrado, false);
+  assert.equal(v.cierre, null);
+  assert.equal(v.reapertura, null);
+});
+
+test('POST /cerrar marca el período como cerrado (200) y GET lo refleja', async () => {
+  const s = await crearServidorConPeriodos([mesActual()]);
+  try {
+    const periodo = mesActual();
+    const res = await fetch(`${s.base}/api/calendarios/${periodo}/cerrar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ autor: 'rrhh.mgomez' }),
+    });
+    assert.equal(res.status, 200);
+    const v = await res.json();
+    assert.equal(v.cerrado, true);
+    assert.equal(v.cierre.autor, 'rrhh.mgomez');
+
+    const v2 = await (await fetch(`${s.base}/api/calendarios/${periodo}`)).json();
+    assert.equal(v2.cerrado, true);
+  } finally {
+    s.close();
+  }
+});
+
+test('POST /cerrar es idempotente: cerrar un período ya cerrado también devuelve 200', async () => {
+  const s = await crearServidorConPeriodos([mesActual()]);
+  try {
+    const periodo = mesActual();
+    await fetch(`${s.base}/api/calendarios/${periodo}/cerrar`, { method: 'POST' });
+    const res = await fetch(`${s.base}/api/calendarios/${periodo}/cerrar`, { method: 'POST' });
+    assert.equal(res.status, 200);
+    const v = await res.json();
+    assert.equal(v.cerrado, true);
+  } finally {
+    s.close();
+  }
+});
+
+test('POST /cerrar sobre un período sin calendario generado → 404 CALENDARIO_NO_GENERADO', async () => {
+  const s = await crearServidorConPeriodos([mesActual()]);
+  try {
+    const res = await fetch(`${s.base}/api/calendarios/209912/cerrar`, { method: 'POST' });
+    assert.equal(res.status, 404);
+    const body = await res.json();
+    assert.equal(body.error.codigo, 'CALENDARIO_NO_GENERADO');
+  } finally {
+    s.close();
+  }
+});
+
+test('POST /reabrir revierte el cierre (200, cerrado:false) e idempotente', async () => {
+  const s = await crearServidorConPeriodos([mesActual()]);
+  try {
+    const periodo = mesActual();
+    await fetch(`${s.base}/api/calendarios/${periodo}/cerrar`, { method: 'POST' });
+    const res = await fetch(`${s.base}/api/calendarios/${periodo}/reabrir`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ autor: 'rrhh.otra' }),
+    });
+    assert.equal(res.status, 200);
+    const v = await res.json();
+    assert.equal(v.cerrado, false);
+    assert.equal(v.reapertura.autor, 'rrhh.otra');
+
+    // Idempotente: reabrir uno ya abierto también 200.
+    const res2 = await fetch(`${s.base}/api/calendarios/${periodo}/reabrir`, { method: 'POST' });
+    assert.equal(res2.status, 200);
+  } finally {
+    s.close();
+  }
+});
+
+test('un período cerrado rechaza /reclasificar con 409 PERIODO_CERRADO, sin alterar el día', async () => {
+  const s = await crearServidorConPeriodos([mesActual()]);
+  try {
+    const periodo = mesActual();
+    await fetch(`${s.base}/api/calendarios/${periodo}/cerrar`, { method: 'POST' });
+    const antes = await (await fetch(`${s.base}/api/calendarios/${periodo}`)).json();
+    const diaAntes = antes.dias[0];
+
+    const res = await fetch(`${s.base}/api/calendarios/${periodo}/reclasificar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fecha: diaAntes.fecha, clasificacion: 'Feriado', autor: 'x' }),
+    });
+    assert.equal(res.status, 409);
+    const body = await res.json();
+    assert.equal(body.error.codigo, 'PERIODO_CERRADO');
+
+    const despues = await (await fetch(`${s.base}/api/calendarios/${periodo}`)).json();
+    assert.equal(despues.dias[0].clasificacion, diaAntes.clasificacion, 'el día no cambió');
+
+    // Reabrir restaura la escritura.
+    await fetch(`${s.base}/api/calendarios/${periodo}/reabrir`, { method: 'POST' });
+    const res2 = await fetch(`${s.base}/api/calendarios/${periodo}/reclasificar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fecha: diaAntes.fecha, clasificacion: 'Feriado', autor: 'x' }),
+    });
+    assert.equal(res2.status, 200);
+  } finally {
+    s.close();
+  }
+});

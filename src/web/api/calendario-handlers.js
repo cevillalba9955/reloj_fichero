@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { ApiError } from './router.js';
 import {
   construirVistaCalendario,
@@ -6,6 +8,8 @@ import {
   calcularFronteraGenerable,
 } from '../view-model.js';
 import { Clasificacion, periodoAnterior, periodoSiguiente } from '../../presentismo/domain/calendario-mes.js';
+import { rutaCarpetaPeriodo, ARCHIVO_PADRON } from '../../presentismo/domain/periodo-storage.js';
+import { guardarSnapshotPadron } from '../../presentismo/adapters/file-padron-category-provider.js';
 
 // feature 007 — Handlers de la API de calendario. Delegan en el servicio de
 // presentismo (feature 004) y arman las proyecciones de presentación. Ninguna
@@ -33,6 +37,24 @@ function periodoRequeridoAntesDe(periodo, periodos) {
   const max = ordenados[ordenados.length - 1];
   if (periodo < min) return periodoAnterior(min);
   return periodoSiguiente(max);
+}
+
+// 013-reestructurar-data-periodos (FR-003): si `P<periodo>/padron.json` no
+// existe todavía, lo crea a partir del padrón ya cableado (`ctx.categoryProvider`,
+// snapshot local del mes en curso). Best-effort: si esa fuente todavía no
+// tiene nada que ofrecer (p. ej. nunca se corrió `sincronizar-padron`), no
+// bloquea la generación del calendario (edge case del spec: no fallar de
+// forma confusa).
+async function asegurarPadronDelPeriodo(ctx, periodo) {
+  const filePath = join(rutaCarpetaPeriodo(ctx.repoDir, periodo), ARCHIVO_PADRON);
+  if (existsSync(filePath)) return;
+  try {
+    const activos = await ctx.categoryProvider.listar();
+    if (activos.length === 0) return;
+    guardarSnapshotPadron({ filePath, empleados: activos });
+  } catch {
+    // Sin snapshot disponible todavía: se deja para una sincronización manual.
+  }
 }
 
 // Arma la VistaCalendarioMes de un período cargando calendario + lista de
@@ -97,11 +119,48 @@ export function registrarRutas(router, ctx) {
     } catch (err) {
       throw new ApiError(500, 'ERROR_GENERANDO_CALENDARIO', err.message);
     }
+    await asegurarPadronDelPeriodo(ctx, periodo);
     return { status: 200, body: await vistaDe(ctx, periodo) };
   });
 
   // POST /api/calendarios/:periodo/reclasificar (US3) — se registra abajo.
   registrarReclasificar(router, ctx);
+
+  // POST /api/calendarios/:periodo/{cerrar,reabrir} (013, US3) — se registran abajo.
+  registrarCerrarReabrir(router, ctx);
+}
+
+// 013-reestructurar-data-periodos (US3, contracts/web-api.md) — cierra/reabre
+// el calendario del período. Idempotente: cerrar uno ya cerrado (o reabrir uno
+// ya abierto) también devuelve 200 y actualiza el autor/fecha del intento.
+function registrarCerrarReabrir(router, ctx) {
+  router.add('POST', '/api/calendarios/:periodo/cerrar', async ({ params, body }) => {
+    validarPeriodo(params.periodo);
+    const { autor = null } = body ?? {};
+    try {
+      await ctx.service.cerrarPeriodo(params.periodo, autor);
+    } catch (err) {
+      if (/no existe calendario/i.test(err.message)) {
+        throw new ApiError(404, 'CALENDARIO_NO_GENERADO', err.message);
+      }
+      throw err;
+    }
+    return { status: 200, body: await vistaDe(ctx, params.periodo) };
+  });
+
+  router.add('POST', '/api/calendarios/:periodo/reabrir', async ({ params, body }) => {
+    validarPeriodo(params.periodo);
+    const { autor = null } = body ?? {};
+    try {
+      await ctx.service.reabrirPeriodo(params.periodo, autor);
+    } catch (err) {
+      if (/no existe calendario/i.test(err.message)) {
+        throw new ApiError(404, 'CALENDARIO_NO_GENERADO', err.message);
+      }
+      throw err;
+    }
+    return { status: 200, body: await vistaDe(ctx, params.periodo) };
+  });
 }
 
 // US3 (feature 007) — reclasifica un día con la clasificación indicada y
@@ -120,7 +179,11 @@ function registrarReclasificar(router, ctx) {
     try {
       await ctx.service.reclasificarDia(params.periodo, fecha, clasificacion, autor ?? null);
     } catch (err) {
-      // El dominio lanza si el calendario no existe o la fecha no pertenece al mes.
+      // El dominio lanza si el calendario no existe, el período está cerrado
+      // (013-reestructurar-data-periodos, FR-006) o la fecha no pertenece al mes.
+      if (err.httpCode === 'PERIODO_CERRADO') {
+        throw new ApiError(409, 'PERIODO_CERRADO', err.message);
+      }
       if (/no existe calendario/i.test(err.message)) {
         throw new ApiError(404, 'CALENDARIO_NO_GENERADO', err.message);
       }

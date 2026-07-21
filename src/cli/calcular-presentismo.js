@@ -11,8 +11,11 @@ import {
 } from '../presentismo/adapters/file-padron-category-provider.js';
 import { createArchiveFichadasProvider } from '../presentismo/adapters/archive-fichadas-provider.js';
 import { registrarFichadas, leerExportsDeSesion } from '../presentismo/adapters/file-fichadas-archive.js';
-import { Clasificacion } from '../presentismo/domain/calendario-mes.js';
+import { Clasificacion, mesActualPeriodo, exigirPeriodoAbierto } from '../presentismo/domain/calendario-mes.js';
+import { rutaCarpetaPeriodo, ARCHIVO_PADRON } from '../presentismo/domain/periodo-storage.js';
 import { parseHoraMinuto, formatHoraMinuto } from '../presentismo/domain/tiempo.js';
+import { join } from 'node:path';
+import { existsSync } from 'node:fs';
 
 // CLI del dominio de presentismo (contracts/cli-presentismo.md).
 // Precedencia de configuración: argumento CLI > variable de entorno > default.
@@ -74,11 +77,6 @@ function construirCategoryProviderOracle() {
   return createOracleEmployeeCategoryProvider({ repository });
 }
 
-function rutaSnapshotPadron(args) {
-  const repoDir = resolver(args['repo-dir'], 'PRESENTISMO_REPO_DIR', './data/presentismo');
-  return resolver(args['padron-file'], 'PRESENTISMO_PADRON_FILE', `${repoDir}/padron.json`);
-}
-
 // Fuente del padrón: 'archivo' (snapshot local, sin DB) u 'oracle' (consulta viva).
 // Precedencia: --padron > PRESENTISMO_PADRON > default 'archivo' (Principio VI: se
 // opera sobre el snapshot; Oracle se toca solo al sincronizar).
@@ -91,23 +89,26 @@ function resolverFuentePadron(args) {
 }
 
 // Devuelve el EmployeeCategoryProvider según la fuente elegida. Para 'archivo'
-// lee el snapshot local (no depende de la conexión a la DB).
+// lee el snapshot local del MES EN CURSO (013-reestructurar-data-periodos,
+// FR-004): `--padron-file`/`PRESENTISMO_PADRON_FILE` fueron retirados, ver
+// contracts/storage-layout.md.
 function construirCategoryProvider(args) {
   if (resolverFuentePadron(args) === 'oracle') {
     return construirCategoryProviderOracle();
   }
-  return createFilePadronCategoryProvider({ filePath: rutaSnapshotPadron(args) });
+  return createFilePadronCategoryProvider({ repoDir: rutaRepoDir(args) });
 }
 
-// Directorio del archivo acumulativo de fichadas por período (fuente del
-// cálculo). Default <repo-dir>/fichadas.
-function rutaArchivoFichadas(args) {
-  const repoDir = resolver(args['repo-dir'], 'PRESENTISMO_REPO_DIR', './data/presentismo');
-  return resolver(args['fichadas-archive-dir'], 'PRESENTISMO_FICHADAS_DIR', `${repoDir}/fichadas`);
+// Raíz del repo de presentismo (013-reestructurar-data-periodos): las
+// fichadas viven en `<repo-dir>/P<periodo>/fichadas.json`
+// (contracts/storage-layout.md); `--fichadas-archive-dir`/`PRESENTISMO_FICHADAS_DIR`
+// fueron retirados (ya no hay una subcarpeta de fichadas separada del período).
+function rutaRepoDir(args) {
+  return resolver(args['repo-dir'], 'PRESENTISMO_REPO_DIR', './data/presentismo');
 }
 
 function construirServicio(args, { categoryProvider = null } = {}) {
-  const repoDir = resolver(args['repo-dir'], 'PRESENTISMO_REPO_DIR', './data/presentismo');
+  const repoDir = rutaRepoDir(args);
   const logDir = resolver(args['log-dir'], 'PRESENTISMO_LOG_DIR', './logs');
 
   const categoriasConfig = cargarCategoriasConfig(args);
@@ -116,9 +117,34 @@ function construirServicio(args, { categoryProvider = null } = {}) {
   // Las fichadas del cálculo salen del archivo acumulativo por período
   // (poblado con `importar-fichadas`). Si el período no fue importado, el
   // provider devuelve lista vacía y el cálculo procede sin fichadas.
-  const fichadasProvider = createArchiveFichadasProvider({ archiveDir: rutaArchivoFichadas(args) });
+  const fichadasProvider = createArchiveFichadasProvider({ repoDir });
 
   return createCalcularPresentismoService({ repo, categoriasConfig, logger, categoryProvider, fichadasProvider });
+}
+
+// 013-reestructurar-data-periodos (FR-003): si `P<periodo>/padron.json` no
+// existe todavía, lo crea a partir de la fuente de padrón resuelta (`--padron
+// archivo|oracle`). Best-effort: si la fuente no está disponible (p. ej.
+// 'archivo' y todavía no hay ningún snapshot para bootstrapear), no rompe la
+// generación del calendario — solo avisa (edge case del spec: no fallar de
+// forma confusa).
+async function asegurarPadronDelPeriodo(args, periodo) {
+  const repoDir = rutaRepoDir(args);
+  const filePath = join(rutaCarpetaPeriodo(repoDir, periodo), ARCHIVO_PADRON);
+  if (existsSync(filePath)) return;
+
+  try {
+    const categoryProvider = construirCategoryProvider(args);
+    const activos = await categoryProvider.listar();
+    if (activos.length === 0) {
+      console.error(`Aviso: la fuente de padrón no devolvió legajos; no se creó ${filePath}.`);
+      return;
+    }
+    const datos = guardarSnapshotPadron({ filePath, empleados: activos });
+    console.log(`Padrón del período ${periodo} creado: ${datos.empleados.length} legajo(s) → ${filePath}`);
+  } catch (err) {
+    console.error(`Aviso: no se pudo crear el padrón del período ${periodo} (${err.message}).`);
+  }
 }
 
 async function cmdGenerarCalendario(args) {
@@ -126,6 +152,7 @@ async function cmdGenerarCalendario(args) {
   if (!periodo) throw new Error('falta --periodo YYYYMM');
   const svc = construirServicio(args);
   const cal = await svc.generarCalendario(periodo);
+  await asegurarPadronDelPeriodo(args, periodo);
   const conteo = cal.dias.reduce((acc, d) => {
     acc[d.clasificacion] = (acc[d.clasificacion] ?? 0) + 1;
     return acc;
@@ -250,6 +277,11 @@ async function cmdListarPadron(args) {
 // Consulta el padrón Oracle (solo lectura) UNA vez y lo guarda como snapshot
 // local, para que el resto de los comandos operen sin conexión a la DB
 // (Principio VI). Es el único comando que exige Oracle configurado.
+// 013-reestructurar-data-periodos (FR-004): escribe SIEMPRE en
+// `P<mesActualPeriodo()>/padron.json` bajo `--repo-dir`/`PRESENTISMO_REPO_DIR`,
+// calculando el mes en curso con el reloj real al momento de ejecutar el
+// comando — nunca sobre un período pasado ni sobre el período que se esté
+// consultando. `--padron-file`/`PRESENTISMO_PADRON_FILE` fueron retirados.
 async function cmdSincronizarPadron(args) {
   const oracleConfig = readOracleRosterConfig(process.env);
   const repository = createOracleRosterRepository({ config: oracleConfig });
@@ -258,9 +290,10 @@ async function cmdSincronizarPadron(args) {
   const activos = await provider.listar();
   if (activos.length === 0) throw new Error('el padrón Oracle no devolvió legajos activos; no se sobrescribe el snapshot.');
 
-  const filePath = rutaSnapshotPadron(args);
+  const periodo = mesActualPeriodo();
+  const filePath = join(rutaCarpetaPeriodo(rutaRepoDir(args), periodo), ARCHIVO_PADRON);
   const datos = guardarSnapshotPadron({ filePath, empleados: activos, vista: oracleConfig.vistaPadron });
-  console.log(`Padrón sincronizado: ${datos.empleados.length} legajo(s) → ${filePath}`);
+  console.log(`Padrón sincronizado (período ${periodo}): ${datos.empleados.length} legajo(s) → ${filePath}`);
   console.log(`  generado ${datos.generadoEn}`);
 }
 
@@ -273,14 +306,21 @@ async function cmdImportarFichadas(args) {
   const periodo = args['periodo'];
   if (!periodo || !/^\d{6}$/.test(String(periodo))) throw new Error('falta --periodo YYYYMM válido');
   const inputDir = resolver(args['fichadas-dir'], 'FICHADAS_OUTPUT_DIR', './output');
-  const archiveDir = rutaArchivoFichadas(args);
+  const repoDir = rutaRepoDir(args);
+
+  // 013-reestructurar-data-periodos (FR-006, research.md §4): incorporar
+  // fichadas a un período cerrado se rechaza, igual que cualquier otra
+  // escritura. No pasa por el servicio (registrarFichadas es de más bajo
+  // nivel), así que la guarda se agrega acá, en el punto de entrada.
+  const calendarioActual = await createFilePresentismoRepository({ repoDir }).cargarCalendario(periodo);
+  if (calendarioActual) exigirPeriodoAbierto(calendarioActual);
 
   const { registros, archivos, errores } = leerExportsDeSesion({ inputDir });
   const prefijoFecha = `${String(periodo).slice(0, 4)}-${String(periodo).slice(4, 6)}`;
   const delPeriodo = registros.filter((r) => typeof r.fecha === 'string' && r.fecha.startsWith(prefijoFecha));
   const sinFecha = registros.filter((r) => r.fecha == null).length;
 
-  const { agregadas, duplicadas, total } = registrarFichadas({ archiveDir, periodo, fichadas: delPeriodo });
+  const { agregadas, duplicadas, total } = registrarFichadas({ repoDir, periodo, fichadas: delPeriodo });
 
   // Registro correlacionable en el log (sin datos crudos, Principio V).
   const logDir = resolver(args['log-dir'], 'PRESENTISMO_LOG_DIR', './logs');
@@ -294,7 +334,7 @@ async function cmdImportarFichadas(args) {
   });
 
   console.log(`Fichadas importadas al período ${periodo}: +${agregadas} nuevas (${duplicadas} duplicadas) → ${total} en total`);
-  console.log(`  origen: ${archivos} archivo(s) de sesión en ${inputDir} → ${archiveDir}/${periodo}.json`);
+  console.log(`  origen: ${archivos} archivo(s) de sesión en ${inputDir} → ${repoDir}/P${periodo}/fichadas.json`);
   if (sinFecha > 0) console.log(`  ⚠ ${sinFecha} fichada(s) sin fecha no se pudieron imputar a un período (omitidas)`);
   if (errores.length > 0) console.log(`  ⚠ ${errores.length} archivo(s) ilegibles omitidos: ${errores.join(', ')}`);
 }
@@ -362,6 +402,27 @@ async function cmdPausa(args) {
   console.log(`Pausa cargada (${id}): legajo ${legajo} ${fecha} ${args['desde']}–${args['hasta']}`);
 }
 
+// 013-reestructurar-data-periodos (US3, contracts/cli-presentismo.md) — marca
+// el calendario del período como cerrado (de solo lectura). Idempotente: si
+// ya estaba cerrado, actualiza el autor/fecha del intento y no falla.
+async function cmdCerrarPeriodo(args) {
+  const periodo = args['periodo'];
+  if (!periodo) throw new Error('uso: cerrar-periodo --periodo YYYYMM --autor <id>');
+  const svc = construirServicio(args);
+  const cal = await svc.cerrarPeriodo(periodo, args['autor'] ?? null);
+  console.log(`Período ${periodo} cerrado por "${cal.cierre.autor ?? '(sin autor)'}" el ${cal.cierre.fechaHora}`);
+}
+
+// Revierte el cierre de un período. Idempotente: si ya estaba abierto,
+// actualiza el autor/fecha del intento y no falla.
+async function cmdReabrirPeriodo(args) {
+  const periodo = args['periodo'];
+  if (!periodo) throw new Error('uso: reabrir-periodo --periodo YYYYMM --autor <id>');
+  const svc = construirServicio(args);
+  const cal = await svc.reabrirPeriodo(periodo, args['autor'] ?? null);
+  console.log(`Período ${periodo} reabierto por "${cal.reapertura.autor ?? '(sin autor)'}" el ${cal.reapertura.fechaHora}`);
+}
+
 const COMANDOS = {
   'generar-calendario': cmdGenerarCalendario,
   reclasificar: cmdReclasificar,
@@ -371,6 +432,8 @@ const COMANDOS = {
   'importar-fichadas': cmdImportarFichadas,
   correccion: cmdCorreccion,
   pausa: cmdPausa,
+  'cerrar-periodo': cmdCerrarPeriodo,
+  'reabrir-periodo': cmdReabrirPeriodo,
 };
 
 async function main() {

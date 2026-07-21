@@ -113,7 +113,7 @@ test('US2: la corrección persiste con autor/motivo/valores y prevalece sobre un
     assert.equal(fila.correccionVigente, true);
 
     // Auditoría (FR-005/SC-003): autor, motivo, fechaHora, valor anterior/nuevo.
-    const estado = JSON.parse(readFileSync(join(e.repoDir, `${e.periodo}.json`), 'utf8'));
+    const estado = JSON.parse(readFileSync(join(e.repoDir, `P${e.periodo}`, 'calendario.json'), 'utf8'));
     const corr = estado.correcciones.find((c) => c.legajo === 3 && c.vigente);
     assert.equal(corr.autor, 'admin@utn');
     assert.equal(corr.motivo, 'error del reloj');
@@ -145,7 +145,7 @@ test('US2: dos correcciones sucesivas conservan el historial completo (edge case
     });
     assert.equal(res.status, 200);
 
-    const estado = JSON.parse(readFileSync(join(e.repoDir, `${e.periodo}.json`), 'utf8'));
+    const estado = JSON.parse(readFileSync(join(e.repoDir, `P${e.periodo}`, 'calendario.json'), 'utf8'));
     const deLegajo1 = estado.correcciones.filter((c) => c.legajo === 1 && c.fecha === FECHA);
     assert.equal(deLegajo1.length, 2, 'ambas altas quedan en el historial');
     assert.equal(deLegajo1.filter((c) => c.vigente).length, 1, 'una sola vigente');
@@ -176,7 +176,7 @@ test('US3: la pausa descuenta horas solo dentro de la jornada efectiva', async (
     assert.equal((await res2.json()).horasTrabajadas, 480, 'sin descuento adicional');
 
     // Auditoría (SC-003): ambas pausas con autor/motivo/fechaHora y tipo.
-    const estado = JSON.parse(readFileSync(join(e.repoDir, `${e.periodo}.json`), 'utf8'));
+    const estado = JSON.parse(readFileSync(join(e.repoDir, `P${e.periodo}`, 'calendario.json'), 'utf8'));
     const deLegajo4 = estado.pausas.filter((p) => p.legajo === 4);
     assert.equal(deLegajo4.length, 2);
     for (const p of deLegajo4) {
@@ -344,6 +344,45 @@ test('auditoría NDJSON: correccion_alta y pausa_alta registran los campos nuevo
   }
 });
 
+// 013-reestructurar-data-periodos (US3, Principio V) — cerrar/reabrir un
+// período se loguea en NDJSON estructurado, con periodo/autor, sin datos
+// biométricos ni credenciales.
+test('auditoría NDJSON: periodo_cerrado y periodo_reabierto registran autor/período sin datos sensibles', async () => {
+  const e = await entorno();
+  try {
+    await fetch(`${e.base}/api/calendarios/${e.periodo}/cerrar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ autor: 'rrhh.mgomez' }),
+    });
+    await fetch(`${e.base}/api/calendarios/${e.periodo}/reabrir`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ autor: 'rrhh.otra' }),
+    });
+
+    const lineas = readFileSync(join(e.logDir, 'presentismo.ndjson'), 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l));
+
+    const cierre = lineas.find((l) => l.tipo === 'periodo_cerrado');
+    assert.ok(cierre, 'se registró periodo_cerrado');
+    assert.equal(cierre.periodo, e.periodo);
+    assert.equal(cierre.autor, 'rrhh.mgomez');
+
+    const reapertura = lineas.find((l) => l.tipo === 'periodo_reabierto');
+    assert.ok(reapertura, 'se registró periodo_reabierto');
+    assert.equal(reapertura.periodo, e.periodo);
+    assert.equal(reapertura.autor, 'rrhh.otra');
+
+    const serial = JSON.stringify(lineas);
+    assert.ok(!/rawHex|template|huella|password|connectString/i.test(serial));
+  } finally {
+    e.close();
+  }
+});
+
 test('US1: la vista es de solo lectura — el GET no altera el estado persistido', async () => {
   const e = await entorno();
   try {
@@ -375,7 +414,7 @@ test('US5: corregir un horario de un día previo persiste y audita con esa fecha
     assert.ok(v.navegacion, 'la vista de un día previo incluye navegacion');
 
     // Auditoría: la corrección queda con la fecha del día corregido (no la de hoy).
-    const estado = JSON.parse(readFileSync(join(e.repoDir, `${e.periodo}.json`), 'utf8'));
+    const estado = JSON.parse(readFileSync(join(e.repoDir, `P${e.periodo}`, 'calendario.json'), 'utf8'));
     const corr = estado.correcciones.find((c) => c.legajo === 3 && c.vigente);
     assert.equal(corr.fecha, FECHA);
     assert.equal(corr.autor, 'admin@utn');

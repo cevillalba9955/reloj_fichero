@@ -103,7 +103,7 @@ test('US1: coherencia fila↔detalle (SC-002) — la suma del detalle coincide c
 test('US1: solo lectura — los GET no alteran el archivo del período (SC-005)', async () => {
   const e = await entorno();
   try {
-    const archivo = join(e.repoDir, `${e.periodo}.json`);
+    const archivo = join(e.repoDir, `P${e.periodo}`, 'calendario.json');
     const antes = readFileSync(archivo, 'utf8');
 
     await fetch(`${e.base}/api/resumen-periodo`);
