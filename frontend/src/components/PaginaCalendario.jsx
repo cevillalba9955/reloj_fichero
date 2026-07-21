@@ -189,7 +189,10 @@ export default function PaginaCalendario({ cliente, inicializarDesdeApp }) {
                 Cerrar período
               </button>
             </div>}
-          <GrillaMes dias={estado.vista.dias} onReclasificar={pedirReclasificar} />
+          <GrillaMes
+            dias={estado.vista.dias}
+            onReclasificar={estado.vista.cerrado ? undefined : pedirReclasificar}
+          />
         </section>
       )}
 

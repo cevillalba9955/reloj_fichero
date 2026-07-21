@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import PaginaCalendario from './PaginaCalendario.jsx';
 
 function vista(over = {}) {
@@ -69,7 +69,15 @@ test('un fallo al iniciar muestra error con reintento', async () => {
   expect(screen.getByText('Reintentar')).toBeInTheDocument();
 });
 
-// Reclasificación: cancelar no llama a la API; confirmar sí y refresca la grilla
+// Reclasificación: el ícono abre un modal para elegir la opción, que a su vez
+// abre el diálogo de confirmación (cancelar no llama a la API; confirmar sí).
+async function elegirReclasificacion(opcion) {
+  fireEvent.click(screen.getByLabelText(/Reclasificar 2026-07-01/));
+  const selector = await screen.findByRole('dialog', { name: /Reclasificar 2026-07-01/ });
+  fireEvent.click(within(selector).getByText(opcion));
+  await screen.findByRole('dialog', { name: 'Confirmar reclasificación' });
+}
+
 test('reclasificar: cancelar no llama a la API; confirmar sí y refresca la grilla', async () => {
   const vistaFeriado = vista({
     dias: [{ ...vista().dias[0], clasificacion: 'Feriado', resaltado: 'feriado' }],
@@ -80,15 +88,14 @@ test('reclasificar: cancelar no llama a la API; confirmar sí y refresca la gril
   render(<PaginaCalendario cliente={cliente} />);
   await screen.findByRole('grid');
 
-  // Iniciar reclasificación → abre el diálogo; cancelar → sin POST.
-  fireEvent.change(screen.getByLabelText(/Reclasificar 2026-07-01/), { target: { value: 'Feriado' } });
-  await screen.findByRole('dialog');
+  // Iniciar reclasificación (ícono → modal de selección → diálogo de
+  // confirmación); cancelar → sin POST.
+  await elegirReclasificacion('Feriado');
   fireEvent.click(screen.getByText('Cancelar'));
   expect(cliente.reclasificar).not.toHaveBeenCalled();
 
   // Reiniciar y confirmar → POST con los datos correctos.
-  fireEvent.change(screen.getByLabelText(/Reclasificar 2026-07-01/), { target: { value: 'Feriado' } });
-  await screen.findByRole('dialog');
+  await elegirReclasificacion('Feriado');
   fireEvent.click(screen.getByText('Confirmar'));
   await waitFor(() =>
     expect(cliente.reclasificar).toHaveBeenCalledWith(
@@ -96,6 +103,16 @@ test('reclasificar: cancelar no llama a la API; confirmar sí y refresca la gril
       expect.objectContaining({ fecha: '2026-07-01', clasificacion: 'Feriado' }),
     ),
   );
+});
+
+// El ícono de reclasificar no debe ofrecerse sobre un período cerrado.
+test('con el período cerrado, no se ofrece el ícono de reclasificar', async () => {
+  const vistaCerrada = vista({ cerrado: true, cierre: { autor: 'ui', fechaHora: '2026-07-20T00:00:00.000Z' } });
+  const cliente = clienteMock({ obtenerCalendario: vi.fn().mockResolvedValue(vistaCerrada) });
+  render(<PaginaCalendario cliente={cliente} />);
+  await screen.findByRole('grid');
+
+  expect(screen.queryByLabelText(/Reclasificar 2026-07-01/)).not.toBeInTheDocument();
 });
 
 // 013-reestructurar-data-periodos (US3) — botón cerrar/reabrir + indicador.
