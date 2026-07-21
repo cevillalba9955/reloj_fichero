@@ -113,15 +113,28 @@ export default function PaginaCalendario({ cliente, inicializarDesdeApp }) {
 
   return (
     <>
-      {periodoMostrado && ultimo && (
-        <NavegacionMes
-          periodo={periodoMostrado}
-          mesActual={mesActual}
-          periodos={periodos}
-          generables={generables}
-          onIr={cargarMes}
-        />
-      )}
+      <div className="header-periodo" aria-live="polite">
+        <div>
+          {estado.tipo === 'con-datos' && (
+            <EncabezadoPeriodo periodoActivo={estado.vista.periodoActivo} />
+          )}
+          {estado.tipo === 'cargando' && (
+            <p className="cargando" role="status">
+              Cargando…
+            </p>
+          )}
+        </div>
+
+        {periodoMostrado && ultimo && (
+          <NavegacionMes
+            periodo={periodoMostrado}
+            mesActual={mesActual}
+            periodos={periodos}
+            generables={generables}
+            onIr={cargarMes}
+          />
+        )}
+      </div>
 
       {aviso && (
         <p className="aviso" role="alert">
@@ -129,11 +142,6 @@ export default function PaginaCalendario({ cliente, inicializarDesdeApp }) {
         </p>
       )}
 
-      {estado.tipo === 'cargando' && (
-        <p className="cargando" role="status">
-          Cargando…
-        </p>
-      )}
 
       {estado.tipo === 'error' && (
         <div className="error" role="alert">
@@ -164,19 +172,23 @@ export default function PaginaCalendario({ cliente, inicializarDesdeApp }) {
 
       {estado.tipo === 'con-datos' && (
         <section className="calendario">
-          <div className="encabezado-cierre-periodo">
-            <EncabezadoPeriodo periodoActivo={estado.vista.periodoActivo} />
-            {estado.vista.cerrado && (
+           {estado.vista.cerrado && <div className="encabezado-periodo-cerrado">
               <span className="indicador-periodo-cerrado" role="status">
                 Período cerrado
               </span>
-            )}
-            {(estado.vista.cerrado || periodoYaPaso) && (
               <button type="button" onClick={cerrarOReabrirPeriodo}>
-                {estado.vista.cerrado ? 'Reabrir período' : 'Cerrar período'}
+                Reabrir período
               </button>
-            )}
-          </div>
+            </div>}
+
+           {periodoYaPaso && !estado.vista.cerrado && <div className="encabezado-cierre-periodo">
+              <span className="indicador-periodo-cerrado" role="status">
+                Período concluido
+              </span>
+              <button type="button" onClick={cerrarOReabrirPeriodo}>
+                Cerrar período
+              </button>
+            </div>}
           <GrillaMes dias={estado.vista.dias} onReclasificar={pedirReclasificar} />
         </section>
       )}
