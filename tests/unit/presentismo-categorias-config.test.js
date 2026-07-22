@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   parseCategoriasConfig,
   serializarCategoriasConfig,
@@ -9,6 +12,7 @@ import {
   agregarCategoria,
   editarCategoriaModalidad,
   editarEsquemaSemanal,
+  saveCategoriasConfig,
 } from '../../src/presentismo/config/categorias-config.js';
 
 function baseConfig() {
@@ -165,4 +169,19 @@ test('editarEsquemaSemanal rechaza vacío o con días repetidos', () => {
   const cfg = parseCategoriasConfig(baseConfig());
   assert.throws(() => editarEsquemaSemanal(cfg, []), /no puede quedar vacío/);
   assert.throws(() => editarEsquemaSemanal(cfg, ['lunes', 'lunes']), /no puede tener días repetidos/);
+});
+
+test('saveCategoriasConfig: un fallo de acceso a disco (ruta inválida) propaga el error sin corromper nada', () => {
+  // Misma simulación portable que env-file.test.js: la "ruta" es en realidad
+  // un directorio, un modo real de fallo de disco (config mal apuntada).
+  const raiz = mkdtempSync(join(tmpdir(), 'categorias-config-'));
+  const rutaDirectorio = join(raiz, 'categorias.json');
+  mkdirSync(rutaDirectorio);
+  try {
+    const cfg = parseCategoriasConfig(baseConfig());
+    assert.throws(() => saveCategoriasConfig(rutaDirectorio, cfg));
+    assert.equal(readdirSync(rutaDirectorio).length, 0, 'sin restos de escritura parcial');
+  } finally {
+    rmSync(raiz, { recursive: true, force: true });
+  }
 });

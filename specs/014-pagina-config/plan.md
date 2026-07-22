@@ -49,7 +49,7 @@ liquidación, es configuración de despliegue/dominio igual que hoy):
   escribir ante un fallo (edge case del spec).
 
 **Testing**: `node:test` + `node:assert`, unitario para los nuevos módulos de
-lectura/escritura (`env-config.js`, extensiones de escritura de
+lectura/escritura (`env-file.js`, extensiones de escritura de
 `categorias-config.js`/`motivos-ausencia-config.js`) con fixtures de
 calibración uno a uno con los Acceptance Scenarios del spec; contrato de los
 endpoints nuevos (`tests/contract/web-api-configuracion.test.js`) y de la nueva

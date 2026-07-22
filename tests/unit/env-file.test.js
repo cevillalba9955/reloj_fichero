@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { leerParametrosEditables, escribirParametrosEditables } from '../../src/config/env-file.js';
@@ -167,6 +167,23 @@ test('PRESENTISMO_RESUMEN_PERIODO limitado a MENSUAL|QUINCENAL', () => {
       () => escribirParametrosEditables(ruta, { PRESENTISMO_RESUMEN_PERIODO: 'SEMANAL' }),
       /PRESENTISMO_RESUMEN_PERIODO/,
     );
+  } finally {
+    rmSync(raiz, { recursive: true, force: true });
+  }
+});
+
+test('un fallo de acceso a disco (ruta inválida) propaga el error sin corromper nada', () => {
+  // Simulación portable (sin depender de permisos, poco fiables en Windows):
+  // la "ruta" del .env es en realidad un directorio, no un archivo — un modo
+  // real de fallo de disco (config apuntando a una ubicación equivocada).
+  const raiz = mkdtempSync(join(tmpdir(), 'env-file-'));
+  const rutaDirectorio = join(raiz, '.env');
+  mkdirSync(rutaDirectorio);
+  try {
+    assert.throws(() => escribirParametrosEditables(rutaDirectorio, { FICHADAS_PORT: 6000 }));
+    // el "archivo" (en realidad el directorio) sigue intacto, sin restos de
+    // escritura parcial (ni siquiera un .tmp-* huérfano).
+    assert.equal(readdirSync(rutaDirectorio).length, 0);
   } finally {
     rmSync(raiz, { recursive: true, force: true });
   }

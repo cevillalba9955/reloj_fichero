@@ -44,6 +44,15 @@ test('muestra el esquema semanal, las modalidades y las categorías actuales', a
   expect(screen.getByRole('checkbox', { name: 'Sábado' })).not.toBeChecked();
 });
 
+test('la tabla de categorías nunca ofrece eliminar (FR-012a)', async () => {
+  render(<FormularioCategoriasModalidades cliente={clienteMock()} />);
+
+  await screen.findByText('ADMIN');
+  const filaAdmin = screen.getByText('ADMIN').closest('tr');
+  expect(within(filaAdmin).getByRole('button', { name: 'Editar' })).toBeInTheDocument();
+  expect(within(filaAdmin).queryByRole('button', { name: 'Eliminar' })).not.toBeInTheDocument();
+});
+
 test('cambiar el esquema semanal y guardar lo envía al cliente', async () => {
   const user = userEvent.setup();
   const cliente = clienteMock();

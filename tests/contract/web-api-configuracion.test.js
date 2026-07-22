@@ -206,6 +206,19 @@ test('PUT /api/configuracion/categorias/categorias/:codigo — reasigna la modal
   }
 });
 
+test('DELETE /api/configuracion/categorias/categorias/:codigo — no se ofrece (FR-012a) → 405', async () => {
+  const e = await crearEntornoConfiguracion();
+  try {
+    const res = await fetch(`${e.base}/api/configuracion/categorias/categorias/ADMIN`, { method: 'DELETE' });
+    assert.equal(res.status, 405, 'eliminar una categoría no es una operación soportada por esta página');
+
+    const categorias = await (await fetch(`${e.base}/api/configuracion/categorias`)).json();
+    assert.ok(categorias.categorias.ADMIN, 'la categoría sigue existiendo, intacta');
+  } finally {
+    e.close();
+  }
+});
+
 test('PUT /api/configuracion/categorias/categorias/:codigo — código inexistente → 404', async () => {
   const e = await crearEntornoConfiguracion();
   try {

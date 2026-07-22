@@ -159,8 +159,9 @@ cambian una vez calibrados; el valor principal de la feature ya está cubierto p
 la Historia 1.
 
 **Independent Test**: se puede probar completo cambiando el tiempo de espera de
-consulta al reloj y la hora/duración del checkpoint de entrada, guardando, y
-verificando que los nuevos valores persisten y quedan reflejados en la página.
+consulta al reloj, la hora/duración del checkpoint de entrada, y la
+granularidad del Resumen del Período (FR-003), guardando, y verificando que
+los nuevos valores persisten y quedan reflejados en la página.
 
 **Acceptance Scenarios**:
 
@@ -170,6 +171,10 @@ verificando que los nuevos valores persisten y quedan reflejados en la página.
 2. **Given** el usuario ingresa un valor fuera de rango (por ejemplo, un tiempo de
    espera negativo o cero), **When** intenta guardar, **Then** el sistema rechaza
    el guardado y señala el campo inválido.
+3. **Given** la granularidad actual del Resumen del Período (mensual o
+   quincenal, FR-003), **When** el usuario la cambia a la otra opción y guarda,
+   **Then** el sistema persiste la nueva granularidad y la refleja al recargar
+   la página.
 
 ---
 
