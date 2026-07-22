@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseMotivosAusenciaConfig, TipoPago } from '../../src/presentismo/config/motivos-ausencia-config.js';
+import {
+  parseMotivosAusenciaConfig,
+  serializarMotivosAusenciaConfig,
+  agregarMotivo,
+  editarMotivo,
+  TipoPago,
+} from '../../src/presentismo/config/motivos-ausencia-config.js';
 
 const CONFIG_VALIDA = {
   motivos: [
@@ -64,17 +70,61 @@ test('rechaza tipoPago inválido', () => {
   );
 });
 
-test('rechaza catálogo sin ningún motivo activo', () => {
-  assert.throws(
-    () =>
-      parseMotivosAusenciaConfig({
-        motivos: [{ id: 'x', etiqueta: 'X', tipoPago: 'Paga', activo: false }],
-      }),
-    /al menos un motivo activo/,
-  );
+test('feature 014: un catálogo sin ningún motivo activo ya NO es un error (research.md §3)', () => {
+  const cfg = parseMotivosAusenciaConfig({
+    motivos: [{ id: 'x', etiqueta: 'X', tipoPago: 'Paga', activo: false }],
+  });
+  assert.deepEqual(cfg.listarActivos(), []);
+  assert.equal(cfg.resolverMotivoActivo('x'), null);
 });
 
 test('rechaza raíz inválida', () => {
   assert.throws(() => parseMotivosAusenciaConfig(null));
   assert.throws(() => parseMotivosAusenciaConfig({}));
+});
+
+// feature 014 (US2 T018) — serialización y edición del catálogo.
+
+test('serializarMotivosAusenciaConfig produce el mismo formato que parsea', () => {
+  const cfg = parseMotivosAusenciaConfig(CONFIG_VALIDA);
+  const raw = serializarMotivosAusenciaConfig(cfg);
+  const reparseado = parseMotivosAusenciaConfig(raw);
+  assert.equal(reparseado.listarActivos().length, cfg.listarActivos().length);
+});
+
+test('agregarMotivo agrega uno nuevo activo por defecto', () => {
+  const cfg = parseMotivosAusenciaConfig(CONFIG_VALIDA);
+  const actualizado = agregarMotivo(cfg, { id: 'mudanza', etiqueta: 'Mudanza', tipoPago: 'No paga' });
+  assert.equal(actualizado.resolverMotivoActivo('mudanza')?.etiqueta, 'Mudanza');
+  // el catálogo original no se muta
+  assert.equal(cfg.resolverMotivoActivo('mudanza'), null);
+});
+
+test('agregarMotivo rechaza un id ya existente', () => {
+  const cfg = parseMotivosAusenciaConfig(CONFIG_VALIDA);
+  assert.throws(
+    () => agregarMotivo(cfg, { id: 'vacaciones', etiqueta: 'Otra', tipoPago: 'Paga' }),
+    /ya existe un motivo/,
+  );
+});
+
+test('editarMotivo cambia etiqueta/tipoPago/activo sin alterar el id', () => {
+  const cfg = parseMotivosAusenciaConfig(CONFIG_VALIDA);
+  const actualizado = editarMotivo(cfg, 'examen', { etiqueta: 'Examen final', tipoPago: 'No paga' });
+  const motivo = actualizado.resolverMotivoActivo('examen');
+  assert.equal(motivo.etiqueta, 'Examen final');
+  assert.equal(motivo.tipoPago, 'No paga');
+  assert.equal(motivo.id, 'examen');
+});
+
+test('editarMotivo con activo:false desactiva sin eliminar (FR-009)', () => {
+  const cfg = parseMotivosAusenciaConfig(CONFIG_VALIDA);
+  const actualizado = editarMotivo(cfg, 'examen', { activo: false });
+  assert.equal(actualizado.resolverMotivoActivo('examen'), null);
+  assert.equal(actualizado.motivos.get('examen').etiqueta, 'Examen', 'sigue existiendo, solo inactivo');
+});
+
+test('editarMotivo rechaza un id inexistente', () => {
+  const cfg = parseMotivosAusenciaConfig(CONFIG_VALIDA);
+  assert.throws(() => editarMotivo(cfg, 'no_existe', { activo: false }), /no existe un motivo/);
 });

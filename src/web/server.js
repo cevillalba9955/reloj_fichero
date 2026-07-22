@@ -8,6 +8,7 @@ import { registrarRutas } from './api/calendario-handlers.js';
 import { registrarRutas as registrarRutasFichadasHoy } from './api/fichadas-hoy-handlers.js';
 import { registrarRutas as registrarRutasResumenPeriodo } from './api/resumen-periodo-handlers.js';
 import { registrarRutas as registrarRutasJustificaciones } from './api/justificaciones-handlers.js';
+import { registrarRutas as registrarRutasConfiguracion } from './api/configuracion-handlers.js';
 import { crearContextoWeb } from './wiring.js';
 
 // feature 007 — Servidor web local (node:http, sin framework). Sirve la API en
@@ -58,6 +59,7 @@ export function crearApp({ env = process.env } = {}) {
   registrarRutasFichadasHoy(router, ctx);
   registrarRutasResumenPeriodo(router, ctx);
   registrarRutasJustificaciones(router, ctx);
+  registrarRutasConfiguracion(router, ctx);
 
   return async function handler(req, res) {
     const manejadaPorApi = await router.handle(req, res);

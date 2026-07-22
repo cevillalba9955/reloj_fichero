@@ -1,6 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCategoriasConfig } from '../../src/presentismo/config/categorias-config.js';
+import { mkdtempSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  parseCategoriasConfig,
+  serializarCategoriasConfig,
+  agregarModalidad,
+  editarModalidad,
+  eliminarModalidad,
+  agregarCategoria,
+  editarCategoriaModalidad,
+  editarEsquemaSemanal,
+  saveCategoriasConfig,
+} from '../../src/presentismo/config/categorias-config.js';
 
 function baseConfig() {
   return {
@@ -64,4 +77,111 @@ test('fail-fast: margen negativo', () => {
   const raw = baseConfig();
   raw.modalidades.mensual.margenAperturaMin = -5;
   assert.throws(() => parseCategoriasConfig(raw), /margenAperturaMin/);
+});
+
+// feature 014 (US3 T025) — escritura y edición.
+
+const MODALIDAD_QUINCENAL = {
+  tipo: 'Quincenal',
+  aperturaOficial: '06:00',
+  cierreOficial: '14:00',
+  margenAperturaMin: 15,
+  margenCierreMin: 15,
+  ventanaApertura: ['05:00', '10:00'],
+  ventanaCierre: ['10:00', '23:59'],
+};
+
+test('serializarCategoriasConfig produce el mismo formato que parsea', () => {
+  const cfg = parseCategoriasConfig(baseConfig());
+  const raw = serializarCategoriasConfig(cfg);
+  const reparseado = parseCategoriasConfig(raw);
+  assert.equal(reparseado.resolverModalidadPorCategoria('ADMIN').jornadaEsperada, 540);
+  assert.deepEqual(raw.esquemaSemanal, ['lunes', 'martes', 'miercoles', 'jueves', 'viernes']);
+});
+
+test('agregarModalidad agrega una modalidad nueva disponible para asignar', () => {
+  const cfg = parseCategoriasConfig(baseConfig());
+  const actualizado = agregarModalidad(cfg, 'quincenal_operarios', MODALIDAD_QUINCENAL);
+  assert.ok(actualizado.modalidades.has('quincenal_operarios'));
+  assert.equal(cfg.modalidades.has('quincenal_operarios'), false, 'el config original no se muta');
+});
+
+test('agregarModalidad rechaza un nombre ya existente', () => {
+  const cfg = parseCategoriasConfig(baseConfig());
+  assert.throws(() => agregarModalidad(cfg, 'mensual', MODALIDAD_QUINCENAL), /ya existe una modalidad/);
+});
+
+test('editarModalidad cambia sus horarios', () => {
+  const cfg = parseCategoriasConfig(baseConfig());
+  const actualizado = editarModalidad(cfg, 'mensual', { ...MODALIDAD_QUINCENAL, tipo: 'Mensual' });
+  assert.equal(actualizado.modalidades.get('mensual').aperturaOficial, 360);
+});
+
+test('eliminarModalidad la borra cuando ninguna categoría la usa', () => {
+  const cfg = parseCategoriasConfig(baseConfig());
+  const conNueva = agregarModalidad(cfg, 'quincenal_operarios', MODALIDAD_QUINCENAL);
+  const actualizado = eliminarModalidad(conNueva, 'quincenal_operarios');
+  assert.equal(actualizado.modalidades.has('quincenal_operarios'), false);
+});
+
+test('eliminarModalidad rechaza si alguna categoría la usa (FR-012)', () => {
+  const cfg = parseCategoriasConfig(baseConfig());
+  try {
+    eliminarModalidad(cfg, 'mensual');
+    assert.fail('debía lanzar');
+  } catch (err) {
+    assert.deepEqual(err.categoriasEnUso, ['ADMIN']);
+  }
+});
+
+test('agregarCategoria crea una categoría nueva asignada a una modalidad existente', () => {
+  const cfg = parseCategoriasConfig(baseConfig());
+  const actualizado = agregarCategoria(cfg, 'PROD', 'mensual');
+  assert.equal(actualizado.resolverModalidadPorCategoria('PROD').tipo, 'Mensual');
+});
+
+test('agregarCategoria rechaza código duplicado o modalidad inexistente', () => {
+  const cfg = parseCategoriasConfig(baseConfig());
+  assert.throws(() => agregarCategoria(cfg, 'ADMIN', 'mensual'), /ya existe una categoría/);
+  assert.throws(() => agregarCategoria(cfg, 'PROD', 'fantasma'), /no existe/);
+});
+
+test('editarCategoriaModalidad reasigna la modalidad de una categoría existente', () => {
+  const cfg = parseCategoriasConfig(baseConfig());
+  const conNueva = agregarModalidad(cfg, 'quincenal_operarios', MODALIDAD_QUINCENAL);
+  const actualizado = editarCategoriaModalidad(conNueva, 'ADMIN', 'quincenal_operarios');
+  assert.equal(actualizado.resolverModalidadPorCategoria('ADMIN').tipo, 'Quincenal');
+});
+
+test('editarCategoriaModalidad rechaza categoría inexistente o modalidad inexistente', () => {
+  const cfg = parseCategoriasConfig(baseConfig());
+  assert.throws(() => editarCategoriaModalidad(cfg, 'NOEXISTE', 'mensual'), /no existe una categoría/);
+  assert.throws(() => editarCategoriaModalidad(cfg, 'ADMIN', 'fantasma'), /no existe/);
+});
+
+test('editarEsquemaSemanal reemplaza el esquema compartido', () => {
+  const cfg = parseCategoriasConfig(baseConfig());
+  const actualizado = editarEsquemaSemanal(cfg, ['lunes', 'martes']);
+  assert.equal([...actualizado.esquemaSemanal].sort().join(','), '1,2');
+});
+
+test('editarEsquemaSemanal rechaza vacío o con días repetidos', () => {
+  const cfg = parseCategoriasConfig(baseConfig());
+  assert.throws(() => editarEsquemaSemanal(cfg, []), /no puede quedar vacío/);
+  assert.throws(() => editarEsquemaSemanal(cfg, ['lunes', 'lunes']), /no puede tener días repetidos/);
+});
+
+test('saveCategoriasConfig: un fallo de acceso a disco (ruta inválida) propaga el error sin corromper nada', () => {
+  // Misma simulación portable que env-file.test.js: la "ruta" es en realidad
+  // un directorio, un modo real de fallo de disco (config mal apuntada).
+  const raiz = mkdtempSync(join(tmpdir(), 'categorias-config-'));
+  const rutaDirectorio = join(raiz, 'categorias.json');
+  mkdirSync(rutaDirectorio);
+  try {
+    const cfg = parseCategoriasConfig(baseConfig());
+    assert.throws(() => saveCategoriasConfig(rutaDirectorio, cfg));
+    assert.equal(readdirSync(rutaDirectorio).length, 0, 'sin restos de escritura parcial');
+  } finally {
+    rmSync(raiz, { recursive: true, force: true });
+  }
 });

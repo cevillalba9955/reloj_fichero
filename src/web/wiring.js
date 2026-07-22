@@ -24,6 +24,11 @@ export function crearContextoWeb(env = process.env) {
   const configPath = env.PRESENTISMO_CATEGORIAS_CONFIG ?? './config/categorias.json';
   const motivosAusenciaConfigPath = env.PRESENTISMO_MOTIVOS_AUSENCIA_CONFIG ?? './config/motivos-ausencia.json';
   const controlUrl = env.FICHADAS_CONTROL_URL ?? 'http://127.0.0.1:5006';
+  // feature 014 — ruta del `.env` que edita la página de Configuración
+  // (contracts/env-config.schema.md). Override solo para tests; en producción
+  // siempre es el `.env` de la raíz del proyecto (mismo que carga
+  // `--env-file-if-exists` en los scripts de package.json).
+  const rutaEnv = env.CONFIGURACION_ENV_PATH ?? '.env';
   // feature 011 (FR-013): granularidad del "Resumen del Período". Variable
   // vacía cae al default (misma convención que FICHADAS_*, spec 002).
   const modoResumenPeriodo = (env.PRESENTISMO_RESUMEN_PERIODO || 'MENSUAL').toUpperCase();
@@ -33,8 +38,34 @@ export function crearContextoWeb(env = process.env) {
     );
   }
 
-  const categoriasConfig = loadCategoriasConfig(configPath);
-  const motivosAusenciaConfig = loadMotivosAusenciaConfig(motivosAusenciaConfigPath);
+  // feature 014 — a diferencia de 007-012 (que cacheaban la config parseada
+  // una sola vez al arrancar el proceso), esta feature permite editar
+  // categorias.json/motivos-ausencia.json en caliente desde la página de
+  // Configuración (US2 FR: el motivo nuevo aparece "en el selector de
+  // Justificación"; US3 FR: la categoría editada "se refleja en los próximos
+  // cálculos"). Envolver el acceso para releer+re-parsear el archivo en cada
+  // llamada evita que el proceso web siga sirviendo una copia en memoria
+  // vieja tras un guardado, sin tener que reiniciar `rs956-web` — el costo es
+  // un `readFileSync`+parse de un archivo pequeño por llamada, despreciable
+  // para el volumen de uso de este sistema. `esquemaSemanal` es la única
+  // excepción: se captura una sola vez al construir el servicio (como ya
+  // hacía `generarCalendario`, spec 013), consistente con "un período en
+  // curso no se recalcula retroactivamente" (spec 014, Edge Cases).
+  const categoriasConfigInicial = loadCategoriasConfig(configPath);
+  const categoriasConfig = {
+    esquemaSemanal: categoriasConfigInicial.esquemaSemanal,
+    get modalidades() {
+      return loadCategoriasConfig(configPath).modalidades;
+    },
+    get categorias() {
+      return loadCategoriasConfig(configPath).categorias;
+    },
+    resolverModalidadPorCategoria: (codigo) => loadCategoriasConfig(configPath).resolverModalidadPorCategoria(codigo),
+  };
+  const motivosAusenciaConfig = {
+    listarActivos: () => loadMotivosAusenciaConfig(motivosAusenciaConfigPath).listarActivos(),
+    resolverMotivoActivo: (id) => loadMotivosAusenciaConfig(motivosAusenciaConfigPath).resolverMotivoActivo(id),
+  };
   const repo = createFilePresentismoRepository({ repoDir });
   const logger = createPresentismoLogger({ logDir });
   // 013-reestructurar-data-periodos (FR-004): el padrón es por período
@@ -65,5 +96,12 @@ export function crearContextoWeb(env = process.env) {
     activeEmployeesProvider,
     consultarReloj,
     modoResumenPeriodo,
+    // feature 014 — rutas de archivo que necesita configuracion-handlers.js
+    // para leer/escribir (env-file.js reescribe rutaEnv; categorias-config.js
+    // /motivos-ausencia-config.js re-parsean configPath/motivosAusenciaConfigPath
+    // en cada request, ver comentario arriba).
+    rutaEnv,
+    categoriasConfigPath: configPath,
+    motivosAusenciaConfigPath,
   };
 }

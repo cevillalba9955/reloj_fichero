@@ -37,5 +37,32 @@ export function createConsultarRelojCliente({
     };
   }
 
-  return { consultar };
+  // feature 014 (US1, contracts/control-api.md) — prueba un host/puerto
+  // CANDIDATO (todavía no guardado) vía POST /probar-conexion. Igual criterio
+  // que consultar(): nunca lanza, siempre devuelve un resultado tipado; un
+  // control-API no disponible se distingue (`disponible: false`) de una
+  // conexión al reloj que falla (`ok: false`).
+  async function probarConexion(host, port) {
+    let res;
+    try {
+      res = await fetchImpl(`${baseUrl}/probar-conexion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ host, port }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (err) {
+      return { disponible: false, motivo: `el servicio de fichadas no responde: ${err.message}` };
+    }
+    if (!res.ok) {
+      return { disponible: false, motivo: `el control del servicio de fichadas respondió HTTP ${res.status}` };
+    }
+    const body = await res.json().catch(() => null);
+    if (!body || typeof body.ok !== 'boolean') {
+      return { disponible: false, motivo: 'respuesta inválida del control del servicio de fichadas' };
+    }
+    return { disponible: true, ok: body.ok, motivo: body.motivo ?? null };
+  }
+
+  return { consultar, probarConexion };
 }

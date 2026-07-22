@@ -1,5 +1,5 @@
 import { Layout, Menu, Breadcrumb, Typography } from 'antd';
-import { CalendarOutlined, ClockCircleOutlined, BarChartOutlined } from '@ant-design/icons';
+import { CalendarOutlined, ClockCircleOutlined, BarChartOutlined, SettingOutlined } from '@ant-design/icons';
 
 const { Header, Sider, Content } = Layout;
 
@@ -12,12 +12,14 @@ const SECCIONES = [
   { key: 'calendario', icon: <CalendarOutlined />, label: 'Calendario' },
   { key: 'fichadas-hoy', icon: <ClockCircleOutlined />, label: 'Fichadas de hoy' },
   { key: 'resumen-periodo', icon: <BarChartOutlined />, label: 'Resumen período' },
+  { key: 'configuracion', icon: <SettingOutlined />, label: 'Configuración' },
 ];
 
 const TITULOS = {
   calendario: 'Calendario',
   'fichadas-hoy': 'Fichadas de hoy',
   'resumen-periodo': 'Resumen período',
+  configuracion: 'Configuración',
 };
 
 export default function AppShell({ seccion, onCambiarSeccion, children }) {
