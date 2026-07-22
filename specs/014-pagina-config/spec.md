@@ -8,6 +8,28 @@
 
 **Input**: User description: "Pagina-Config. hacer configurable dinamicamente ciertos parametros del archivo .env. ej IP PORT del reloj, ademas editar parametros de config/categorias.json y config/motivos-ausencia.json"
 
+## Clarifications
+
+### Session 2026-07-22
+
+- Q: ¿Se debe permitir eliminar una categoría completa desde esta página (no solo
+  bloquear la eliminación de una modalidad en uso)? → A: No permitir eliminar
+  categorías desde esta página; solo se pueden agregar y editar (incluida la
+  modalidad asignada). Retirar una categoría por completo queda fuera de
+  alcance de esta feature.
+- Q: `config/categorias.json` también tiene `esquemaSemanal` (lista de días
+  laborales compartida por todas las modalidades) — ¿debe ser editable desde
+  esta página? → A: Sí, editable, por extensibilidad (queda dentro del mismo
+  alcance que el resto de `categorias.json`).
+- Q: ¿Los cambios de configuración (reloj, motivos, categorías/modalidades,
+  esquema semanal) deben quedar registrados en un log de auditoría? → A: No,
+  esta feature no registra auditoría de estos cambios (se puede evaluar más
+  adelante, junto con una eventual autenticación de usuarios).
+- Q: Una vez creada una categoría (por ejemplo `ADMIN`, `PROD`), ¿su código se
+  puede renombrar, o queda fijo (solo se edita la modalidad asignada)? → A: El
+  código queda fijo una vez creada la categoría; solo se edita la modalidad
+  asignada, igual que el identificador de un motivo de ausencia.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Configurar la conexión al reloj sin editar archivos a mano (Priority: P1)
@@ -85,8 +107,9 @@ Ausencias (spec 012) refleja esos cambios.
 ### User Story 3 - Editar categorías y modalidades horarias (Priority: P3)
 
 Como responsable de administración de personal, quiero agregar o editar
-categorías de empleados y las modalidades horarias (apertura/cierre oficial,
-márgenes, ventanas) que se les asignan, desde la aplicación, para dar de alta una
+categorías de empleados, las modalidades horarias (apertura/cierre oficial,
+márgenes, ventanas) que se les asignan, y el esquema semanal de días laborales
+compartido por todas las modalidades, desde la aplicación, para dar de alta una
 categoría nueva o ajustar un horario sin editar `config/categorias.json` a mano.
 
 **Why this priority**: valor real pero de menor frecuencia de uso que las
@@ -95,7 +118,8 @@ que exista la misma pantalla de Configuración que las historias anteriores.
 
 **Independent Test**: se puede probar completo agregando una modalidad horaria
 nueva, asignándosela a una categoría (nueva o existente), y verificando que el
-cálculo de presentismo de esa categoría usa el horario recién definido.
+cálculo de presentismo de esa categoría usa el horario recién definido. No
+incluye eliminar categorías (ver Clarifications).
 
 **Acceptance Scenarios**:
 
@@ -112,6 +136,13 @@ cálculo de presentismo de esa categoría usa el horario recién definido.
    `00:00`-`23:59`) o una ventana donde el cierre es anterior a la apertura,
    **When** intenta guardar, **Then** el sistema rechaza el guardado y señala el
    campo inválido.
+5. **Given** el esquema semanal de días laborales actual, **When** el usuario
+   modifica qué días de la semana se consideran laborales, **Then** el cambio
+   se persiste y rige para todas las modalidades por igual (es un único
+   esquema compartido, no uno por modalidad).
+6. **Given** el usuario intenta guardar un esquema semanal vacío o con un día
+   repetido, **When** guarda, **Then** el sistema rechaza el guardado y señala
+   el error.
 
 ---
 
@@ -208,9 +239,18 @@ verificando que los nuevos valores persisten y quedan reflejados en la página.
   modalidad que tienen asignada.
 - **FR-012**: El sistema DEBE impedir eliminar una modalidad horaria que esté
   asignada a alguna categoría, indicando qué categorías la usan.
+- **FR-012a**: El sistema NO DEBE ofrecer la eliminación de una categoría de
+  empleado desde esta página; una categoría solo se agrega o se edita (incluida
+  la modalidad que tiene asignada), nunca se borra.
+- **FR-012b**: El sistema DEBE mantener fijo el código de una categoría una vez
+  creada; solo su modalidad asignada es editable, no su código.
 - **FR-013**: El sistema DEBE validar los horarios de una modalidad (horas en
   formato válido, cierre de ventana posterior a la apertura de esa misma ventana)
   antes de guardar.
+- **FR-013a**: El sistema DEBE permitir editar el esquema semanal de días
+  laborales (`config/categorias.json`: `esquemaSemanal`), compartido por todas
+  las modalidades, validando que no quede vacío y que no contenga días
+  repetidos antes de guardar.
 - **FR-014**: El sistema NO DEBE exponer ni permitir editar credenciales o cadenas
   de conexión a Oracle (usuario, contraseña, connect string) desde la página de
   Configuración.
@@ -230,6 +270,8 @@ verificando que los nuevos valores persisten y quedan reflejados en la página.
 - **Modalidad Horaria**: tipo (mensual/quincenal), apertura y cierre oficial,
   márgenes de tolerancia, ventanas válidas de apertura y de cierre.
 - **Categoría de Empleado**: código de categoría y modalidad horaria asignada.
+- **Esquema Semanal**: lista de días de la semana considerados laborales,
+  compartida por todas las modalidades horarias.
 
 ## Success Criteria *(mandatory)*
 
@@ -268,3 +310,6 @@ verificando que los nuevos valores persisten y quedan reflejados en la página.
 - No se requiere recalcular retroactivamente días de un período ya procesado
   cuando cambia una modalidad u otra categoría asignada; el cambio rige hacia
   adelante.
+- Esta feature no incorpora un registro de auditoría (quién/cuándo) de los
+  cambios de configuración; queda fuera de alcance hasta que, si corresponde,
+  se incorpore autenticación de usuarios.
