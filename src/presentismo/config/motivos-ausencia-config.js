@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, renameSync } from 'node:fs';
 
 // Configuración del catálogo de motivos de Justificación de Ausencias
 // (contracts/motivos-ausencia-config.schema.md, spec 012 FR-004..FR-006).
@@ -35,8 +35,12 @@ export function parseMotivosAusenciaConfig(raw) {
     motivos.set(id, { id, etiqueta, tipoPago: m.tipoPago, activo });
   }
 
-  const activos = [...motivos.values()].filter((m) => m.activo);
-  if (activos.length === 0) fail('el catálogo debe tener al menos un motivo activo');
+  // feature 014 (research.md §3): a diferencia de la validación original de
+  // spec 012, un catálogo sin ningún motivo activo YA NO es un error de
+  // arranque — es una decisión de negocio válida (spec 014, Edge Cases): la
+  // página de Configuración permite desactivar el último motivo activo. El
+  // selector de Justificación de Ausencias simplemente queda vacío hasta que
+  // se reactive o cree uno.
 
   return {
     motivos,
@@ -51,6 +55,43 @@ export function parseMotivosAusenciaConfig(raw) {
       return m?.activo ? m : null;
     },
   };
+}
+
+// feature 014 (US2, contracts/web-api-configuracion.md) — Serialización y
+// edición del catálogo. Las funciones de edición operan sobre una config ya
+// parseada y devuelven una NUEVA config, re-validada con
+// `parseMotivosAusenciaConfig` (mismo criterio fail-fast que la carga), para
+// garantizar que nunca se persiste un catálogo inválido.
+
+export function serializarMotivosAusenciaConfig(config) {
+  return { motivos: [...config.motivos.values()] };
+}
+
+// Alta de un motivo nuevo (FR-008). Rechaza un `id` ya existente (FR-010).
+export function agregarMotivo(config, { id, etiqueta, tipoPago, activo = true }) {
+  if (config.motivos.has(id)) fail(`ya existe un motivo con id "${id}"`);
+  const raw = serializarMotivosAusenciaConfig(config);
+  raw.motivos.push({ id, etiqueta, tipoPago, activo });
+  return parseMotivosAusenciaConfig(raw);
+}
+
+// Edita etiqueta/tipoPago/activo de un motivo existente (FR-008, FR-009). El
+// `id` es inmutable: no forma parte de `cambios` (Clarifications del spec).
+export function editarMotivo(config, id, cambios) {
+  if (!config.motivos.has(id)) fail(`no existe un motivo con id "${id}"`);
+  const raw = serializarMotivosAusenciaConfig(config);
+  const idx = raw.motivos.findIndex((m) => m.id === id);
+  raw.motivos[idx] = { ...raw.motivos[idx], ...cambios, id };
+  return parseMotivosAusenciaConfig(raw);
+}
+
+// Escritura atómica (archivo temporal + rename, FR-015): nunca deja el
+// archivo a medio escribir ante un fallo de disco.
+export function saveMotivosAusenciaConfig(path, config) {
+  const contenido = `${JSON.stringify(serializarMotivosAusenciaConfig(config), null, 2)}\n`;
+  const rutaTmp = `${path}.tmp-${process.pid}-${Date.now()}`;
+  writeFileSync(rutaTmp, contenido, 'utf8');
+  renameSync(rutaTmp, path);
 }
 
 // Carga desde archivo JSON (fail-fast ante ausencia / JSON inválido).

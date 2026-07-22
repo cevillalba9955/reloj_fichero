@@ -37,10 +37,10 @@ tests backend en `tests/` (repo root), tests frontend co-ubicados
 **Purpose**: Crear el punto de entrada de la nueva página/API antes de
 implementar cualquier historia.
 
-- [ ] T001 [P] Agregar entrada de navegación "Configuración" (`icon`, `label`, título) en `frontend/src/components/AppShell.jsx` (arrays `SECCIONES`/`TITULOS`)
-- [ ] T002 [P] Crear `src/web/api/configuracion-handlers.js` con `export function registrarRutas(router, ctx) {}` vacío, y registrarlo en `src/web/server.js` (import + llamada, junto a los demás `registrarRutas*`)
-- [ ] T003 [P] Crear `frontend/src/api/configuracion-client.js` con `export function crearClienteConfiguracion({ fetchImpl, base = '/api' } = {}) {}` vacío (mismo patrón que `frontend/src/api/resumen-periodo-client.js`)
-- [ ] T004 Crear `frontend/src/components/PaginaConfiguracion.jsx` con `Tabs` de AntD (pestañas vacías "Reloj y servicio", "Motivos de ausencia", "Categorías y modalidades") + `PaginaConfiguracion.test.jsx` esqueleto; agregar rama `'configuracion'` en `frontend/src/App.jsx` (depende de T001, T003)
+- [X] T001 [P] Agregar entrada de navegación "Configuración" (`icon`, `label`, título) en `frontend/src/components/AppShell.jsx` (arrays `SECCIONES`/`TITULOS`)
+- [X] T002 [P] Crear `src/web/api/configuracion-handlers.js` con `export function registrarRutas(router, ctx) {}` vacío, y registrarlo en `src/web/server.js` (import + llamada, junto a los demás `registrarRutas*`)
+- [X] T003 [P] Crear `frontend/src/api/configuracion-client.js` con `export function crearClienteConfiguracion({ fetchImpl, base = '/api' } = {}) {}` vacío (mismo patrón que `frontend/src/api/resumen-periodo-client.js`)
+- [X] T004 Crear `frontend/src/components/PaginaConfiguracion.jsx` con `Tabs` de AntD (pestañas vacías "Reloj y servicio", "Motivos de ausencia", "Categorías y modalidades") + `PaginaConfiguracion.test.jsx` esqueleto; agregar rama `'configuracion'` en `frontend/src/App.jsx` (depende de T001, T003)
 
 **Checkpoint**: la página existe, vacía, navegable, y la API responde 404 en `/api/configuracion/*` de forma controlada (ruta registrada sin handlers todavía).
 
@@ -52,8 +52,8 @@ implementar cualquier historia.
 
 **⚠️ CRITICAL**: Ninguna historia sobre `.env` (US1, US4) puede implementarse sin esto.
 
-- [ ] T005 Crear `src/config/env-file.js` con lectura genérica de pares `CLAVE=valor` (preserva comentarios/orden/claves no gestionadas) y escritura atómica genérica (archivo temporal + `rename`), sin reglas de validación por clave todavía (contracts/env-config.schema.md)
-- [ ] T006 [P] Test unitario de `env-file.js` en `tests/unit/env-file.test.js`: lectura preserva comentarios y claves ajenas (`RRHH_ORACLE_*`), escritura atómica no corrompe el archivo ante un fallo simulado de disco
+- [X] T005 Crear `src/config/env-file.js` con lectura genérica de pares `CLAVE=valor` (preserva comentarios/orden/claves no gestionadas) y escritura atómica genérica (archivo temporal + `rename`), sin reglas de validación por clave todavía (contracts/env-config.schema.md)
+- [X] T006 [P] Test unitario de `env-file.js` en `tests/unit/env-file.test.js`: lectura preserva comentarios y claves ajenas (`RRHH_ORACLE_*`), escritura atómica no corrompe el archivo ante un fallo simulado de disco
 
 **Checkpoint**: `env-file.js` puede leer y reescribir cualquier subconjunto de claves de un `.env` de prueba sin perder el resto del contenido.
 
@@ -71,19 +71,19 @@ servicio), sin tocar categorías ni motivos.
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T007 [P] [US1] Test de contrato `GET`/`PUT /api/configuracion/reloj` (solo `host`/`port`) en `tests/contract/web-api-configuracion.test.js`: guardado válido, puerto fuera de rango → 400 sin persistir
-- [ ] T008 [P] [US1] Test de contrato `POST /api/configuracion/reloj/probar-conexion` en `tests/contract/control-api-probar-conexion.test.js`, mockeando el control-API (éxito, fallo de conexión, control-API no disponible → 502)
-- [ ] T009 [P] [US1] Test unitario de validación de `FICHADAS_HOST` (no vacío) y `FICHADAS_PORT` (entero 1–65535) en `tests/unit/env-file.test.js`
+- [X] T007 [P] [US1] Test de contrato `GET`/`PUT /api/configuracion/reloj` (solo `host`/`port`) en `tests/contract/web-api-configuracion.test.js`: guardado válido, puerto fuera de rango → 400 sin persistir
+- [X] T008 [P] [US1] Test de contrato `POST /api/configuracion/reloj/probar-conexion` en `tests/contract/control-api-probar-conexion.test.js`, mockeando el control-API (éxito, fallo de conexión, control-API no disponible → 502)
+- [X] T009 [P] [US1] Test unitario de validación de `FICHADAS_HOST` (no vacío) y `FICHADAS_PORT` (entero 1–65535) en `tests/unit/env-file.test.js`
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Agregar validación + lectura/escritura de `FICHADAS_HOST`/`FICHADAS_PORT` a `leerParametrosEditables`/`escribirParametrosEditables` en `src/config/env-file.js` (depende de T005)
-- [ ] T011 [US1] Agregar ruta `POST /probar-conexion` a `crearServidorControl` en `src/cli/consulta-programada.js`: recibe `{ host, port }`, usa `connectSocket(host, port, timeoutMs)` de `src/protocol/client.js` con el `FICHADAS_TIMEOUT_MS` vigente, cierra el socket, responde `{ ok, motivo? }` (contracts/control-api.md)
-- [ ] T012 [US1] Implementar `GET /api/configuracion/reloj` y `PUT /api/configuracion/reloj` (solo `host`/`port` por ahora) en `src/web/api/configuracion-handlers.js`; exponer la ruta del `.env` desde `src/web/wiring.js` al contexto (depende de T002, T010)
-- [ ] T013 [US1] Implementar `POST /api/configuracion/reloj/probar-conexion` en `configuracion-handlers.js` como proxy HTTP al control-API (nuevo cliente en `src/web/wiring.js`, mismo patrón que `src/presentismo/service/consultar-reloj-cliente.js`); mapear indisponibilidad a `502 SERVICIO_FICHADAS_NO_DISPONIBLE` (depende de T011)
-- [ ] T014 [US1] Implementar `obtenerReloj()`/`guardarReloj()`/`probarConexionReloj()` en `frontend/src/api/configuracion-client.js` (depende de T003)
-- [ ] T015 [US1] Implementar `FormularioConexionReloj.jsx` (campos host/puerto, botón "Probar conexión", confirmación de guardado exitoso/error, aviso "requiere reinicio del servicio de fichadas") + `FormularioConexionReloj.test.jsx`; montarlo en la pestaña "Reloj y servicio" de `PaginaConfiguracion.jsx` (depende de T004, T014)
-- [ ] T016 [US1] Test de integración guardar→releer host/puerto en `tests/integration/configuracion.integration.test.js`
+- [X] T010 [US1] Agregar validación + lectura/escritura de `FICHADAS_HOST`/`FICHADAS_PORT` a `leerParametrosEditables`/`escribirParametrosEditables` en `src/config/env-file.js` (depende de T005)
+- [X] T011 [US1] Agregar ruta `POST /probar-conexion` a `crearServidorControl` en `src/cli/consulta-programada.js`: recibe `{ host, port }`, usa `connectSocket(host, port, timeoutMs)` de `src/protocol/client.js` con el `FICHADAS_TIMEOUT_MS` vigente, cierra el socket, responde `{ ok, motivo? }` (contracts/control-api.md)
+- [X] T012 [US1] Implementar `GET /api/configuracion/reloj` y `PUT /api/configuracion/reloj` (solo `host`/`port` por ahora) en `src/web/api/configuracion-handlers.js`; exponer la ruta del `.env` desde `src/web/wiring.js` al contexto (depende de T002, T010)
+- [X] T013 [US1] Implementar `POST /api/configuracion/reloj/probar-conexion` en `configuracion-handlers.js` como proxy HTTP al control-API (nuevo cliente en `src/web/wiring.js`, mismo patrón que `src/presentismo/service/consultar-reloj-cliente.js`); mapear indisponibilidad a `502 SERVICIO_FICHADAS_NO_DISPONIBLE` (depende de T011)
+- [X] T014 [US1] Implementar `obtenerReloj()`/`guardarReloj()`/`probarConexionReloj()` en `frontend/src/api/configuracion-client.js` (depende de T003)
+- [X] T015 [US1] Implementar `FormularioConexionReloj.jsx` (campos host/puerto, botón "Probar conexión", confirmación de guardado exitoso/error, aviso "requiere reinicio del servicio de fichadas") + `FormularioConexionReloj.test.jsx`; montarlo en la pestaña "Reloj y servicio" de `PaginaConfiguracion.jsx` (depende de T004, T014)
+- [X] T016 [US1] Test de integración guardar→releer host/puerto en `tests/integration/configuracion.integration.test.js`
 
 **Checkpoint**: US1 funcional y probable de forma completamente independiente.
 
@@ -99,16 +99,16 @@ Ausencias (spec 012) refleja los cambios.
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T017 [P] [US2] Test de contrato `GET`/`POST /api/configuracion/motivos-ausencia` y `PUT /api/configuracion/motivos-ausencia/:id` en `tests/contract/web-api-configuracion.test.js`: alta, edición, desactivación, `id` duplicado → 400
-- [ ] T018 [P] [US2] Test unitario de escritura/edición en `tests/unit/presentismo-motivos-ausencia-config.test.js`: `id` inmutable, duplicado rechazado, catálogo puede quedar sin motivos activos (research.md §3)
+- [X] T017 [P] [US2] Test de contrato `GET`/`POST /api/configuracion/motivos-ausencia` y `PUT /api/configuracion/motivos-ausencia/:id` en `tests/contract/web-api-configuracion.test.js`: alta, edición, desactivación, `id` duplicado → 400
+- [X] T018 [P] [US2] Test unitario de escritura/edición en `tests/unit/presentismo-motivos-ausencia-config.test.js`: `id` inmutable, duplicado rechazado, catálogo puede quedar sin motivos activos (research.md §3)
 
 ### Implementation for User Story 2
 
-- [ ] T019 [US2] Agregar `serializarMotivosAusenciaConfig` y funciones `agregarMotivo`/`editarMotivo`/`desactivarMotivo` (re-validan con `parseMotivosAusenciaConfig` antes de escribir) a `src/presentismo/config/motivos-ausencia-config.js`; relajar el `fail()` de "debe haber al menos un motivo activo" a una validación no bloqueante (research.md §3)
-- [ ] T020 [US2] Implementar `GET`/`POST /api/configuracion/motivos-ausencia` y `PUT /api/configuracion/motivos-ausencia/:id` en `configuracion-handlers.js` (depende de T019)
-- [ ] T021 [US2] Implementar `obtenerMotivos()`/`crearMotivo()`/`editarMotivo()` en `frontend/src/api/configuracion-client.js`
-- [ ] T022 [US2] Implementar `TablaMotivosAusencia.jsx` (listado completo, alta, edición de etiqueta/tipo de pago, activar/desactivar) + `TablaMotivosAusencia.test.jsx`; montarla en la pestaña "Motivos de ausencia" (depende de T004, T021)
-- [ ] T023 [US2] Test de integración: un motivo creado/desactivado desde `/api/configuracion/motivos-ausencia` se refleja en `GET /api/motivos-ausencia` (selector de Justificación, spec 012) en `tests/integration/configuracion.integration.test.js`
+- [X] T019 [US2] Agregar `serializarMotivosAusenciaConfig` y funciones `agregarMotivo`/`editarMotivo`/`desactivarMotivo` (re-validan con `parseMotivosAusenciaConfig` antes de escribir) a `src/presentismo/config/motivos-ausencia-config.js`; relajar el `fail()` de "debe haber al menos un motivo activo" a una validación no bloqueante (research.md §3)
+- [X] T020 [US2] Implementar `GET`/`POST /api/configuracion/motivos-ausencia` y `PUT /api/configuracion/motivos-ausencia/:id` en `configuracion-handlers.js` (depende de T019)
+- [X] T021 [US2] Implementar `obtenerMotivos()`/`crearMotivo()`/`editarMotivo()` en `frontend/src/api/configuracion-client.js`
+- [X] T022 [US2] Implementar `TablaMotivosAusencia.jsx` (listado completo, alta, edición de etiqueta/tipo de pago, activar/desactivar) + `TablaMotivosAusencia.test.jsx`; montarla en la pestaña "Motivos de ausencia" (depende de T004, T021)
+- [X] T023 [US2] Test de integración: un motivo creado/desactivado desde `/api/configuracion/motivos-ausencia` se refleja en `GET /api/motivos-ausencia` (selector de Justificación, spec 012) en `tests/integration/configuracion.integration.test.js`
 
 **Checkpoint**: US1 y US2 funcionan de forma independiente.
 
@@ -125,16 +125,16 @@ categoría usa el horario recién definido.
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T024 [P] [US3] Test de contrato `GET /api/configuracion/categorias`, `PUT .../esquema-semanal`, `POST`/`PUT`/`DELETE .../modalidades[/:nombre]`, `POST`/`PUT .../categorias[/:codigo]` en `tests/contract/web-api-configuracion.test.js`: alta/edición válidas, eliminación de modalidad en uso → 409 con lista de categorías, código de categoría duplicado → 400, modalidad inexistente → 400
-- [ ] T025 [P] [US3] Test unitario de escritura/edición en `tests/unit/presentismo-categorias-config.test.js`: alta/edición de modalidad, bloqueo de eliminación en uso, código de categoría inmutable, esquema semanal vacío/repetido rechazado
+- [X] T024 [P] [US3] Test de contrato `GET /api/configuracion/categorias`, `PUT .../esquema-semanal`, `POST`/`PUT`/`DELETE .../modalidades[/:nombre]`, `POST`/`PUT .../categorias[/:codigo]` en `tests/contract/web-api-configuracion.test.js`: alta/edición válidas, eliminación de modalidad en uso → 409 con lista de categorías, código de categoría duplicado → 400, modalidad inexistente → 400
+- [X] T025 [P] [US3] Test unitario de escritura/edición en `tests/unit/presentismo-categorias-config.test.js`: alta/edición de modalidad, bloqueo de eliminación en uso, código de categoría inmutable, esquema semanal vacío/repetido rechazado
 
 ### Implementation for User Story 3
 
-- [ ] T026 [US3] Agregar `serializarCategoriasConfig` y funciones `agregarModalidad`/`editarModalidad`/`eliminarModalidad` (bloquea si alguna categoría la referencia), `agregarCategoria`/`editarCategoriaModalidad` (sin eliminación, código inmutable) y `editarEsquemaSemanal` a `src/presentismo/config/categorias-config.js`, todas re-validando con `parseCategoriasConfig` antes de escribir
-- [ ] T027 [US3] Implementar `GET /api/configuracion/categorias`, `PUT .../esquema-semanal`, `POST`/`PUT`/`DELETE .../modalidades[/:nombre]`, `POST`/`PUT .../categorias[/:codigo]` en `configuracion-handlers.js` (depende de T026)
-- [ ] T028 [US3] Implementar los métodos de categorías/modalidades/esquema semanal en `frontend/src/api/configuracion-client.js`
-- [ ] T029 [US3] Implementar `FormularioCategoriasModalidades.jsx` (tabla de modalidades con alta/edición/baja bloqueada visualmente si está en uso, tabla de categorías con alta/edición de modalidad asignada, editor del esquema semanal) + `FormularioCategoriasModalidades.test.jsx`; montarlo en la pestaña "Categorías y modalidades" (depende de T004, T028)
-- [ ] T030 [US3] Test de integración: una modalidad/categoría editada afecta el próximo `npm run presentismo` de esa categoría, en `tests/integration/configuracion.integration.test.js`
+- [X] T026 [US3] Agregar `serializarCategoriasConfig` y funciones `agregarModalidad`/`editarModalidad`/`eliminarModalidad` (bloquea si alguna categoría la referencia), `agregarCategoria`/`editarCategoriaModalidad` (sin eliminación, código inmutable) y `editarEsquemaSemanal` a `src/presentismo/config/categorias-config.js`, todas re-validando con `parseCategoriasConfig` antes de escribir
+- [X] T027 [US3] Implementar `GET /api/configuracion/categorias`, `PUT .../esquema-semanal`, `POST`/`PUT`/`DELETE .../modalidades[/:nombre]`, `POST`/`PUT .../categorias[/:codigo]` en `configuracion-handlers.js` (depende de T026)
+- [X] T028 [US3] Implementar los métodos de categorías/modalidades/esquema semanal en `frontend/src/api/configuracion-client.js`
+- [X] T029 [US3] Implementar `FormularioCategoriasModalidades.jsx` (tabla de modalidades con alta/edición/baja bloqueada visualmente si está en uso, tabla de categorías con alta/edición de modalidad asignada, editor del esquema semanal) + `FormularioCategoriasModalidades.test.jsx`; montarlo en la pestaña "Categorías y modalidades" (depende de T004, T028)
+- [X] T030 [US3] Test de integración: una modalidad/categoría editada afecta el próximo `npm run presentismo` de esa categoría, en `tests/integration/configuracion.integration.test.js`
 
 **Checkpoint**: US1, US2 y US3 funcionan de forma independiente.
 
@@ -151,15 +151,15 @@ hora/duración del checkpoint de entrada, guardar, y verificar que persisten.
 
 ### Tests for User Story 4 ⚠️
 
-- [ ] T031 [P] [US4] Test unitario de validación de `timeoutMs`/`tickIntervalMs`/`statusIntervalMs`/`entradaHora`/`entradaDuracion`/`fullHandshake`/`controlPort`/`resumenPeriodo` en `tests/unit/env-file.test.js`
-- [ ] T032 [P] [US4] Test de contrato extendido `GET`/`PUT /api/configuracion/reloj` con todos los campos (incluye rechazo atómico: un campo inválido no persiste ningún campo del body) en `tests/contract/web-api-configuracion.test.js`
+- [X] T031 [P] [US4] Test unitario de validación de `timeoutMs`/`tickIntervalMs`/`statusIntervalMs`/`entradaHora`/`entradaDuracion`/`fullHandshake`/`controlPort`/`resumenPeriodo` en `tests/unit/env-file.test.js` (ya cubierto por la implementación completa de env-file.js en la fase Foundational)
+- [X] T032 [P] [US4] Test de contrato extendido `GET`/`PUT /api/configuracion/reloj` con todos los campos (incluye rechazo atómico: un campo inválido no persiste ningún campo del body) en `tests/contract/web-api-configuracion.test.js`
 
 ### Implementation for User Story 4
 
-- [ ] T033 [US4] Extender `leerParametrosEditables`/`escribirParametrosEditables` en `src/config/env-file.js` con `FICHADAS_TIMEOUT_MS`, `FICHADAS_TICK_INTERVAL_MS`, `FICHADAS_STATUS_INTERVAL_MS`, `FICHADAS_ENTRADA_HORA`, `FICHADAS_ENTRADA_DURACION`, `FICHADAS_FULL_HANDSHAKE`, `FICHADAS_CONTROL_PORT` y `PRESENTISMO_RESUMEN_PERIODO` (depende de T010)
-- [ ] T034 [US4] Extender `GET`/`PUT /api/configuracion/reloj` en `configuracion-handlers.js` para incluir todos los campos de T033 (depende de T012, T033)
-- [ ] T035 [US4] Extender `FormularioConexionReloj.jsx` con los campos restantes (agrupados en la misma pestaña "Reloj y servicio") + actualizar `FormularioConexionReloj.test.jsx` (depende de T015, T034)
-- [ ] T036 [US4] Test de integración: un valor fuera de rango en cualquiera de los campos nuevos no persiste ningún campo del body, en `tests/integration/configuracion.integration.test.js`
+- [X] T033 [US4] Extender `leerParametrosEditables`/`escribirParametrosEditables` en `src/config/env-file.js` con `FICHADAS_TIMEOUT_MS`, `FICHADAS_TICK_INTERVAL_MS`, `FICHADAS_STATUS_INTERVAL_MS`, `FICHADAS_ENTRADA_HORA`, `FICHADAS_ENTRADA_DURACION`, `FICHADAS_FULL_HANDSHAKE`, `FICHADAS_CONTROL_PORT` y `PRESENTISMO_RESUMEN_PERIODO` (ya incluido desde T005/T010, construido completo desde el inicio)
+- [X] T034 [US4] Extender `GET`/`PUT /api/configuracion/reloj` en `configuracion-handlers.js` para incluir todos los campos de T033 (ya incluido desde T012, mapeo `CAMPO_A_CLAVE_ENV` completo desde el inicio)
+- [X] T035 [US4] Extender `FormularioConexionReloj.jsx` con los campos restantes (agrupados en la misma pestaña "Reloj y servicio") + actualizar `FormularioConexionReloj.test.jsx` (depende de T015, T034)
+- [X] T036 [US4] Test de integración: un valor fuera de rango en cualquiera de los campos nuevos no persiste ningún campo del body, en `tests/integration/configuracion.integration.test.js`
 
 **Checkpoint**: las 4 historias funcionan de forma independiente entre sí.
 
@@ -169,10 +169,10 @@ hora/duración del checkpoint de entrada, guardar, y verificar que persisten.
 
 **Purpose**: validación end-to-end y limpieza final.
 
-- [ ] T037 [P] Ejecutar los escenarios de `quickstart.md` (las 4 historias) y corregir cualquier discrepancia encontrada
-- [ ] T038 Revisión manual: confirmar que ningún endpoint de `/api/configuracion/*` expone `RRHH_ORACLE_*` ni rutas de archivos/directorios (FR-014)
-- [ ] T039 [P] `cd frontend && npm run build` y verificar en el navegador que `PaginaConfiguracion` carga sin errores de consola y sin warnings de AntD
-- [ ] T040 [P] `npm test` (backend) y `cd frontend && npm test` (frontend) — confirmar suite completa en verde
+- [X] T037 [P] Ejecutar los escenarios de `quickstart.md` (las 4 historias) y corregir cualquier discrepancia encontrada — verificado en navegador contra una copia sandbox del `.env`/`categorias.json`/`motivos-ausencia.json` reales (server.js + preview del navegador): las 3 pestañas cargan datos reales, "Probar conexión" reporta correctamente `SERVICIO_FICHADAS_NO_DISPONIBLE` cuando no hay control-API
+- [X] T038 Revisión manual: confirmar que ningún endpoint de `/api/configuracion/*` expone `RRHH_ORACLE_*` ni rutas de archivos/directorios (FR-014) — grep confirmó que solo aparecen en un comentario documentando la exclusión
+- [X] T039 [P] `cd frontend && npm run build` y verificar en el navegador que `PaginaConfiguracion` carga sin errores de consola y sin warnings de AntD — build OK, sin errores de consola en las 3 pestañas
+- [X] T040 [P] `npm test` (backend) y `cd frontend && npm test` (frontend) — confirmar suite completa en verde — 565/565 backend, 122/122 frontend
 
 ---
 

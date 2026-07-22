@@ -5,6 +5,8 @@ import PaginaFichadasHoy from './components/PaginaFichadasHoy.jsx';
 import { crearClienteFichadasHoy } from './api/fichadas-hoy-client.js';
 import PaginaResumenPeriodo from './components/PaginaResumenPeriodo.jsx';
 import { crearClienteResumenPeriodo } from './api/resumen-periodo-client.js';
+import PaginaConfiguracion from './components/PaginaConfiguracion.jsx';
+import { crearClienteConfiguracion } from './api/configuracion-client.js';
 import AppShell from './components/AppShell.jsx';
 
 // feature 007 — Pantalla principal. Orquesta la carga del último mes generado,
@@ -20,11 +22,13 @@ import AppShell from './components/AppShell.jsx';
 const clienteCalendarioPorDefecto = crearClienteCalendario();
 const clienteFichadasPorDefecto = crearClienteFichadasHoy(); // se inyecta desde main.jsx
 const clienteResumenPeriodoPorDefecto = crearClienteResumenPeriodo();
+const clienteConfiguracionPorDefecto = crearClienteConfiguracion();
 
 export default function App({
   clienteCalendario = clienteCalendarioPorDefecto,
   clienteFichadas = clienteFichadasPorDefecto,
   clienteResumenPeriodo = clienteResumenPeriodoPorDefecto,
+  clienteConfiguracion = clienteConfiguracionPorDefecto,
 }) {
   const [pestania, setPestania] = useState('fichadas-hoy');
 
@@ -35,6 +39,8 @@ export default function App({
       {pestania === 'calendario' && <PaginaCalendario cliente={clienteCalendario} />}
 
       {pestania === 'resumen-periodo' && <PaginaResumenPeriodo cliente={clienteResumenPeriodo} />}
+
+      {pestania === 'configuracion' && <PaginaConfiguracion cliente={clienteConfiguracion} />}
     </AppShell>
   );
 }

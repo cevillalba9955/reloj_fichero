@@ -133,8 +133,10 @@ horarios de una modalidad existente.
 ### `DELETE /api/configuracion/categorias/modalidades/:nombre`
 
 - **200** `{ "eliminada": true }`: ninguna categoría la usaba.
-- **409** `MODALIDAD_EN_USO`: `{ "error": { "codigo": "MODALIDAD_EN_USO", "mensaje": "..." }, "categorias": ["ADMIN", "PROD"] }`
-  — lista las categorías que la referencian (FR-012).
+- **409** `MODALIDAD_EN_USO`: `{ "error": { "codigo": "MODALIDAD_EN_USO", "mensaje": "... está en uso por: ADMIN, PROD" } }`
+  — el mensaje nombra las categorías que la referencian (FR-012); la forma de
+  error sigue siendo la uniforme `{ error: { codigo, mensaje } }` del resto de
+  la API (`src/web/api/router.js`), sin campos adicionales en el cuerpo.
 - **404** `MODALIDAD_NO_ENCONTRADA`.
 
 ### `POST /api/configuracion/categorias/categorias`

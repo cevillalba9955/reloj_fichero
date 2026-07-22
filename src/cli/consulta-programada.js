@@ -11,6 +11,7 @@ import { createRosterFetchLogger } from '../logging/roster-fetch-logger.js';
 import { registrarFichadas } from '../presentismo/adapters/file-fichadas-archive.js';
 import { createFilePresentismoRepository } from '../presentismo/adapters/file-presentismo-repository.js';
 import { createPresentismoLogger } from '../presentismo/logging/presentismo-logger.js';
+import { connectSocket } from '../protocol/client.js';
 
 export class InvalidArgsError extends Error {}
 
@@ -213,16 +214,58 @@ export function createFichadasSink({ repoDir, now = () => new Date(), logger = n
 // servicio de fichadas. Atado EXCLUSIVAMENTE a 127.0.0.1 (nunca a una interfaz
 // externa): es el canal por el que el proceso web (rs956-web.service) pide un
 // ciclo fuera de horario al UNICO dueño de la conexion al reloj (Principio
-// III). Una sola ruta: POST /tick → { resultado: "ok"|"omitido"|"error",
-// fichadasNuevas, detail } (contracts/control-api.md). Un ciclo con error del
+// III). POST /tick → { resultado: "ok"|"omitido"|"error", fichadasNuevas,
+// detail } (contracts/control-api.md, feature 010). Un ciclo con error del
 // reloj sigue siendo HTTP 200: el POST /tick en si se ejecuto; la API web es
 // la que lo traduce a 502 hacia el frontend.
-export function crearServidorControl({ tick, port, host = '127.0.0.1' }) {
+//
+// feature 014 — agrega POST /probar-conexion: mismo principio (el proceso web
+// nunca abre el socket del reloj el mismo, Principio III), pero para un
+// host/puerto CANDIDATO todavia no guardado (contracts/control-api.md de
+// 014). Usa connectSocket() del driver aislado, cierra el socket sin ejecutar
+// ningun comando del protocolo, y nunca persiste ni altera el scheduler.
+export function crearServidorControl({ tick, port, host = '127.0.0.1', timeoutMs = 5000 }) {
+  async function manejarProbarConexion(req, res) {
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    let body;
+    try {
+      body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: { codigo: 'CUERPO_INVALIDO', mensaje: 'Body JSON invalido' } }));
+      return;
+    }
+    const { host: hostCandidato, port: portCandidato } = body ?? {};
+    if (typeof hostCandidato !== 'string' || hostCandidato.trim() === '' || !Number.isInteger(portCandidato)) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: { codigo: 'PARAMETROS_INVALIDOS', mensaje: 'Se requiere host (string) y port (entero)' } }));
+      return;
+    }
+    let socket;
+    try {
+      socket = await connectSocket(hostCandidato, portCandidato, timeoutMs);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, motivo: err.message }));
+    } finally {
+      socket?.destroy();
+    }
+  }
+
   const server = createServer(async (req, res) => {
     const pathname = new URL(req.url, 'http://localhost').pathname;
+
+    if (req.method === 'POST' && pathname === '/probar-conexion') {
+      await manejarProbarConexion(req, res);
+      return;
+    }
+
     if (req.method !== 'POST' || pathname !== '/tick') {
       res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ error: { codigo: 'NO_ENCONTRADO', mensaje: 'Solo POST /tick' } }));
+      res.end(JSON.stringify({ error: { codigo: 'NO_ENCONTRADO', mensaje: 'Solo POST /tick o POST /probar-conexion' } }));
       return;
     }
     try {
@@ -300,7 +343,7 @@ export function runService(
   // feature 010 (US4): control local opcional (solo si se configuro el puerto).
   let controlServer = null;
   if (options.controlPort) {
-    crearServidorControl({ tick: handle.tick, port: options.controlPort }).then((srv) => {
+    crearServidorControl({ tick: handle.tick, port: options.controlPort, timeoutMs: options.timeoutMs }).then((srv) => {
       controlServer = srv;
       print(`Control local del servicio (POST /tick) en http://127.0.0.1:${options.controlPort}`);
     });
