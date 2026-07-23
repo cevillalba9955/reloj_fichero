@@ -35,15 +35,16 @@ function entorno(extra = {}) {
   });
 }
 
-test('GET /api/motivos-ausencia → 200 con el catálogo de 9 motivos activos', async () => {
+// spec 015 (FR-018): 'vacaciones' queda deshabilitado para nuevas cargas
+// desde esta feature; el catálogo activo pasa de 9 a 8 motivos.
+test('GET /api/motivos-ausencia → 200 con el catálogo de 8 motivos activos (FR-018: vacaciones deshabilitado)', async () => {
   const e = await entorno();
   try {
     const res = await fetch(`${e.base}/api/motivos-ausencia`);
     assert.equal(res.status, 200);
     const { motivos } = await res.json();
-    assert.equal(motivos.length, 9);
-    const vacaciones = motivos.find((m) => m.id === 'vacaciones');
-    assert.equal(vacaciones.tipoPago, 'Paga');
+    assert.equal(motivos.length, 8);
+    assert.equal(motivos.find((m) => m.id === 'vacaciones'), undefined, 'FR-018: deshabilitado para nuevas cargas');
     const sinAviso = motivos.find((m) => m.id === 'sin_aviso');
     assert.equal(sinAviso.tipoPago, 'No paga');
   } finally {
@@ -131,7 +132,7 @@ test('POST /api/justificaciones sobre día único con fichadas → 409 JUSTIFICA
     const res = await fetch(`${e.base}/api/justificaciones`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ legajo: 1, fecha: FECHA_CON_FICHADAS, motivoId: 'vacaciones' }),
+      body: JSON.stringify({ legajo: 1, fecha: FECHA_CON_FICHADAS, motivoId: 'examen' }),
     });
     assert.equal(res.status, 409);
     assert.equal((await res.json()).error.codigo, 'JUSTIFICACION_NO_APLICABLE');
@@ -146,7 +147,7 @@ test('POST /api/justificaciones sobre día único No Laborable → 409 JUSTIFICA
     const res = await fetch(`${e.base}/api/justificaciones`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ legajo: 1, fecha: FECHA_NO_LABORABLE, motivoId: 'vacaciones' }),
+      body: JSON.stringify({ legajo: 1, fecha: FECHA_NO_LABORABLE, motivoId: 'examen' }),
     });
     assert.equal(res.status, 409);
     assert.equal((await res.json()).error.codigo, 'JUSTIFICACION_NO_APLICABLE');
@@ -161,7 +162,7 @@ test('POST /api/justificaciones — período sin calendario generado → 404 CAL
     const res = await fetch(`${e.base}/api/justificaciones`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ legajo: 1, fecha: '2099-01-05', motivoId: 'vacaciones' }),
+      body: JSON.stringify({ legajo: 1, fecha: '2099-01-05', motivoId: 'examen' }),
     });
     assert.equal(res.status, 404);
     assert.equal((await res.json()).error.codigo, 'CALENDARIO_NO_GENERADO');
@@ -176,7 +177,7 @@ test('POST /api/justificaciones — legajo sin categoría configurada → 409 EM
     const res = await fetch(`${e.base}/api/justificaciones`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ legajo: 9, fecha: FECHA_SIN_FICHADAS, motivoId: 'vacaciones' }),
+      body: JSON.stringify({ legajo: 9, fecha: FECHA_SIN_FICHADAS, motivoId: 'examen' }),
     });
     assert.equal(res.status, 409);
     assert.equal((await res.json()).error.codigo, 'EMPLEADO_SIN_CATEGORIA');
@@ -191,7 +192,7 @@ test('POST /api/justificaciones sobre un día futuro → 200 registrada (licenci
     const res = await fetch(`${e.base}/api/justificaciones`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ legajo: 1, fecha: FECHA_FUTURA, motivoId: 'vacaciones' }),
+      body: JSON.stringify({ legajo: 1, fecha: FECHA_FUTURA, motivoId: 'examen' }),
     });
     assert.equal(res.status, 200);
     const body = await res.json();
@@ -211,7 +212,7 @@ test('POST /api/justificaciones con rango → registra Laborables, omite No Labo
         legajo: 1,
         fecha: FECHA_SIN_FICHADAS,
         hasta: FECHA_NO_LABORABLE,
-        motivoId: 'vacaciones',
+        motivoId: 'examen',
       }),
     });
     assert.equal(res.status, 200);
@@ -233,7 +234,7 @@ test('POST /api/justificaciones — rango sin ningún día elegible → 409 RANG
         legajo: 1,
         fecha: FECHA_NO_LABORABLE,
         hasta: FECHA_NO_LABORABLE,
-        motivoId: 'vacaciones',
+        motivoId: 'examen',
       }),
     });
     assert.equal(res.status, 409);
@@ -249,7 +250,7 @@ test('DELETE /api/justificaciones revierte la vigente → 200; segunda vez → 4
     await fetch(`${e.base}/api/justificaciones`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ legajo: 1, fecha: FECHA_SIN_FICHADAS, motivoId: 'vacaciones' }),
+      body: JSON.stringify({ legajo: 1, fecha: FECHA_SIN_FICHADAS, motivoId: 'examen' }),
     });
     const res = await fetch(`${e.base}/api/justificaciones`, {
       method: 'DELETE',

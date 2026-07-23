@@ -8,14 +8,21 @@ export function createOracleEmployeeCategoryProvider({ repository }) {
     if (cache) return cache;
     const filas = await repository.fetchLegajosConCategoria();
     cache = new Map();
-    for (const { legajo, categoria, nombre } of filas) {
+    for (const { legajo, categoria, nombre, fechaIngreso } of filas) {
       const n = Number(legajo);
       if (!Number.isInteger(n)) continue; // legajo inválido: se descarta
       const codigo = categoria == null ? null : String(categoria).trim();
       const nom = nombre == null ? null : String(nombre).trim();
+      // spec 015 (FR-001): fecha de ingreso nula/vacía/no parseable → null,
+      // SIN descartar el legajo (contracts/oracle-roster-fecha-ingreso.md).
+      const fechaIngresoValida =
+        typeof fechaIngreso === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fechaIngreso.trim())
+          ? fechaIngreso.trim()
+          : null;
       cache.set(n, {
         codigoCategoria: codigo && codigo.length > 0 ? codigo : null,
         nombre: nom && nom.length > 0 ? nom : null,
+        fechaIngreso: fechaIngresoValida,
       });
     }
     return cache;
@@ -28,12 +35,13 @@ export function createOracleEmployeeCategoryProvider({ repository }) {
     },
 
     // Lista el padrón activo normalizado (mismo dedup/descarte que el cache),
-    // ordenado por legajo. Incluye el nombre para la IU (null si no se
-    // configuró la columna). Reusa la única obtención diaria (research §4).
+    // ordenado por legajo. Incluye nombre (IU) y fechaIngreso (spec 015,
+    // antigüedad para vacaciones); ambos null si no se configuró la columna
+    // o el dato no está cargado. Reusa la única obtención diaria (research §4).
     async listar() {
       const mapa = await asegurarCache();
       return [...mapa.entries()]
-        .map(([legajo, { codigoCategoria, nombre }]) => ({ legajo, codigoCategoria, nombre }))
+        .map(([legajo, { codigoCategoria, nombre, fechaIngreso }]) => ({ legajo, codigoCategoria, nombre, fechaIngreso }))
         .sort((a, b) => a.legajo - b.legajo);
     },
   };

@@ -80,7 +80,7 @@ test('[US3] cerrar bloquea reclasificar, corrección, pausa, retiro anticipado y
       /cerrado/,
     );
     await assert.rejects(
-      () => svc.cargarJustificacion({ legajo: 1, fecha: '2026-07-06', motivoId: 'vacaciones', autor: 'x', hoy: '2026-07-20' }),
+      () => svc.cargarJustificacion({ legajo: 1, fecha: '2026-07-06', motivoId: 'examen', autor: 'x', hoy: '2026-07-20' }),
       /cerrado/,
     );
 

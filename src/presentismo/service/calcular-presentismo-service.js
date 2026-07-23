@@ -21,8 +21,21 @@ import {
   crearJustificacion,
   expandirRangoElegible,
 } from '../domain/justificacion.js';
+import {
+  MotivoVacaciones,
+  expandirDiasCorridos,
+  construirAsignacion,
+  construirMovimientoSaldo,
+  aplicarAsignacion,
+  aplicarReversion,
+  aplicarIncremento,
+  calcularAntiguedadAnios,
+  proximoIncremento,
+  calcularIncrementosPendientes,
+} from '../domain/vacaciones.js';
 import { assertCumplePuerto } from '../ports/index.js';
 import { createNullLogger } from '../logging/presentismo-logger.js';
+import { randomUUID } from 'node:crypto';
 
 // Minutos-del-día del reloj local del servidor (feature 010, situación "hoy").
 function minutosAhora(now = new Date()) {
@@ -43,9 +56,20 @@ export function createCalcularPresentismoService({
   // Justificación no están disponibles (mismo criterio best-effort que otros
   // proveedores opcionales).
   motivosAusenciaConfig = null,
+  // spec 015 — repositorio de saldo/asignaciones de vacaciones; null = las
+  // operaciones de vacaciones no están disponibles (mismo criterio best-effort).
+  vacacionesRepo = null,
+  // spec 015 — config de incremento anual/escala de antigüedad; null = listar/
+  // consultar vacaciones no están disponibles (mismo criterio best-effort).
+  vacacionesConfig = null,
+  // spec 015 (US3) — padrón para resolver fechaIngreso/activo de UN legajo
+  // puntual (asignar/consultar/revertir vacaciones); null = el incremento
+  // perezoso no se aplica en esos puntos de entrada (best-effort).
+  activeEmployeesProvider = null,
 }) {
   assertCumplePuerto('PresentismoRepository', repo);
   assertCumplePuerto('PresentismoLogger', logger);
+  if (vacacionesRepo) assertCumplePuerto('VacacionesRepository', vacacionesRepo);
 
   const esquemaSemanalDias = categoriasConfig.esquemaSemanal;
 
@@ -552,6 +576,280 @@ export function createCalcularPresentismoService({
     logger.evento('justificacion_reversion', { periodo, legajo, dia: fecha, autor: autor ?? null });
   }
 
+  function exigirVacacionesRepo() {
+    if (!vacacionesRepo) {
+      throw new Error('presentismo: VacacionesRepository no configurado');
+    }
+  }
+
+  // spec 015 (US3) — resuelve `{legajo, activo, fechaIngreso}` de UN legajo
+  // puntual desde el padrón (asignar/consultar/revertir vacaciones no
+  // reciben la lista completa como sí la recibe listarVacaciones).
+  async function obtenerEmpleadoPadron(legajo) {
+    if (!activeEmployeesProvider) return null;
+    const empleados = await activeEmployeesProvider.getActiveEmployees();
+    return empleados.find((e) => e.legajo === legajo) ?? null;
+  }
+
+  // spec 015 (US3, FR-010/FR-012/FR-013, research.md §4) — aplica de forma
+  // perezoso todo incremento anual pendiente de un legajo ANTES de continuar
+  // con la operación pedida (asignar/consultar/listar/revertir vacaciones).
+  // No-op si falta config/repo, si el legajo está inactivo, sin
+  // `fechaIngreso` (FR-012), o si no hay ningún ciclo pendiente todavía
+  // (idempotencia vía `ultimoIncrementoAplicado`).
+  async function aplicarIncrementoPerezoso(legajo, empleado, hoy = hoyLocal()) {
+    if (!vacacionesRepo || !vacacionesConfig) return;
+    if (!empleado || empleado.activo !== true || empleado.fechaIngreso == null) return;
+
+    const datosLegajo = await vacacionesRepo.cargarLegajo(legajo);
+    const pendientes = calcularIncrementosPendientes({
+      fechaIngreso: empleado.fechaIngreso,
+      ultimoIncrementoAplicado: datosLegajo.ultimoIncrementoAplicado,
+      escalaAntiguedad: vacacionesConfig.escalaAntiguedad,
+      incrementoAnualConfig: vacacionesConfig.incrementoAnual,
+      hoy,
+    });
+    if (pendientes.length === 0) return;
+
+    let saldo = datosLegajo.saldo;
+    const movimientosNuevos = [];
+    for (const ciclo of pendientes) {
+      saldo = aplicarIncremento(saldo, ciclo.dias);
+      movimientosNuevos.push(
+        construirMovimientoSaldo({
+          tipo: 'incremento',
+          fecha: ciclo.fecha,
+          dias: ciclo.dias,
+          saldoResultante: saldo,
+          antiguedadAnios: ciclo.antiguedadAnios,
+        }),
+      );
+    }
+    await vacacionesRepo.guardarLegajo(legajo, {
+      saldo,
+      ultimoIncrementoAplicado: pendientes[pendientes.length - 1].fecha,
+      movimientos: [...datosLegajo.movimientos, ...movimientosNuevos],
+    });
+    for (const m of movimientosNuevos) {
+      logger.evento('vacaciones_incremento_anual', {
+        legajo,
+        fecha: m.fecha,
+        dias: m.dias,
+        antiguedadAnios: m.antiguedadAnios,
+        saldoResultante: m.saldoResultante,
+      });
+    }
+  }
+
+  // spec 015 (US1, FR-002..FR-007/FR-016) — Asigna un período de vacaciones:
+  // expande a días corridos (sin filtrar hábil/feriado, research.md §6),
+  // valida TODO O NADA (cada período tocado con calendario generado y
+  // abierto, ningún día con Justificación vigente) antes de escribir nada, y
+  // solo entonces registra la Asignación + una Justificación-espejo por
+  // fecha (motivo fijo `vacaciones-anual`, research.md §1) + el Movimiento de
+  // saldo que descuenta cantidadDias (puede quedar negativo, FR-004).
+  async function asignarVacaciones({ legajo, fechaInicio, cantidadDias, autor }) {
+    exigirVacacionesRepo();
+    if (!Number.isInteger(legajo) || legajo < 1) {
+      const err = new Error(`vacaciones: legajo inválido "${legajo}"`);
+      err.httpCode = 'VACACIONES_INVALIDA';
+      throw err;
+    }
+    if (typeof fechaInicio !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(fechaInicio)) {
+      const err = new Error(`vacaciones: fechaInicio inválida "${fechaInicio}"`);
+      err.httpCode = 'VACACIONES_INVALIDA';
+      throw err;
+    }
+    if (!Number.isInteger(cantidadDias) || cantidadDias <= 0) {
+      const err = new Error(`vacaciones: cantidadDias inválida "${cantidadDias}"`);
+      err.httpCode = 'VACACIONES_INVALIDA';
+      throw err;
+    }
+
+    const fechas = expandirDiasCorridos(fechaInicio, cantidadDias);
+    const periodosTocados = [...new Set(fechas.map((f) => periodoDeFecha(f)))];
+
+    // Todo o nada (FR-005/FR-007): valida TODOS los períodos tocados y TODAS
+    // las fechas del rango antes de escribir ningún registro.
+    const justificacionesPorPeriodo = new Map();
+    for (const periodo of periodosTocados) {
+      const cal = await repo.cargarCalendario(periodo);
+      if (!cal) {
+        const err = new Error(`vacaciones: no hay calendario generado para ${periodo}`);
+        err.httpCode = 'CALENDARIO_NO_GENERADO';
+        throw err;
+      }
+      exigirPeriodoAbierto(cal); // err.httpCode = 'PERIODO_CERRADO'
+      justificacionesPorPeriodo.set(periodo, await repo.listarJustificaciones(periodo, legajo));
+    }
+
+    const fechasEnConflicto = fechas.filter((f) => {
+      const justifs = justificacionesPorPeriodo.get(periodoDeFecha(f));
+      return justificacionVigenteDe(justifs, legajo, f) != null;
+    });
+    if (fechasEnConflicto.length > 0) {
+      const err = new Error(
+        `vacaciones: ya existe una Justificación vigente en ${fechasEnConflicto.join(', ')}`,
+      );
+      err.httpCode = 'VACACIONES_SUPERPUESTA';
+      err.fechas = fechasEnConflicto;
+      throw err;
+    }
+
+    // Todo válido: aplica el incremento perezoso pendiente (research.md §4)
+    // ANTES de descontar, y registra la Asignación, sus Justificaciones-
+    // espejo y el Movimiento de saldo.
+    await aplicarIncrementoPerezoso(legajo, await obtenerEmpleadoPadron(legajo));
+
+    const id = randomUUID();
+    const fechaHora = new Date().toISOString();
+    const asignacion = construirAsignacion({ id, legajo, fechaInicio, cantidadDias, autor, fechaHora });
+
+    const datosLegajo = await vacacionesRepo.cargarLegajo(legajo);
+    const nuevoSaldo = aplicarAsignacion(datosLegajo.saldo, cantidadDias);
+    const movimiento = construirMovimientoSaldo({
+      tipo: 'asignacion',
+      fecha: fechaInicio,
+      dias: -cantidadDias,
+      saldoResultante: nuevoSaldo,
+      asignacionId: id,
+      autor: autor ?? null,
+    });
+
+    for (const f of fechas) {
+      const periodo = periodoDeFecha(f);
+      const justificacion = crearJustificacion({
+        periodo,
+        legajo,
+        fecha: f,
+        motivo: MotivoVacaciones,
+        autor,
+        fechaHora,
+        origenCarga: { asignacionVacacionesId: id },
+      });
+      await repo.guardarJustificacion(justificacion);
+    }
+    await vacacionesRepo.guardarAsignacion(asignacion);
+    await vacacionesRepo.guardarLegajo(legajo, {
+      ...datosLegajo,
+      saldo: nuevoSaldo,
+      movimientos: [...datosLegajo.movimientos, movimiento],
+    });
+
+    logger.evento('vacaciones_asignacion_alta', {
+      legajo,
+      asignacionId: id,
+      fechaInicio,
+      cantidadDias,
+      saldoResultante: nuevoSaldo,
+      autor: autor ?? null,
+    });
+
+    return { asignacionId: id, fechaInicio, fechaFin: asignacion.fechaFin, cantidadDias, saldoResultante: nuevoSaldo };
+  }
+
+  // spec 015 (US2, FR-008) — lista, para cada legajo ACTIVO, su antigüedad
+  // calculada a `hoy`, su saldo actual y la fecha de su próximo incremento
+  // anual. Un legajo sin `fechaIngreso` (FR-012, Acceptance Scenario US2.3)
+  // se señala `pendienteFechaIngreso: true`, sin antigüedad ni próximo
+  // incremento calculado, sin bloquear el resto del listado. `empleados` es
+  // `ActiveEmployeesProvider.getActiveEmployees()` ya resuelto (mismo patrón
+  // que fichadas-hoy-handlers.js/resumen-periodo-handlers.js: el handler
+  // consulta el padrón, el servicio solo calcula).
+  async function listarVacaciones(empleados, { hoy = hoyLocal() } = {}) {
+    exigirVacacionesRepo();
+    if (!vacacionesConfig) {
+      throw new Error('presentismo: config de vacaciones no configurada');
+    }
+    const filas = [];
+    for (const empleado of empleados.filter((e) => e.activo)) {
+      await aplicarIncrementoPerezoso(empleado.legajo, empleado, hoy);
+      const datosLegajo = await vacacionesRepo.cargarLegajo(empleado.legajo);
+      if (empleado.fechaIngreso == null) {
+        filas.push({
+          legajo: empleado.legajo,
+          fechaIngreso: null,
+          antiguedadAnios: null,
+          saldo: datosLegajo.saldo,
+          proximoIncremento: null,
+          pendienteFechaIngreso: true,
+        });
+        continue;
+      }
+      filas.push({
+        legajo: empleado.legajo,
+        fechaIngreso: empleado.fechaIngreso,
+        antiguedadAnios: calcularAntiguedadAnios(empleado.fechaIngreso, hoy),
+        saldo: datosLegajo.saldo,
+        proximoIncremento: proximoIncremento(vacacionesConfig.incrementoAnual, hoy),
+        pendienteFechaIngreso: false,
+      });
+    }
+    return filas;
+  }
+
+  // spec 015 (US2, FR-009) — historial completo de movimientos y
+  // asignaciones de un legajo.
+  async function consultarVacaciones(legajo) {
+    exigirVacacionesRepo();
+    await aplicarIncrementoPerezoso(legajo, await obtenerEmpleadoPadron(legajo));
+    const datosLegajo = await vacacionesRepo.cargarLegajo(legajo);
+    const asignaciones = await vacacionesRepo.listarAsignaciones(legajo);
+    return { legajo, saldo: datosLegajo.saldo, movimientos: datosLegajo.movimientos, asignaciones };
+  }
+
+  // spec 015 (US4, FR-014/FR-015) — revierte una Asignación de Vacaciones
+  // vigente: revierte cada Justificación-espejo que generó (día por día, por
+  // período — mismo repo.revertirJustificacion que 012) y repone el saldo
+  // descontado (nunca clampeado, puede quedar en cualquier valor). Sin
+  // 409 PERIODO_CERRADO (contracts/web-api.md no lo define para este
+  // endpoint: revertir una vacación no queda bloqueada por el cierre del
+  // período, a diferencia del alta).
+  async function revertirAsignacionVacaciones({ id, autor }) {
+    exigirVacacionesRepo();
+    const asignacion = await vacacionesRepo.cargarAsignacion(id);
+    if (!asignacion || !asignacion.vigente) {
+      const err = new Error(`vacaciones: no existe una asignación vigente con id "${id}"`);
+      err.httpCode = 'VACACIONES_NO_ENCONTRADA';
+      throw err;
+    }
+
+    const { legajo } = asignacion;
+    await aplicarIncrementoPerezoso(legajo, await obtenerEmpleadoPadron(legajo));
+
+    const fechaHora = new Date().toISOString();
+    const fechas = expandirDiasCorridos(asignacion.fechaInicio, asignacion.cantidadDias);
+    for (const f of fechas) {
+      await repo.revertirJustificacion(periodoDeFecha(f), legajo, f, { autor: autor ?? null });
+    }
+    await vacacionesRepo.revertirAsignacion(id, { autor: autor ?? null, fechaHora });
+
+    const datosLegajo = await vacacionesRepo.cargarLegajo(legajo);
+    const nuevoSaldo = aplicarReversion(datosLegajo.saldo, asignacion.cantidadDias);
+    const movimiento = construirMovimientoSaldo({
+      tipo: 'reversion',
+      fecha: fechaHora.slice(0, 10),
+      dias: asignacion.cantidadDias,
+      saldoResultante: nuevoSaldo,
+      asignacionId: id,
+      autor: autor ?? null,
+    });
+    await vacacionesRepo.guardarLegajo(legajo, {
+      ...datosLegajo,
+      saldo: nuevoSaldo,
+      movimientos: [...datosLegajo.movimientos, movimiento],
+    });
+
+    logger.evento('vacaciones_asignacion_reversion', {
+      legajo,
+      asignacionId: id,
+      saldoResultante: nuevoSaldo,
+      autor: autor ?? null,
+    });
+
+    return { id, revertida: true, saldoResultante: nuevoSaldo };
+  }
+
   return {
     generarCalendario: generarCalendarioMes,
     reclasificarDia: reclasificarDiaMes,
@@ -568,5 +866,9 @@ export function createCalcularPresentismoService({
     revertirPausa,
     cargarJustificacion,
     revertirJustificacion,
+    asignarVacaciones,
+    listarVacaciones,
+    consultarVacaciones,
+    revertirAsignacionVacaciones,
   };
 }

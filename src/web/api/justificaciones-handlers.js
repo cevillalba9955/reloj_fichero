@@ -1,5 +1,7 @@
 import { ApiError } from './router.js';
 import { hoyLocal } from '../view-model.js';
+import { justificacionVigenteDe } from '../../presentismo/domain/justificacion.js';
+import { MotivoVacaciones } from '../../presentismo/domain/vacaciones.js';
 
 // feature 012 — Handlers de la API de "Justificación de Ausencias". Delegan
 // en el servicio de presentismo (`cargarJustificacion`/`revertirJustificacion`)
@@ -115,12 +117,26 @@ export function registrarRutas(router, ctx) {
   });
 
   // DELETE /api/justificaciones (US3) — revierte la Justificación vigente.
+  // spec 015 (research.md §1, guardrail de origen): una Justificación-espejo
+  // de vacaciones (motivoId 'vacaciones-anual') NUNCA se revierte por acá,
+  // para no dejar el saldo/asignación de vacaciones desincronizados del
+  // calendario — se revierte desde la Asignación de Vacaciones.
   router.add('DELETE', '/api/justificaciones', async ({ body }) => {
     const { legajo, fecha, autor = null } = body ?? {};
     validarLegajo(legajo);
     validarFecha(fecha);
 
     const periodo = periodoDe(fecha);
+    const justificaciones = await ctx.repo.listarJustificaciones(periodo, legajo);
+    const vigente = justificacionVigenteDe(justificaciones, legajo, fecha);
+    if (vigente?.motivoId === MotivoVacaciones.id) {
+      throw new ApiError(
+        409,
+        'JUSTIFICACION_ES_VACACIONES',
+        `El ${fecha} es una Justificación de vacaciones; revertila desde su Asignación de Vacaciones ` +
+          '(DELETE /api/vacaciones/asignaciones/{id})',
+      );
+    }
     try {
       await ctx.service.revertirJustificacion({ periodo, legajo, fecha, autor });
       return { status: 200, body: { fecha, revertida: true } };

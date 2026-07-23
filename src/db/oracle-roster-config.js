@@ -70,6 +70,20 @@ export function readOracleRosterConfig(env = process.env) {
     }
   }
 
+  // Opcional (spec 015, FR-001): columna de fecha de ingreso del empleado,
+  // fuente de la antigüedad para vacaciones. Sin default — si no se provee,
+  // la lectura de fecha de ingreso queda deshabilitada (null, mismo criterio
+  // que columnaCategoria/columnaNombre). Si se provee, debe ser un
+  // identificador SQL válido sin punto.
+  const columnaFechaIngresoRaw = env.RRHH_ORACLE_COLUMNA_FECHA_INGRESO;
+  let columnaFechaIngreso = null;
+  if (typeof columnaFechaIngresoRaw === 'string' && columnaFechaIngresoRaw.trim() !== '') {
+    columnaFechaIngreso = columnaFechaIngresoRaw.trim();
+    if (!SQL_IDENT_COLUMNA.test(columnaFechaIngreso)) {
+      problemas.push('RRHH_ORACLE_COLUMNA_FECHA_INGRESO (no es un identificador SQL válido)');
+    }
+  }
+
   // Opcional con default; si se provee, debe ser un entero > 0.
   const timeoutRaw = env.RRHH_ORACLE_TIMEOUT_MS;
   let timeoutMs = DEFAULT_TIMEOUT_MS;
@@ -89,5 +103,15 @@ export function readOracleRosterConfig(env = process.env) {
     );
   }
 
-  return { user, password, connectString, vistaPadron, columnaLegajo, columnaCategoria, columnaNombre, timeoutMs };
+  return {
+    user,
+    password,
+    connectString,
+    vistaPadron,
+    columnaLegajo,
+    columnaCategoria,
+    columnaNombre,
+    columnaFechaIngreso,
+    timeoutMs,
+  };
 }

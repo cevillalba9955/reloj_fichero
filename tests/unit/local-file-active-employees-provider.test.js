@@ -26,9 +26,9 @@ test('LocalFileActiveEmployeesProvider: lee el archivo de configuración y expon
     const empleados = await provider.getActiveEmployees();
 
     assert.deepEqual(empleados, [
-      { legajo: 1, activo: true },
-      { legajo: 2, activo: true },
-      { legajo: 3, activo: true },
+      { legajo: 1, activo: true, fechaIngreso: null },
+      { legajo: 2, activo: true, fechaIngreso: null },
+      { legajo: 3, activo: true, fechaIngreso: null },
     ]);
   });
 });
@@ -77,8 +77,8 @@ test('LocalFileActiveEmployeesProvider: lee el snapshot 004 ({ empleados }) y ex
     );
     const provider = createLocalFileActiveEmployeesProvider({ filePath });
     assert.deepEqual(await provider.getActiveEmployees(), [
-      { legajo: 9, activo: true },
-      { legajo: 74, activo: true },
+      { legajo: 9, activo: true, fechaIngreso: null },
+      { legajo: 74, activo: true, fechaIngreso: null },
     ]);
   });
 });
@@ -101,8 +101,8 @@ test('LocalFileActiveEmployeesProvider: normaliza (dedup + descarta invalidos) e
     );
     const provider = createLocalFileActiveEmployeesProvider({ filePath });
     assert.deepEqual(await provider.getActiveEmployees(), [
-      { legajo: 9, activo: true },
-      { legajo: 10, activo: true },
+      { legajo: 9, activo: true, fechaIngreso: null },
+      { legajo: 10, activo: true, fechaIngreso: null },
     ]);
   });
 });
@@ -135,10 +135,10 @@ test('{ repoDir, now }: resuelve P<mesActualPeriodo(now())>/padron.json en cada 
     let ahora = new Date(2026, 6, 15); // julio
     const provider = createLocalFileActiveEmployeesProvider({ repoDir, now: () => ahora });
 
-    assert.deepEqual(await provider.getActiveEmployees(), [{ legajo: 1, activo: true }]);
+    assert.deepEqual(await provider.getActiveEmployees(), [{ legajo: 1, activo: true, fechaIngreso: null }]);
 
     // El reloj avanza a agosto sin recrear el provider (proceso de larga vida).
     ahora = new Date(2026, 7, 1);
-    assert.deepEqual(await provider.getActiveEmployees(), [{ legajo: 2, activo: true }]);
+    assert.deepEqual(await provider.getActiveEmployees(), [{ legajo: 2, activo: true, fechaIngreso: null }]);
   });
 });

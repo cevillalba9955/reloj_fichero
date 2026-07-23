@@ -105,8 +105,8 @@ test('[US2] sincronizar el padrón actualiza el mes en curso; un período pasado
 
     const provider = createFilePadronCategoryProvider({ repoDir, now: nowAgosto });
     assert.deepEqual(await provider.listar(), [
-      { legajo: 1, codigoCategoria: 'ADMIN', nombre: null },
-      { legajo: 9, codigoCategoria: 'ADMIN', nombre: null },
+      { legajo: 1, codigoCategoria: 'ADMIN', nombre: null, fechaIngreso: null },
+      { legajo: 9, codigoCategoria: 'ADMIN', nombre: null, fechaIngreso: null },
     ]);
   } finally {
     rmSync(repoDir, { recursive: true, force: true });

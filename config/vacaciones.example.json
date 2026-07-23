@@ -1,0 +1,9 @@
+{
+  "incrementoAnual": { "mes": 11, "dia": 1 },
+  "escalaAntiguedad": [
+    { "aniosMinimos": 0, "dias": 14 },
+    { "aniosMinimos": 5, "dias": 21 },
+    { "aniosMinimos": 10, "dias": 28 },
+    { "aniosMinimos": 20, "dias": 35 }
+  ]
+}

@@ -82,11 +82,11 @@ test('listar() devuelve el padrón normalizado y ordenado por legajo', async () 
   const repository = createOracleRosterRepository({ config, connectionFactory: factory });
   const provider = createOracleEmployeeCategoryProvider({ repository });
 
-  // Sin columnaNombre configurada, nombre es null.
+  // Sin columnaNombre/columnaFechaIngreso configuradas, ambas son null.
   assert.deepEqual(await provider.listar(), [
-    { legajo: 9, codigoCategoria: null, nombre: null },
-    { legajo: 1234, codigoCategoria: 'ADMIN', nombre: null },
-    { legajo: 5678, codigoCategoria: 'PROD', nombre: null },
+    { legajo: 9, codigoCategoria: null, nombre: null, fechaIngreso: null },
+    { legajo: 1234, codigoCategoria: 'ADMIN', nombre: null, fechaIngreso: null },
+    { legajo: 5678, codigoCategoria: 'PROD', nombre: null, fechaIngreso: null },
   ]);
 });
 
@@ -102,12 +102,57 @@ test('con columnaNombre, listar() incluye el nombre y el SQL lo proyecta', async
   const provider = createOracleEmployeeCategoryProvider({ repository });
 
   assert.deepEqual(await provider.listar(), [
-    { legajo: 1234, codigoCategoria: 'ADMIN', nombre: 'Ada Lovelace' },
-    { legajo: 5678, codigoCategoria: 'PROD', nombre: null },
+    { legajo: 1234, codigoCategoria: 'ADMIN', nombre: 'Ada Lovelace', fechaIngreso: null },
+    { legajo: 5678, codigoCategoria: 'PROD', nombre: null, fechaIngreso: null },
   ]);
   assert.match(calls.sql, /SELECT LEGAJO, CATEGORIA, NOMBRE FROM RRHH\.V_PADRON/);
   // obtenerCategoria sigue devolviendo solo la categoría (no cambia el puerto).
   assert.deepEqual(await provider.obtenerCategoria(1234), { legajo: 1234, codigoCategoria: 'ADMIN' });
+});
+
+// spec 015 (FR-001, contracts/oracle-roster-fecha-ingreso.md): columna de
+// fecha de ingreso opcional, fuente de la antigüedad para vacaciones.
+test('con columnaFechaIngreso, listar() incluye fechaIngreso y el SQL la proyecta', async () => {
+  const { factory, calls } = fakeConnectionFactory([
+    { LEGAJO: 1234, CATEGORIA: 'ADMIN', FECHA_INGRESO: '2018-03-01' },
+    { LEGAJO: 5678, CATEGORIA: 'PROD', FECHA_INGRESO: null },
+  ]);
+  const repository = createOracleRosterRepository({
+    config: { ...config, columnaFechaIngreso: 'FECHA_INGRESO' },
+    connectionFactory: factory,
+  });
+  const provider = createOracleEmployeeCategoryProvider({ repository });
+
+  assert.deepEqual(await provider.listar(), [
+    { legajo: 1234, codigoCategoria: 'ADMIN', nombre: null, fechaIngreso: '2018-03-01' },
+    { legajo: 5678, codigoCategoria: 'PROD', nombre: null, fechaIngreso: null },
+  ]);
+  assert.match(calls.sql, /SELECT LEGAJO, CATEGORIA, FECHA_INGRESO FROM RRHH\.V_PADRON/);
+});
+
+test('fechaIngreso no parseable como YYYY-MM-DD se normaliza a null sin descartar el legajo', async () => {
+  const { factory } = fakeConnectionFactory([{ LEGAJO: 1, CATEGORIA: 'ADMIN', FECHA_INGRESO: 'no-es-fecha' }]);
+  const repository = createOracleRosterRepository({
+    config: { ...config, columnaFechaIngreso: 'FECHA_INGRESO' },
+    connectionFactory: factory,
+  });
+  const provider = createOracleEmployeeCategoryProvider({ repository });
+  assert.deepEqual(await provider.listar(), [{ legajo: 1, codigoCategoria: 'ADMIN', nombre: null, fechaIngreso: null }]);
+});
+
+test('con columnaNombre Y columnaFechaIngreso, el SQL proyecta ambas en orden', async () => {
+  const { factory, calls } = fakeConnectionFactory([
+    { LEGAJO: 1, CATEGORIA: 'ADMIN', NOMBRE: 'Ada', FECHA_INGRESO: '2018-03-01' },
+  ]);
+  const repository = createOracleRosterRepository({
+    config: { ...config, columnaNombre: 'NOMBRE', columnaFechaIngreso: 'FECHA_INGRESO' },
+    connectionFactory: factory,
+  });
+  const provider = createOracleEmployeeCategoryProvider({ repository });
+  assert.deepEqual(await provider.listar(), [
+    { legajo: 1, codigoCategoria: 'ADMIN', nombre: 'Ada', fechaIngreso: '2018-03-01' },
+  ]);
+  assert.match(calls.sql, /SELECT LEGAJO, CATEGORIA, NOMBRE, FECHA_INGRESO FROM RRHH\.V_PADRON/);
 });
 
 test('listar() y obtenerCategoria() comparten una sola consulta al padrón', async () => {

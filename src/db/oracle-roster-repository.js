@@ -75,9 +75,11 @@ function extraerFilas(result, columnaLegajo) {
   });
 }
 
-// Extrae filas {legajo, categoria[, nombre]} respetando OBJECT (mayúsculas) o
-// array. `columnaNombre` es opcional; si es null, no se proyecta ni se lee.
-function extraerFilasConCategoria(result, columnaLegajo, columnaCategoria, columnaNombre) {
+// Extrae filas {legajo, categoria[, nombre][, fechaIngreso]} respetando
+// OBJECT (mayúsculas) o array. `extras` es la lista ORDENADA de columnas
+// opcionales realmente proyectadas (mismo orden que en el SQL), cada una
+// `{ key, columna }`; una columna no configurada ni se proyecta ni se lee.
+function extraerFilasConCategoria(result, columnaLegajo, columnaCategoria, extras = []) {
   const rows = result?.rows ?? [];
   const val = (row, col, idx) => {
     if (Array.isArray(row)) return row[idx];
@@ -93,7 +95,9 @@ function extraerFilasConCategoria(result, columnaLegajo, columnaCategoria, colum
       legajo: val(row, columnaLegajo, 0),
       categoria: val(row, columnaCategoria, 1),
     };
-    if (columnaNombre) fila.nombre = val(row, columnaNombre, 2);
+    extras.forEach(({ key, columna }, i) => {
+      fila[key] = val(row, columna, 2 + i);
+    });
     return fila;
   });
 }
@@ -153,15 +157,20 @@ export function createOracleRosterRepository({ config, connectionFactory = defau
     if (!SQL_IDENT_COLUMNA.test(config.columnaCategoria)) {
       throw new Error('oracle-roster-repository: columnaCategoria no es un identificador SQL válido');
     }
-    // Columna de nombre opcional (IU). Se valida solo si está configurada.
-    if (config.columnaNombre && !SQL_IDENT_COLUMNA.test(config.columnaNombre)) {
-      throw new Error('oracle-roster-repository: columnaNombre no es un identificador SQL válido');
+    // Columnas opcionales (nombre, fecha de ingreso — spec 015 FR-001). Se
+    // validan solo si están configuradas; el orden acá define el orden de
+    // proyección en el SQL y de extracción posicional de filas en array.
+    const extras = [];
+    if (config.columnaNombre) extras.push({ key: 'nombre', columna: config.columnaNombre });
+    if (config.columnaFechaIngreso) extras.push({ key: 'fechaIngreso', columna: config.columnaFechaIngreso });
+    for (const { columna } of extras) {
+      if (!SQL_IDENT_COLUMNA.test(columna)) {
+        throw new Error(`oracle-roster-repository: columna "${columna}" no es un identificador SQL válido`);
+      }
     }
 
-    const proyeccion = config.columnaNombre
-      ? `${config.columnaLegajo}, ${config.columnaCategoria}, ${config.columnaNombre}`
-      : `${config.columnaLegajo}, ${config.columnaCategoria}`;
-    const sql = `SELECT ${proyeccion} FROM ${config.vistaPadron}`;
+    const columnas = [config.columnaLegajo, config.columnaCategoria, ...extras.map((e) => e.columna)];
+    const sql = `SELECT ${columnas.join(', ')} FROM ${config.vistaPadron}`;
     const timeoutMs = config.timeoutMs;
 
     let connection = null;
@@ -170,7 +179,7 @@ export function createOracleRosterRepository({ config, connectionFactory = defau
       connection = await conDeadline(Promise.resolve().then(() => connectionFactory(config)), timeoutMs);
       fase = 'consulta';
       const result = await conDeadline(connection.execute(sql, [], {}), timeoutMs);
-      return extraerFilasConCategoria(result, config.columnaLegajo, config.columnaCategoria, config.columnaNombre);
+      return extraerFilasConCategoria(result, config.columnaLegajo, config.columnaCategoria, extras);
     } catch (err) {
       if (err instanceof TimeoutSentinel) throw rosterError('timeout');
       if (fase === 'conexion') throw rosterError(categorizarErrorConexion(err));

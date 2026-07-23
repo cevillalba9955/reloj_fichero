@@ -1,6 +1,8 @@
 import { loadCategoriasConfig } from '../presentismo/config/categorias-config.js';
 import { loadMotivosAusenciaConfig } from '../presentismo/config/motivos-ausencia-config.js';
+import { loadVacacionesConfig } from '../presentismo/config/vacaciones-config.js';
 import { createFilePresentismoRepository } from '../presentismo/adapters/file-presentismo-repository.js';
+import { createFileVacacionesRepository } from '../presentismo/adapters/file-vacaciones-repository.js';
 import { createPresentismoLogger } from '../presentismo/logging/presentismo-logger.js';
 import { createCalcularPresentismoService } from '../presentismo/service/calcular-presentismo-service.js';
 import { createFilePadronCategoryProvider } from '../presentismo/adapters/file-padron-category-provider.js';
@@ -23,6 +25,9 @@ export function crearContextoWeb(env = process.env) {
   const logDir = env.PRESENTISMO_LOG_DIR ?? './logs';
   const configPath = env.PRESENTISMO_CATEGORIAS_CONFIG ?? './config/categorias.json';
   const motivosAusenciaConfigPath = env.PRESENTISMO_MOTIVOS_AUSENCIA_CONFIG ?? './config/motivos-ausencia.json';
+  // spec 015 — ruta de la config de vacaciones (incremento anual + escala de
+  // antigüedad→días), mismo criterio de override que motivosAusenciaConfigPath.
+  const vacacionesConfigPath = env.PRESENTISMO_VACACIONES_CONFIG ?? './config/vacaciones.json';
   const controlUrl = env.FICHADAS_CONTROL_URL ?? 'http://127.0.0.1:5006';
   // feature 014 — ruta del `.env` que edita la página de Configuración
   // (contracts/env-config.schema.md). Override solo para tests; en producción
@@ -66,7 +71,19 @@ export function crearContextoWeb(env = process.env) {
     listarActivos: () => loadMotivosAusenciaConfig(motivosAusenciaConfigPath).listarActivos(),
     resolverMotivoActivo: (id) => loadMotivosAusenciaConfig(motivosAusenciaConfigPath).resolverMotivoActivo(id),
   };
+  // spec 015 — igual criterio que motivosAusenciaConfig: re-lee+re-parsea en
+  // cada acceso para que editar config/vacaciones.json a mano tome efecto sin
+  // reiniciar el proceso web (SC-005, FR-011).
+  const vacacionesConfig = {
+    get incrementoAnual() {
+      return loadVacacionesConfig(vacacionesConfigPath).incrementoAnual;
+    },
+    get escalaAntiguedad() {
+      return loadVacacionesConfig(vacacionesConfigPath).escalaAntiguedad;
+    },
+  };
   const repo = createFilePresentismoRepository({ repoDir });
+  const vacacionesRepo = createFileVacacionesRepository({ repoDir });
   const logger = createPresentismoLogger({ logDir });
   // 013-reestructurar-data-periodos (FR-004): el padrón es por período
   // (`P<periodo>/padron.json`); ambos proveedores resuelven el mes en curso en
@@ -83,6 +100,9 @@ export function crearContextoWeb(env = process.env) {
     fichadasProvider,
     categoryProvider,
     motivosAusenciaConfig,
+    vacacionesRepo,
+    vacacionesConfig,
+    activeEmployeesProvider,
   });
 
   return {
@@ -90,6 +110,8 @@ export function crearContextoWeb(env = process.env) {
     service,
     categoriasConfig,
     motivosAusenciaConfig,
+    vacacionesConfig,
+    vacacionesRepo,
     logger,
     repoDir,
     categoryProvider,
@@ -103,5 +125,6 @@ export function crearContextoWeb(env = process.env) {
     rutaEnv,
     categoriasConfigPath: configPath,
     motivosAusenciaConfigPath,
+    vacacionesConfigPath,
   };
 }

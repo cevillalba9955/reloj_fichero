@@ -151,16 +151,19 @@ function estadoConCorreccion(auto, entradaEfectiva, salidaEfectiva) {
   return EstadoJornada.SIN_FICHADAS;
 }
 
-// `justificacion` (spec 012, feature 012): Justificación vigente de este día
+// `justificacion` (spec 012, feature 012; generalizado a cualquier
+// clasificación por spec 015 FR-006): Justificación vigente de este día
 // ({tipoPago, ...}), aplicable solo cuando NO hay corrección (mutuamente
 // excluyentes por construcción: FR-002 exige Sin fichadas/futuro para
-// justificar, la corrección exige que ya haya jornada calculada). Sobre
-// Laborable: si el auto YA no está `Sin fichadas` (llegaron fichadas después
-// de justificar), no se toca el resultado y se señala
-// `requiereJustificacionRevision` (FR-010, edge case "fichadas que llegan
-// después de justificar"). Si sigue `Sin fichadas`, una Justificación `Paga`
-// acredita la jornada esperada igual que un `Feriado` (FR-013); una `No paga`
-// no cambia nada (FR-014): el día sigue en `Sin fichadas` con 0 horas.
+// justificar, la corrección exige que ya haya jornada calculada). Si
+// llegaron fichadas después de justificar, no se toca el resultado y se
+// señala `requiereJustificacionRevision` (FR-010/FR-017, edge case "fichadas
+// que llegan después de justificar"). Si no, el día pasa a `Sin fichadas`
+// (cuenta como ausencia en el resumen del período, spec 011): una
+// Justificación `Paga` acredita la jornada esperada igual que un `Feriado`
+// (FR-013); una `No paga` no acredita nada, SIEMPRE 0 horas (FR-014) —
+// incluso sobre un `Feriado` que de otro modo se auto-acredita (spec 015
+// FR-006: una Asignación de Vacaciones no distingue hábil/no hábil/feriado).
 export function aplicarAjustes(auto, { correccion = null, pausas = [], params = null, justificacion = null } = {}) {
   const corrigeHorario =
     correccion && (correccion.entradaCorregida != null || correccion.salidaCorregida != null);
@@ -230,8 +233,15 @@ export function aplicarAjustes(auto, { correccion = null, pausas = [], params = 
     };
   }
 
-  if (justificacion && auto.clasificacion === Clasificacion.LABORABLE) {
-    const llegaronFichadas = auto.estado !== EstadoJornada.SIN_FICHADAS;
+  if (justificacion) {
+    // Laborable: "llegaron fichadas" ya lo indica el propio estado auto
+    // (deja de ser Sin fichadas). No Laborable/Feriado nunca pasan por
+    // SIN_FICHADAS (su auto es NO_APLICA/FERIADO_CUMPLIDO siempre): ahí la
+    // señal es la presencia de fichadas descartadas por `calcularJornadaAuto`.
+    const llegaronFichadas =
+      auto.clasificacion === Clasificacion.LABORABLE
+        ? auto.estado !== EstadoJornada.SIN_FICHADAS
+        : (auto.fichadasNoUsadas ?? []).length > 0;
     if (llegaronFichadas) {
       return {
         ...auto,
@@ -245,10 +255,11 @@ export function aplicarAjustes(auto, { correccion = null, pausas = [], params = 
       };
     }
     const paga = justificacion.tipoPago === 'Paga';
-    const creditoPaga = paga && params ? params.jornadaEsperada : auto.totalDiario;
+    const creditoPaga = paga && params ? params.jornadaEsperada : 0;
     return {
       ...auto,
-      totalDiario: paga ? creditoPaga : auto.totalDiario,
+      estado: EstadoJornada.SIN_FICHADAS,
+      totalDiario: creditoPaga,
       descuentoPausas: 0,
       correccionVigente: false,
       pausas,

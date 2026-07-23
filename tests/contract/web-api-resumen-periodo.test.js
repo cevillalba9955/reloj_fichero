@@ -253,7 +253,7 @@ test('feature 012: feriado/licencia en el resumen y justificacion en el detalle'
     const alta = await fetch(`${e.base}/api/justificaciones`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ legajo: 1, fecha: FECHA_LICENCIA, motivoId: 'vacaciones' }),
+      body: JSON.stringify({ legajo: 1, fecha: FECHA_LICENCIA, motivoId: 'examen' }),
     });
     assert.equal(alta.status, 200);
 
@@ -266,7 +266,7 @@ test('feature 012: feriado/licencia en el resumen y justificacion en el detalle'
     const detalleRes = await fetch(`${e.base}/api/resumen-periodo/1`);
     const detalle = await detalleRes.json();
     const dia = detalle.dias.find((d) => d.fecha === FECHA_LICENCIA);
-    assert.equal(dia.justificacion.motivoId, 'vacaciones');
+    assert.equal(dia.justificacion.motivoId, 'examen');
     assert.equal(dia.justificacion.tipoPago, 'Paga');
   } finally {
     e.close();
