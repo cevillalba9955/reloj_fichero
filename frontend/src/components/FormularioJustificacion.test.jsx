@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import FormularioJustificacion from './FormularioJustificacion.jsx';
-import { seleccionarOpcion } from '../test-utils/antd.js';
+import { seleccionarOpcion, escribirFecha } from '../test-utils/antd.js';
 
 // feature 012 (US1) — motivo obligatorio (FR-003), legajo/fecha precargados
 // desde una fila o editables en la carga general, envío con/sin rango.
@@ -40,8 +40,8 @@ test('sin fila (carga general), permite completar legajo, fecha y un rango "hast
   render(<FormularioJustificacion motivos={MOTIVOS} onGuardar={onGuardar} onCancelar={vi.fn()} />);
 
   fireEvent.change(screen.getByLabelText('Legajo'), { target: { value: '7' } });
-  fireEvent.change(screen.getByLabelText(/^Fecha/), { target: { value: '2026-08-03' } });
-  fireEvent.change(screen.getByLabelText(/Hasta/), { target: { value: '2026-08-05' } });
+  escribirFecha(/^Fecha/, '2026-08-03');
+  escribirFecha(/Hasta/, '2026-08-05');
   await seleccionarOpcion(/Motivo/, 'Sin Aviso (No paga)');
   fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 

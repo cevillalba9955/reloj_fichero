@@ -271,12 +271,40 @@ test('fichadas que llegan después de justificar señalan requiereJustificacionR
   assert.equal(ajustada.totalDiario, 540, 'las horas calculadas de las fichadas reales prevalecen');
 });
 
-test('justificación no aplica sobre Feriado/No Laborable (defensa en profundidad de FR-002)', () => {
+// spec 015 (FR-006): a diferencia de la Justificación genérica de 012 (que
+// nunca llega a un día No Laborable/Feriado porque su propio alta la
+// descarta antes), la Justificación-espejo de una Asignación de Vacaciones
+// SÍ se genera sobre esos días (research.md §1) y debe aplicarse igual que
+// sobre un Laborable: una `No paga` nunca acredita horas (ni siquiera el
+// crédito automático de un Feriado) y el día pasa a `Sin fichadas` (cuenta
+// como ausencia en el resumen del período, spec 011).
+test('justificación No paga sobre un Feriado anula el crédito automático (spec 015, FR-006)', () => {
   const feriado = calc(Clasificacion.FERIADO, []);
   const ajustada = aplicarAjustes(feriado, {
-    justificacion: { tipoPago: 'Paga', motivoId: 'vacaciones' },
+    justificacion: { tipoPago: 'No paga', motivoId: 'vacaciones-anual' },
     params: PARAMS,
   });
-  assert.equal(ajustada.justificacion, null, 'un Feriado ignora la justificación: nunca es Laborable');
-  assert.equal(ajustada.totalDiario, 540, 'sigue acreditado por ser Feriado, no por la justificación');
+  assert.deepEqual(ajustada.justificacion, { tipoPago: 'No paga', motivoId: 'vacaciones-anual' });
+  assert.equal(ajustada.estado, EstadoJornada.SIN_FICHADAS);
+  assert.equal(ajustada.totalDiario, 0, 'No paga nunca acredita, ni siquiera el crédito automático de Feriado');
+});
+
+test('justificación No paga sobre un No Laborable (fin de semana) queda en Sin fichadas, 0 horas (spec 015, FR-006)', () => {
+  const finde = calc(Clasificacion.NO_LABORABLE, []);
+  const ajustada = aplicarAjustes(finde, {
+    justificacion: { tipoPago: 'No paga', motivoId: 'vacaciones-anual' },
+    params: PARAMS,
+  });
+  assert.deepEqual(ajustada.justificacion, { tipoPago: 'No paga', motivoId: 'vacaciones-anual' });
+  assert.equal(ajustada.estado, EstadoJornada.SIN_FICHADAS, 'cuenta como ausencia en el resumen del período');
+  assert.equal(ajustada.totalDiario, 0);
+});
+
+test('fichadas en un No Laborable justificado señalan requiereJustificacionRevision (spec 015, FR-017)', () => {
+  const finde = calc(Clasificacion.NO_LABORABLE, [500]); // una fichada cae fuera de calendario pero queda registrada
+  const ajustada = aplicarAjustes(finde, {
+    justificacion: { tipoPago: 'No paga', motivoId: 'vacaciones-anual' },
+    params: PARAMS,
+  });
+  assert.equal(ajustada.requiereJustificacionRevision, true);
 });

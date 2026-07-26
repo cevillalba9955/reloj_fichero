@@ -10,6 +10,7 @@ import FormularioJustificacion from './FormularioJustificacion.jsx';
 import BotonConsultarReloj from './BotonConsultarReloj.jsx';
 import NavegacionDia from './NavegacionDia.jsx';
 import Dialogo from './Dialogo.jsx';
+import { leerSesion, guardarSesion } from '../utils/sesion-storage.js';
 
 // feature 010 — Página "Fichadas de Hoy": carga la vista del día al montar,
 // con estados cargando / con-datos / error (reintento) (US1); permite corregir
@@ -29,9 +30,18 @@ const ETIQUETA_DIA = {
   Feriado: 'Feriado',
 };
 
+// Recuerda la fecha vista entre pestañas (sessionStorage): al volver a
+// "Fichadas de hoy" por el menú de la izquierda, retoma el día que se estaba
+// viendo en vez de saltar siempre a hoy.
+const CLAVE_FECHA_SESION = 'presentismo.fichadasHoy.fecha';
+
 export default function PaginaFichadasHoy({
   cliente = clientePorDefecto,
   clienteJustificaciones = clienteJustificacionesPorDefecto,
+  // Fecha con la que llega desde otra pestaña (ej. doble clic en una celda
+  // del Calendario); null = hoy del servidor. Solo importa al MONTAR: la
+  // navegación posterior sigue siendo con `fechaSeleccionada` (US5).
+  fechaInicial = null,
 }) {
   const [estado, setEstado] = useState({ tipo: 'cargando' });
   const [correccion, setCorreccion] = useState(null); // fila en corrección
@@ -39,8 +49,16 @@ export default function PaginaFichadasHoy({
   const [justificacion, setJustificacion] = useState(null); // fila (o {}) en justificación
   const [motivos, setMotivos] = useState([]);
   // US5: día seleccionado (null = hoy del servidor). Solo se navega a fechas
-  // que el servidor ofreció en `navegacion` (FR-016/FR-017).
-  const [fechaSeleccionada, setFechaSeleccionada] = useState(null);
+  // que el servidor ofreció en `navegacion` (FR-016/FR-017). `fechaInicial`
+  // (doble clic en el Calendario) tiene prioridad sobre lo recordado de la
+  // sesión; sin ella, retoma la última fecha vista.
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(
+    () => fechaInicial ?? leerSesion(CLAVE_FECHA_SESION),
+  );
+
+  useEffect(() => {
+    guardarSesion(CLAVE_FECHA_SESION, fechaSeleccionada);
+  }, [fechaSeleccionada]);
 
   // Carga diferida: el catálogo de motivos solo se pide la primera vez que se
   // abre el diálogo de Justificación (evita un fetch en cada carga de página

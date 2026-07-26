@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import {
   crearEntornoFichadasHoy,
   fechaDelMes,
+  fechaDelMesSiguiente,
   mesActualPeriodo,
 } from '../helpers/fichadas-hoy-entorno.js';
 
@@ -370,10 +371,13 @@ test('POST consultar-reloj — el ciclo del reloj falló (resultado "error") →
 });
 
 // ---------------------------------------------------------------------------
-// T058/T059 (US5, iteración 2) — Navegación de días previos: el GET con ?fecha=
-// es contrato oficial; fechas futuras o de períodos sin calendario ("período de
-// liquidación abierto", research.md §6) → 400 FECHA_FUERA_DE_RANGO, también en
-// los POST de edición.
+// T058/T059 (US5, iteración 2) — Navegación de días previos Y futuros: el GET
+// con ?fecha= es contrato oficial y es de solo lectura, así que permite
+// cualquier día (previo o futuro) de un período con calendario generado
+// ("período de liquidación abierto", research.md §6); solo un período SIN
+// calendario → 400 FECHA_FUERA_DE_RANGO. Los POST de edición (corregir/
+// pausar/retirar) siguen rechazando un día futuro además de uno sin
+// calendario: no tiene sentido editar una fichada que todavía no ocurrió.
 // ---------------------------------------------------------------------------
 
 // 'YYYY-MM-DD' a `delta` días de hoy (reloj real del sistema, UTC-safe).
@@ -391,15 +395,17 @@ function fechaMesSinCalendario() {
   return new Date(Date.UTC(n.getFullYear(), n.getMonth() - 1, 15)).toISOString().slice(0, 10);
 }
 
-test('GET sin ?fecha → 200 con navegacion { esHoy: true, siguiente: null }', async () => {
-  const e = await crearEntornoFichadasHoy({ padron: PADRON });
+test('GET sin ?fecha → 200 con navegacion { esHoy: true }; ofrece "siguiente" si ese día tiene calendario', async () => {
+  // incluirMesSiguiente evita que el resultado dependa de en qué día del mes
+  // corre la suite: "mañana" siempre tiene calendario generado.
+  const e = await crearEntornoFichadasHoy({ padron: PADRON, incluirMesSiguiente: true });
   try {
     const res = await fetch(`${e.base}/api/fichadas-hoy`);
     assert.equal(res.status, 200);
     const v = await res.json();
     assert.ok(v.navegacion, 'la vista incluye el bloque navegacion');
     assert.equal(v.navegacion.esHoy, true);
-    assert.equal(v.navegacion.siguiente, null, 'nunca se ofrece un día futuro');
+    assert.equal(v.navegacion.siguiente, fechaRelativa(1), 'un día futuro es navegable si su período tiene calendario');
   } finally {
     e.close();
   }
@@ -423,12 +429,15 @@ test('GET ?fecha= de un día previo navegable → 200 con navegacion coherente',
   }
 });
 
-test('GET ?fecha= futura → 400 FECHA_FUERA_DE_RANGO', async () => {
-  const e = await crearEntornoFichadasHoy({ padron: PADRON });
+test('GET ?fecha= futura de un período con calendario generado → 200 (navegar/ver no es editar)', async () => {
+  const e = await crearEntornoFichadasHoy({ padron: PADRON, incluirMesSiguiente: true });
   try {
-    const res = await fetch(`${e.base}/api/fichadas-hoy?fecha=${fechaRelativa(1)}`);
-    assert.equal(res.status, 400);
-    assert.equal((await res.json()).error.codigo, 'FECHA_FUERA_DE_RANGO');
+    const fechaFutura = fechaDelMesSiguiente(1);
+    const res = await fetch(`${e.base}/api/fichadas-hoy?fecha=${fechaFutura}`);
+    assert.equal(res.status, 200);
+    const v = await res.json();
+    assert.equal(v.fecha, fechaFutura);
+    assert.equal(v.navegacion.esHoy, false);
   } finally {
     e.close();
   }
@@ -445,10 +454,11 @@ test('GET ?fecha= de un período sin calendario → 400 FECHA_FUERA_DE_RANGO', a
   }
 });
 
-test('POST correcciones/pausas/retiros — fecha futura o de período sin calendario → 400 FECHA_FUERA_DE_RANGO', async () => {
+test('POST correcciones/pausas/retiros — fecha futura (aunque su período tenga calendario) o de período sin calendario → 400 FECHA_FUERA_DE_RANGO', async () => {
   const e = await crearEntornoFichadasHoy({
     padron: PADRON,
     clasificaciones: { [FECHA]: 'Laborable' },
+    incluirMesSiguiente: true, // la fecha futura usada abajo SÍ tiene calendario: aísla que el rechazo es por ser futura, no por período sin generar.
   });
   try {
     const casos = [
@@ -457,7 +467,7 @@ test('POST correcciones/pausas/retiros — fecha futura o de período sin calend
       ['/api/fichadas-hoy/retiros-anticipados', { hora: '14:30' }],
     ];
     for (const [path, extra] of casos) {
-      for (const fecha of [fechaRelativa(1), fechaMesSinCalendario()]) {
+      for (const fecha of [fechaDelMesSiguiente(1), fechaMesSinCalendario()]) {
         const res = await postJson(e.base, path, {
           legajo: 1, fecha, autor: 'admin', motivo: 'motivo válido', ...extra,
         });

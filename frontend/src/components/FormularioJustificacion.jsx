@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Input, Select, Button, Alert, Space } from 'antd';
+import CampoFecha from './CampoFecha.jsx';
 
 // feature 012 (US1) — Registra el motivo de una ausencia para un día o un
 // rango de días, con motivo OBLIGATORIO elegido de una lista cerrada (FR-003,
@@ -67,16 +68,11 @@ export default function FormularioJustificacion({ fila = null, motivos = [], onG
       )}
       <label>
         Fecha{!fila && ' (o desde, para un rango)'}
-        <Input
-          type="date"
-          value={fecha}
-          onChange={(ev) => setFecha(ev.target.value)}
-          readOnly={Boolean(fila)}
-        />
+        <CampoFecha value={fecha} onChange={setFecha} disabled={Boolean(fila)} />
       </label>
       <label>
         Hasta (opcional, para varios días)
-        <Input type="date" value={hasta} onChange={(ev) => setHasta(ev.target.value)} />
+        <CampoFecha value={hasta} onChange={setHasta} />
       </label>
       <label>
         Motivo (obligatorio)

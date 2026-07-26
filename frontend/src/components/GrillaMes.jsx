@@ -6,7 +6,7 @@ import CeldaDia from './CeldaDia.jsx';
 
 const DIAS_SEMANA = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
-export default function GrillaMes({ dias, onReclasificar }) {
+export default function GrillaMes({ dias, onReclasificar, onIrAFichadas }) {
   if (!dias || dias.length === 0) return null;
   const offset = dias[0].diaSemana; // huecos antes del día 1
   const huecos = Array.from({ length: offset });
@@ -25,7 +25,7 @@ export default function GrillaMes({ dias, onReclasificar }) {
           <div key={`hueco-${i}`} className="celda-vacia" aria-hidden="true" />
         ))}
         {dias.map((dia) => (
-          <CeldaDia key={dia.fecha} dia={dia} onReclasificar={onReclasificar} />
+          <CeldaDia key={dia.fecha} dia={dia} onReclasificar={onReclasificar} onIrAFichadas={onIrAFichadas} />
         ))}
       </div>
     </div>

@@ -56,11 +56,13 @@ export function createLocalFileActiveEmployeesProvider({ filePath, repoDir, now 
     }
 
     // Detección por forma: legacy tiene prioridad; si no, el snapshot 004.
+    // El esquema legacy ({ legajosActivos: [n] }) no trae fecha de ingreso:
+    // siempre null (spec 015, FR-001/FR-012 — no bloquea el resto del padrón).
     let crudos;
     if (Array.isArray(datos?.legajosActivos)) {
-      crudos = datos.legajosActivos;
+      crudos = datos.legajosActivos.map((legajo) => ({ legajo, fechaIngreso: null }));
     } else if (Array.isArray(datos?.empleados)) {
-      crudos = datos.empleados.map((e) => e?.legajo);
+      crudos = datos.empleados.map((e) => ({ legajo: e?.legajo, fechaIngreso: e?.fechaIngreso ?? null }));
     } else {
       throw new RosterNoDisponibleError(
         `El archivo de padron "${ruta}" no tiene el formato esperado ` +
@@ -70,11 +72,16 @@ export function createLocalFileActiveEmployeesProvider({ filePath, repoDir, now 
 
     const vistos = new Set();
     const empleados = [];
-    for (const raw of crudos) {
+    for (const { legajo: raw, fechaIngreso } of crudos) {
       const legajo = interpretarLegajo(raw);
       if (legajo === null || vistos.has(legajo)) continue; // inválido o duplicado
       vistos.add(legajo);
-      empleados.push({ legajo, activo: true });
+      // fechaIngreso no parseable como YYYY-MM-DD → null, sin descartar el legajo.
+      const fechaIngresoValida =
+        typeof fechaIngreso === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fechaIngreso.trim())
+          ? fechaIngreso.trim()
+          : null;
+      empleados.push({ legajo, activo: true, fechaIngreso: fechaIngresoValida });
     }
 
     if (empleados.length === 0) {

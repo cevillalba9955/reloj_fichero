@@ -32,8 +32,8 @@ test('guardarSnapshotPadron + provider por archivo hacen round-trip sin DB (resu
   const provider = createFilePadronCategoryProvider({ repoDir, now });
   assert.deepEqual(await provider.obtenerCategoria(1234), { legajo: 1234, codigoCategoria: 'ADMIN' });
   assert.deepEqual(await provider.listar(), [
-    { legajo: 1234, codigoCategoria: 'ADMIN', nombre: 'Ada Lovelace' },
-    { legajo: 5678, codigoCategoria: 'PROD', nombre: 'Grace Hopper' },
+    { legajo: 1234, codigoCategoria: 'ADMIN', nombre: 'Ada Lovelace', fechaIngreso: null },
+    { legajo: 5678, codigoCategoria: 'PROD', nombre: 'Grace Hopper', fechaIngreso: null },
   ]);
   // Legajo ausente → null.
   assert.deepEqual(await provider.obtenerCategoria(9999), { legajo: 9999, codigoCategoria: null });
@@ -44,7 +44,25 @@ test('snapshot sin nombre (columna no configurada) → nombre null en el round-t
   const now = () => new Date(2026, 6, 1);
   guardarSnapshotPadron({ filePath: rutaPadron(repoDir, '202607'), empleados: [{ legajo: 1, codigoCategoria: 'ADMIN' }] });
   const provider = createFilePadronCategoryProvider({ repoDir, now });
-  assert.deepEqual(await provider.listar(), [{ legajo: 1, codigoCategoria: 'ADMIN', nombre: null }]);
+  assert.deepEqual(await provider.listar(), [{ legajo: 1, codigoCategoria: 'ADMIN', nombre: null, fechaIngreso: null }]);
+});
+
+// spec 015 (FR-001): fechaIngreso viaja en el snapshot del padrón.
+test('snapshot con fechaIngreso hace round-trip; sin ella queda null', async () => {
+  const repoDir = tmpRepo();
+  const now = () => new Date(2026, 6, 1);
+  guardarSnapshotPadron({
+    filePath: rutaPadron(repoDir, '202607'),
+    empleados: [
+      { legajo: 1, codigoCategoria: 'ADMIN', fechaIngreso: '2018-03-01' },
+      { legajo: 2, codigoCategoria: 'PROD' },
+    ],
+  });
+  const provider = createFilePadronCategoryProvider({ repoDir, now });
+  assert.deepEqual(await provider.listar(), [
+    { legajo: 1, codigoCategoria: 'ADMIN', nombre: null, fechaIngreso: '2018-03-01' },
+    { legajo: 2, codigoCategoria: 'PROD', nombre: null, fechaIngreso: null },
+  ]);
 });
 
 test('el snapshot no contiene credenciales ni connect string (Principio V)', () => {

@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { screen, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // Helper compartido para tests: el `Select` de antd no es un <select> nativo
@@ -20,4 +20,16 @@ export async function seleccionarOpcion(comboboxName, textoOpcion) {
     selector: '.ant-select-item-option-content',
   });
   await user.click(opcion);
+}
+
+// Helper compartido para tests: CampoFecha (envoltorio de antd DatePicker)
+// muestra/tipea en formato dd/mm/aaaa, así que los tests siguen escribiendo
+// fechas en ISO (YYYY-MM-DD, igual que el resto de la app) y este helper hace
+// la conversión. antd (rc-picker) solo dispara `onChange` al confirmar el
+// valor tipeado (Enter), no en cada tecla.
+export function escribirFecha(labelName, fechaIso) {
+  const [anio, mes, dia] = fechaIso.split('-');
+  const input = screen.getByLabelText(labelName);
+  fireEvent.change(input, { target: { value: `${dia}/${mes}/${anio}` } });
+  fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
 }

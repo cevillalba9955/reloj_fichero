@@ -6,7 +6,7 @@
     { "id": "art", "etiqueta": "ART", "tipoPago": "Paga", "activo": true },
     { "id": "nacimiento", "etiqueta": "Nacimiento", "tipoPago": "Paga", "activo": true },
     { "id": "fallecimiento", "etiqueta": "Fallecimiento", "tipoPago": "Paga", "activo": true },
-    { "id": "vacaciones", "etiqueta": "Vacaciones", "tipoPago": "Paga", "activo": true },
+    { "id": "vacaciones", "etiqueta": "Vacaciones", "tipoPago": "Paga", "activo": false },
     { "id": "matrimonio", "etiqueta": "Matrimonio", "tipoPago": "Paga", "activo": true },
     { "id": "examen", "etiqueta": "Examen", "tipoPago": "Paga", "activo": true }
   ]

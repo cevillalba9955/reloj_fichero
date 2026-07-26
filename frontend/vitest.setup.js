@@ -7,6 +7,13 @@ afterEach(() => {
   cleanup();
 });
 
+// sessionStorage persiste entre tests del mismo archivo (mismo jsdom
+// `window`) sin este reset: PaginaFichadasHoy/PaginaCalendario guardan ahí
+// la fecha/período vistos, lo que filtraría estado de un test a otro.
+afterEach(() => {
+  window.sessionStorage.clear();
+});
+
 // jsdom no implementa getComputedStyle(elt, pseudoElt); antd Modal/Drawer lo
 // usan para medir el ancho de la scrollbar al bloquear el scroll del body.
 // Sin este stub, cada test con Modal imprime un error inofensivo por consola.

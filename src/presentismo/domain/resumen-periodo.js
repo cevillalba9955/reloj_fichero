@@ -2,6 +2,7 @@ import { Clasificacion } from './calendario-mes.js';
 import { EstadoJornada } from './jornada.js';
 import { esEntradaTarde } from './situacion-dia.js';
 import { TipoPausa } from './pausa.js';
+import { MotivoVacaciones } from './vacaciones.js';
 
 // feature 011 — Proyección pura del resumen de un período por empleado
 // (data-model.md, research.md §1-§2). Deriva la fila de acumulados y el
@@ -80,15 +81,21 @@ export function proyectarResumenPeriodo({ resumen, hoy }) {
   // columna propia: sigue sumando a `ausencias` (Clarifications 2026-07-20).
   let feriado = 0;
   let licencia = 0;
+  // spec 015 — `vacaciones` cuenta los días con la Justificación-espejo que
+  // genera una Asignación de Vacaciones (`MotivoVacaciones.id`, "No paga":
+  // sin esta columna propia, quedarían mezclados dentro de `ausencias`).
+  let vacaciones = 0;
 
   for (const d of detalle) {
     horasTrabajadas += d.horas;
     const esLicencia = d.justificacion?.tipoPago === 'Paga';
+    const esVacaciones = d.justificacion?.motivoId === MotivoVacaciones.id;
     if (d.clasificacion === Clasificacion.FERIADO) feriado += 1;
     if (esLicencia) licencia += 1;
+    if (esVacaciones) vacaciones += 1;
     if (d.estado === EstadoJornada.COMPLETA) completas += 1;
     else if (d.estado === EstadoJornada.INCOMPLETA) incompletas += 1;
-    else if (d.estado === EstadoJornada.SIN_FICHADAS && !esLicencia) ausencias += 1;
+    else if (d.estado === EstadoJornada.SIN_FICHADAS && !esLicencia && !esVacaciones) ausencias += 1;
     if (d.llegadaTarde) llegadasTarde += 1;
     if (d.corregida) correcciones += 1;
     if (d.pausas.some((p) => p.tipo === TipoPausa.RETIRO_ANTICIPADO)) retirosAnticipados += 1;
@@ -105,6 +112,7 @@ export function proyectarResumenPeriodo({ resumen, hoy }) {
     correcciones,
     feriado,
     licencia,
+    vacaciones,
     detalle,
   };
 }

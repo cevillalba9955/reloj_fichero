@@ -23,18 +23,25 @@ import { mesActualPeriodo } from '../domain/calendario-mes.js';
 // `nombre` es opcional (para la IU); nunca contiene credenciales ni datos
 // biométricos (Principio V).
 
-// Normaliza filas crudas a un Map legajo→{categoria, nombre} (dedup, descarte de
-// legajos inválidos, vacíos→null): misma disciplina que el provider Oracle.
+// Normaliza filas crudas a un Map legajo→{categoria, nombre, fechaIngreso}
+// (dedup, descarte de legajos inválidos, vacíos→null): misma disciplina que
+// el provider Oracle. `fechaIngreso` (spec 015, FR-001) se descarta a null si
+// no es 'YYYY-MM-DD', sin descartar el legajo.
 function construirMapa(empleados) {
   const mapa = new Map();
-  for (const { legajo, categoria, nombre } of empleados) {
+  for (const { legajo, categoria, nombre, fechaIngreso } of empleados) {
     const n = Number(legajo);
     if (!Number.isInteger(n)) continue;
     const codigo = categoria == null ? null : String(categoria).trim();
     const nom = nombre == null ? null : String(nombre).trim();
+    const fechaIngresoValida =
+      typeof fechaIngreso === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fechaIngreso.trim())
+        ? fechaIngreso.trim()
+        : null;
     mapa.set(n, {
       codigoCategoria: codigo && codigo.length > 0 ? codigo : null,
       nombre: nom && nom.length > 0 ? nom : null,
+      fechaIngreso: fechaIngresoValida,
     });
   }
   return mapa;
@@ -86,23 +93,26 @@ export function createFilePadronCategoryProvider({ repoDir, now = () => new Date
     async listar() {
       const mapa = cacheDelMesActual();
       return [...mapa.entries()]
-        .map(([legajo, { codigoCategoria, nombre }]) => ({ legajo, codigoCategoria, nombre }))
+        .map(([legajo, { codigoCategoria, nombre, fechaIngreso }]) => ({ legajo, codigoCategoria, nombre, fechaIngreso }))
         .sort((a, b) => a.legajo - b.legajo);
     },
   };
 }
 
 // Escribe un snapshot del padrón a disco (crea el directorio si falta).
-// `empleados` es la lista normalizada [{ legajo, codigoCategoria, nombre? }] tal
-// cual la devuelve un provider.listar(). `vista` es solo una traza de origen.
+// `empleados` es la lista normalizada [{ legajo, codigoCategoria, nombre?,
+// fechaIngreso? }] tal cual la devuelve un provider.listar(). `vista` es solo
+// una traza de origen. `fechaIngreso` (spec 015, FR-001) es null si no se
+// sincronizó desde Oracle.
 export function guardarSnapshotPadron({ filePath, empleados, vista = null }) {
   const datos = {
     generadoEn: new Date().toISOString(),
     vista,
-    empleados: empleados.map(({ legajo, codigoCategoria, nombre }) => ({
+    empleados: empleados.map(({ legajo, codigoCategoria, nombre, fechaIngreso }) => ({
       legajo,
       categoria: codigoCategoria,
       nombre: nombre ?? null,
+      fechaIngreso: fechaIngreso ?? null,
     })),
   };
   mkdirSync(dirname(filePath), { recursive: true });

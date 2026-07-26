@@ -126,6 +126,21 @@
 .fila-fichada.situacion-licencia {
   background: #f5f8ff;
 }
+.fila-vacaciones.pendiente {
+  background: #fff7f7;
+}
+/* Fila con el historial/asignación abiertos (clic o "Asignar vacaciones");
+   va después de ".pendiente" para ganarle en empate de especificidad cuando
+   coinciden las dos clases. El color se fija también en cada <td> (no solo
+   en el <tr>) y con !important: antd le agrega a cada celda la clase
+   `.ant-table-cell-row-hover` al pasar el mouse, con un estilo propio que
+   de otro modo oculta el color de la fila seleccionada durante el hover. */
+.fila-vacaciones.seleccionada {
+  background: #e6f4ff;
+}
+.fila-vacaciones.seleccionada > td {
+  background: #e6f4ff !important;
+}
 
 /* --- Avisos y errores de dominio --- */
 .aviso {

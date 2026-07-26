@@ -5,8 +5,14 @@ import EstadoVacio from './EstadoVacio.jsx';
 import EncabezadoPeriodo from './EncabezadoPeriodo.jsx';
 import NavegacionMes from './NavegacionMes.jsx';
 import DialogoConfirmarReclasificar from './DialogoConfirmarReclasificar.jsx';
+import { leerSesion, guardarSesion } from '../utils/sesion-storage.js';
 
-export default function PaginaCalendario({ cliente, inicializarDesdeApp }) {
+// Recuerda el período mostrado entre pestañas (sessionStorage): al volver al
+// Calendario por el menú de la izquierda, retoma el mes que se estaba viendo
+// en vez de saltar siempre al último generado.
+const CLAVE_PERIODO_SESION = 'presentismo.calendario.periodo';
+
+export default function PaginaCalendario({ cliente, inicializarDesdeApp, onIrAFichadas }) {
   const [estado, setEstado] = useState({ tipo: 'cargando' });
   const [ultimo, setUltimo] = useState(null);
   const [periodos, setPeriodos] = useState([]);
@@ -17,6 +23,7 @@ export default function PaginaCalendario({ cliente, inicializarDesdeApp }) {
 
   const cargarMes = useCallback(
     async (periodo) => {
+      guardarSesion(CLAVE_PERIODO_SESION, periodo);
       setEstado({ tipo: 'cargando' });
       try {
         const vista = await cliente.obtenerCalendario(periodo);
@@ -39,7 +46,11 @@ export default function PaginaCalendario({ cliente, inicializarDesdeApp }) {
       setGenerables(gen ?? []);
       setMesActual(mes ?? null);
       if (!ult) setEstado({ tipo: 'vacio-global' });
-      else await cargarMes(ult);
+      else {
+        const recordado = leerSesion(CLAVE_PERIODO_SESION);
+        const periodoAMostrar = recordado && (perds ?? []).includes(recordado) ? recordado : ult;
+        await cargarMes(periodoAMostrar);
+      }
     } catch (err) {
       setEstado({ tipo: 'error', mensaje: err.message });
     }
@@ -192,6 +203,7 @@ export default function PaginaCalendario({ cliente, inicializarDesdeApp }) {
           <GrillaMes
             dias={estado.vista.dias}
             onReclasificar={estado.vista.cerrado ? undefined : pedirReclasificar}
+            onIrAFichadas={onIrAFichadas}
           />
         </section>
       )}

@@ -23,6 +23,10 @@ const TIPOS = new Set([
   'periodo_cerrado',
   'periodo_reabierto',
   'fichadas_rechazadas_periodo_cerrado',
+  // spec 015 — Control de Vacaciones Anual
+  'vacaciones_asignacion_alta',
+  'vacaciones_asignacion_reversion',
+  'vacaciones_incremento_anual',
 ]);
 
 // Campos que jamás deben aparecer en un evento (defensa en profundidad).

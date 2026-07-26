@@ -61,7 +61,7 @@ test('US1 + US3: rango de fechas futuras y reversión con recarga posterior', as
       legajo: 1,
       fecha: desde,
       hasta,
-      motivoId: 'vacaciones',
+      motivoId: 'examen',
     });
     assert.equal(status, 200);
     assert.ok(body.registradas.length >= 1);
@@ -74,10 +74,10 @@ test('US1 + US3: rango de fechas futuras y reversión con recarga posterior', as
     const recarga = await post(e.base, '/api/justificaciones', {
       legajo: 1,
       fecha: primerDia,
-      motivoId: 'examen',
+      motivoId: 'matrimonio',
     });
     assert.equal(recarga.status, 200, 'tras revertir se puede cargar un motivo nuevo sobre el mismo día (FR-009)');
-    assert.equal(recarga.body.registradas[0].motivoId, 'examen');
+    assert.equal(recarga.body.registradas[0].motivoId, 'matrimonio');
   } finally {
     e.close();
   }

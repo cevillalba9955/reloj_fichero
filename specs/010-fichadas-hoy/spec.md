@@ -298,11 +298,14 @@ como en las Historias 2 y 3.
 - **FR-015**: El sistema MUST NOT mostrar datos biométricos crudos (templates
   de huella, imágenes) en la página ni en los registros de auditoría.
 - **FR-016**: El sistema MUST permitir a un administrador navegar desde el
-  día actual hacia días previos dentro del período de liquidación abierto
-  (calendario de feature 004), mostrando para el día seleccionado la misma
-  información y acciones descriptas en FR-001 a FR-007.
-- **FR-017**: El sistema MUST NOT permitir navegar a días futuros ni a días
-  anteriores al período de liquidación abierto (períodos ya cerrados).
+  día actual hacia días previos O POSTERIORES dentro de cualquier período con
+  calendario generado (feature 004), mostrando para el día seleccionado la
+  misma información descripta en FR-001 a FR-007.
+- **FR-017**: El sistema MUST NOT permitir navegar (ver) a un día de un
+  período sin calendario generado. Además, MUST NOT permitir EDITAR
+  (corrección de horario, pausa intermedia, retiro anticipado) un día
+  futuro: esas acciones siguen exigiendo `fecha <= hoy`, aunque el día se
+  pueda visualizar.
 - **FR-018**: El sistema MUST presentar los formularios de corrección de
   horario, pausa intermedia y retiro anticipado como diálogos modales, en
   lugar de formularios embebidos en la página.

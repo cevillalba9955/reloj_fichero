@@ -23,6 +23,19 @@
  */
 
 /**
+ * VacacionesRepository: persiste saldo/movimientos/asignaciones de
+ * vacaciones (spec 015), fuera de la carpeta por período (data de legajo,
+ * no de período — research.md §3).
+ * @typedef {Object} VacacionesRepository
+ * @property {(legajo:number) => Promise<{saldo:number, ultimoIncrementoAplicado:string|null, movimientos:object[]}>} cargarLegajo
+ * @property {(legajo:number, datosLegajo:object) => Promise<void>} guardarLegajo
+ * @property {(asignacion:object) => Promise<void>} guardarAsignacion
+ * @property {(id:string) => Promise<object|null>} cargarAsignacion
+ * @property {(legajo?:number) => Promise<object[]>} listarAsignaciones
+ * @property {(id:string, reversion:{autor:string|null, fechaHora:string}) => Promise<object|null>} revertirAsignacion
+ */
+
+/**
  * PresentismoRepository: persiste el estado propio del sistema.
  * @typedef {Object} PresentismoRepository
  * @property {(periodo:string) => Promise<object|null>} cargarCalendario
@@ -55,6 +68,14 @@ const METODOS = {
     'listarJustificaciones',
     'guardarJustificacion',
     'revertirJustificacion',
+  ],
+  VacacionesRepository: [
+    'cargarLegajo',
+    'guardarLegajo',
+    'guardarAsignacion',
+    'cargarAsignacion',
+    'listarAsignaciones',
+    'revertirAsignacion',
   ],
   PresentismoLogger: ['evento'],
 };

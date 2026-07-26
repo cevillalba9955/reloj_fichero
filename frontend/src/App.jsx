@@ -7,6 +7,8 @@ import PaginaResumenPeriodo from './components/PaginaResumenPeriodo.jsx';
 import { crearClienteResumenPeriodo } from './api/resumen-periodo-client.js';
 import PaginaConfiguracion from './components/PaginaConfiguracion.jsx';
 import { crearClienteConfiguracion } from './api/configuracion-client.js';
+import PaginaVacaciones from './components/PaginaVacaciones.jsx';
+import { crearClienteVacaciones } from './api/vacaciones-client.js';
 import AppShell from './components/AppShell.jsx';
 
 // feature 007 — Pantalla principal. Orquesta la carga del último mes generado,
@@ -23,24 +25,46 @@ const clienteCalendarioPorDefecto = crearClienteCalendario();
 const clienteFichadasPorDefecto = crearClienteFichadasHoy(); // se inyecta desde main.jsx
 const clienteResumenPeriodoPorDefecto = crearClienteResumenPeriodo();
 const clienteConfiguracionPorDefecto = crearClienteConfiguracion();
+const clienteVacacionesPorDefecto = crearClienteVacaciones();
 
 export default function App({
   clienteCalendario = clienteCalendarioPorDefecto,
   clienteFichadas = clienteFichadasPorDefecto,
   clienteResumenPeriodo = clienteResumenPeriodoPorDefecto,
   clienteConfiguracion = clienteConfiguracionPorDefecto,
+  clienteVacaciones = clienteVacacionesPorDefecto,
 }) {
   const [pestania, setPestania] = useState('fichadas-hoy');
+  // Fecha con la que se llega a "Fichadas de hoy" desde un doble clic en una
+  // celda del Calendario; una navegación manual por el menú la resetea (solo
+  // debe aplicar la próxima vez que se entre a la pestaña por ese camino).
+  const [fechaFichadasHoy, setFechaFichadasHoy] = useState(null);
+
+  function cambiarSeccion(seccion) {
+    setFechaFichadasHoy(null);
+    setPestania(seccion);
+  }
+
+  function irAFichadasHoy(fecha) {
+    setFechaFichadasHoy(fecha);
+    setPestania('fichadas-hoy');
+  }
 
   return (
-    <AppShell seccion={pestania} onCambiarSeccion={setPestania}>
-      {pestania === 'fichadas-hoy' && <PaginaFichadasHoy cliente={clienteFichadas} />}
+    <AppShell seccion={pestania} onCambiarSeccion={cambiarSeccion}>
+      {pestania === 'fichadas-hoy' && (
+        <PaginaFichadasHoy cliente={clienteFichadas} fechaInicial={fechaFichadasHoy} />
+      )}
 
-      {pestania === 'calendario' && <PaginaCalendario cliente={clienteCalendario} />}
+      {pestania === 'calendario' && (
+        <PaginaCalendario cliente={clienteCalendario} onIrAFichadas={irAFichadasHoy} />
+      )}
 
       {pestania === 'resumen-periodo' && <PaginaResumenPeriodo cliente={clienteResumenPeriodo} />}
 
       {pestania === 'configuracion' && <PaginaConfiguracion cliente={clienteConfiguracion} />}
+
+      {pestania === 'vacaciones' && <PaginaVacaciones cliente={clienteVacaciones} />}
     </AppShell>
   );
 }

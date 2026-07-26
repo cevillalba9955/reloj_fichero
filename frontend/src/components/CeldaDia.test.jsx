@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import CeldaDia from './CeldaDia.jsx';
 
 // T016 (feature 007) — CeldaDia: clasificación con 2º recurso (texto/aria),
@@ -44,4 +44,16 @@ test('sin esHoy no se marca como hoy', () => {
   render(<CeldaDia dia={dia({ esHoy: false })} />);
   const celda = screen.getByRole('gridcell');
   expect(celda).toHaveAttribute('data-es-hoy', 'false');
+});
+
+test('doble clic con onIrAFichadas llama al callback con la fecha del día', () => {
+  const onIrAFichadas = vi.fn();
+  render(<CeldaDia dia={dia({ fecha: '2026-07-15' })} onIrAFichadas={onIrAFichadas} />);
+  fireEvent.doubleClick(screen.getByRole('gridcell'));
+  expect(onIrAFichadas).toHaveBeenCalledWith('2026-07-15');
+});
+
+test('sin onIrAFichadas, el doble clic no rompe nada', () => {
+  render(<CeldaDia dia={dia()} />);
+  expect(() => fireEvent.doubleClick(screen.getByRole('gridcell'))).not.toThrow();
 });

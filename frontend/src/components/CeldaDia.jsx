@@ -12,6 +12,10 @@ import { ESTADOS_CALENDARIO } from '../theme/estados.js';
 // para elegir la nueva clasificación; el padre solo pasa `onReclasificar`
 // cuando el período está abierto (si el período está cerrado, no se pasa y el
 // ícono no se renderiza — ver PaginaCalendario.jsx).
+//
+// Doble clic en la celda navega a "Fichadas de hoy" con esa fecha
+// seleccionada (`onIrAFichadas`, opcional — sin él, el doble clic no hace
+// nada).
 
 const ETIQUETA = {
   Laborable: 'Hábil',
@@ -21,7 +25,7 @@ const ETIQUETA = {
 
 const OPCIONES = ['Laborable', 'No Laborable', 'Feriado'];
 
-export default function CeldaDia({ dia, onReclasificar }) {
+export default function CeldaDia({ dia, onReclasificar, onIrAFichadas }) {
   const [modalAbierto, setModalAbierto] = useState(false);
   const etiqueta = ETIQUETA[dia.clasificacion] ?? dia.clasificacion;
   const clases = ['celda', `resaltado-${dia.resaltado}`];
@@ -50,6 +54,7 @@ export default function CeldaDia({ dia, onReclasificar }) {
       data-resaltado={dia.resaltado}
       data-es-hoy={dia.esHoy ? 'true' : 'false'}
       data-en-periodo={dia.enPeriodoActivo ? 'true' : 'false'}
+      onDoubleClick={onIrAFichadas ? () => onIrAFichadas(dia.fecha) : undefined}
     >
       <span className="dia-numero">{dia.dd}</span>
       <Tag className="dia-clasificacion" color={ESTADOS_CALENDARIO[dia.resaltado]?.color}>
