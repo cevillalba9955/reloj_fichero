@@ -222,6 +222,49 @@ test('una fila con justificación vigente muestra el motivo, el botón de revert
   expect(onRevertirJustificacion).toHaveBeenCalledWith(expect.objectContaining({ legajo: 1 }));
 });
 
+// spec 015 feedback — la Justificación-espejo de una Asignación de
+// Vacaciones (motivoId 'vacaciones-anual') tiene su propio badge "VACACIONES"
+// (color lila/purple), que pisa la situación original (Ausente, Esperando,
+// etc.), igual que Licencia pero como categoría propia.
+test('un motivo vacaciones-anual se muestra como VACACIONES (badge propio), pisando AUSENTE', () => {
+  render(
+    <TablaFichadasHoy
+      empleados={[
+        fila({
+          legajo: 5,
+          situacion: 'AUSENTE',
+          justificacion: { motivoId: 'vacaciones-anual', etiquetaMotivo: 'Vacaciones', tipoPago: 'No paga' },
+        }),
+      ]}
+    />,
+  );
+  const [datos] = filasDeDatos();
+  expect(datos).toHaveTextContent('VACACIONES');
+  expect(datos).not.toHaveTextContent('AUSENTE');
+  expect(datos).not.toHaveTextContent('LICENCIA');
+  expect(datos.className).toContain('situacion-vacaciones');
+  // No repite "Vacaciones" dos veces (el Tag ya lo dice).
+  expect(datos.textContent.match(/Vacaciones/gi)).toHaveLength(1);
+});
+
+test('un motivo vacaciones-anual pisa también ESPERANDO', () => {
+  render(
+    <TablaFichadasHoy
+      empleados={[
+        fila({
+          legajo: 6,
+          entrada: null,
+          situacion: 'ESPERANDO',
+          justificacion: { motivoId: 'vacaciones-anual', etiquetaMotivo: 'Vacaciones', tipoPago: 'No paga' },
+        }),
+      ]}
+    />,
+  );
+  const [datos] = filasDeDatos();
+  expect(datos).toHaveTextContent('VACACIONES');
+  expect(datos).not.toHaveTextContent('ESPERANDO');
+});
+
 test('un motivo No paga conserva la etiqueta de situación original (no se muestra como Licencia)', () => {
   render(
     <TablaFichadasHoy

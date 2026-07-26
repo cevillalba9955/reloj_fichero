@@ -76,6 +76,19 @@ async function periodoEfectivo(ctx, query) {
   return { periodo, periodoMes, tramo, periodos: expandirPeriodos(generados, modo) };
 }
 
+// `hoy` cae dentro del período mostrado (mes completo, o la quincena
+// correspondiente en modo QUINCENAL). Los acumulados de un período "en
+// curso" todavía no reflejan sus días futuros (FR-008 de resumen-periodo.js:
+// `proyectarResumenPeriodo` filtra `fecha <= hoy`) — la UI usa este flag para
+// avisarlo, no para cambiar el cálculo.
+function periodoIncluyeHoy(periodoMes, tramo, hoy) {
+  const mesHoy = hoy.slice(0, 4) + hoy.slice(5, 7);
+  if (periodoMes !== mesHoy) return false;
+  if (tramo == null) return true;
+  const tramoHoy = Number(hoy.slice(8, 10)) <= 15 ? Tramo.Q1 : Tramo.Q2;
+  return tramo === tramoHoy;
+}
+
 // Legajos esperados, del snapshot local del padrón (mismo criterio best-effort
 // que fichadas-hoy-handlers: sin snapshot, la vista se muestra sin filas).
 async function legajosEsperados(ctx) {
@@ -103,15 +116,17 @@ export function registrarRutas(router, ctx) {
     const { periodo, periodoMes, tramo, periodos } = await periodoEfectivo(ctx, query);
     const legajos = await legajosEsperados(ctx);
     const nombres = await nombresPorLegajo(ctx);
+    const hoy = hoyLocal();
 
     let filas;
     try {
-      filas = await ctx.service.calcularResumenPeriodo(periodoMes, legajos, hoyLocal(), { tramo });
+      filas = await ctx.service.calcularResumenPeriodo(periodoMes, legajos, hoy, { tramo });
     } catch (err) {
       throw new ApiError(500, 'ERROR_CALCULANDO_RESUMEN', err.message);
     }
     const conNombre = filas.map((f) => ({ ...f, nombre: nombres.get(f.legajo) ?? null }));
-    return { status: 200, body: construirVistaResumenPeriodo({ periodo, periodos, filas: conNombre }) };
+    const enCurso = periodoIncluyeHoy(periodoMes, tramo, hoy);
+    return { status: 200, body: construirVistaResumenPeriodo({ periodo, periodos, filas: conNombre, enCurso }) };
   });
 
   // GET /api/resumen-periodo/:legajo[?periodo=YYYYMM[-Q1|-Q2]] → VistaDetalleEmpleado (US2).

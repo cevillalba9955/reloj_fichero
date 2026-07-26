@@ -33,6 +33,11 @@ Respuestas:
 - **200** `VistaResumenPeriodo` — incluye `periodos` (para el selector), el `periodo`
   efectivo y `filas[]` ordenadas por legajo. Un empleado sin categoría configurada va
   con `anomalia` y acumulados en 0 (FR-007), sin abortar la vista.
+- **200** también incluye `enCurso: boolean` (spec 015 feedback): `true` cuando `hoy`
+  cae dentro del período devuelto (mes completo, o la quincena correspondiente en
+  modo QUINCENAL). No cambia ningún cálculo — es solo un aviso para la UI, porque
+  un período "en curso" todavía no refleja sus días futuros en los acumulados
+  (FR-008 de `resumen-periodo.js`: `proyectarResumenPeriodo` filtra `fecha <= hoy`).
 - **400** `PERIODO_INVALIDO` — formato distinto de `YYYYMM` (o `YYYYMM-Q1/Q2` en
   modo QUINCENAL).
 - **404** `CALENDARIO_NO_GENERADO` — el período pedido no tiene calendario (también

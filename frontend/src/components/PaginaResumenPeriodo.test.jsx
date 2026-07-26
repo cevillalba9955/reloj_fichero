@@ -104,6 +104,22 @@ test('clic en una fila abre el diálogo de detalle (US2)', async () => {
   expect(await screen.findByText('2026-07-01')).toBeInTheDocument();
 });
 
+// spec 015 feedback — aviso de que un período "en curso" todavía no refleja
+// sus días futuros en los acumulados.
+test('con enCurso, muestra el aviso de período en curso', async () => {
+  const cliente = clienteMock({ obtenerResumen: vi.fn().mockResolvedValue(vista({ enCurso: true })) });
+  render(<PaginaResumenPeriodo cliente={cliente} />);
+  await screen.findByRole('table');
+  expect(screen.getByText(/Período en curso/)).toBeInTheDocument();
+});
+
+test('sin enCurso, no muestra el aviso de período en curso', async () => {
+  const cliente = clienteMock({ obtenerResumen: vi.fn().mockResolvedValue(vista({ enCurso: false })) });
+  render(<PaginaResumenPeriodo cliente={cliente} />);
+  await screen.findByRole('table');
+  expect(screen.queryByText(/Período en curso/)).not.toBeInTheDocument();
+});
+
 test('cerrar el diálogo de detalle vuelve al resumen sin efecto', async () => {
   const cliente = clienteMock();
   render(<PaginaResumenPeriodo cliente={cliente} />);

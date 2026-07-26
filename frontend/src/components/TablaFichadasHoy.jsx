@@ -32,6 +32,16 @@ function esLicencia(fila) {
   return fila.justificacion?.tipoPago === 'Paga';
 }
 
+// spec 015 feedback — un día con la Justificación-espejo de una Asignación
+// de Vacaciones tiene su propio badge "VACACIONES" (lila), que pisa
+// cualquier otra situación (Ausente, Esperando, etc.) del mismo día — mismo
+// criterio que `esLicencia`. El id debe coincidir con `MotivoVacaciones.id`
+// de src/presentismo/domain/vacaciones.js; el frontend no importa el
+// backend (Principio I: único acceso a datos vía `/api`).
+function esVacaciones(fila) {
+  return fila.justificacion?.motivoId === 'vacaciones-anual';
+}
+
 // Minutos → 'H:MM' para lectura (el dato viaja en minutos, formato de 004).
 function formatoHoras(min) {
   const m = Number.isInteger(min) && min >= 0 ? min : 0;
@@ -99,16 +109,23 @@ export default function TablaFichadasHoy({
       title: 'Situación',
       key: 'situacion',
       render: (_, fila) => {
-        const licencia = esLicencia(fila);
-        const clave = licencia ? 'licencia' : CLAVE_SITUACION[fila.situacion] ?? 'desconocida';
-        const etiquetaSituacion = licencia ? 'LICENCIA' : ETIQUETA_SITUACION[fila.situacion] ?? fila.situacion;
+        const vacaciones = esVacaciones(fila);
+        const licencia = !vacaciones && esLicencia(fila);
+        const clave = vacaciones ? 'vacaciones' : licencia ? 'licencia' : CLAVE_SITUACION[fila.situacion] ?? 'desconocida';
+        const etiquetaSituacion = vacaciones
+          ? 'VACACIONES'
+          : licencia
+            ? 'LICENCIA'
+            : ETIQUETA_SITUACION[fila.situacion] ?? fila.situacion;
         const { color, icon: Icon } = ESTADOS_FICHADA[clave] ?? ESTADOS_FICHADA.desconocida;
         return (
           <>
             <Tag color={color} icon={<Icon />}>
               {etiquetaSituacion}
             </Tag>
-            {fila.justificacion && <span> {fila.justificacion.etiquetaMotivo}</span>}
+            {/* La etiqueta del motivo de vacaciones ("Vacaciones") ya está en
+                el Tag de arriba: mostrarla de nuevo sería redundante. */}
+            {fila.justificacion && !vacaciones && <span> {fila.justificacion.etiquetaMotivo}</span>}
             {fila.correccionVigente && <span className="marca-correccion"> (*)</span>}
             {fila.requiereJustificacionRevision && (
               <span className="marca-revision" role="alert">
@@ -167,8 +184,9 @@ export default function TablaFichadasHoy({
       columns={columnas}
       dataSource={empleados}
       rowClassName={(fila) => {
-        const licencia = esLicencia(fila);
-        const clave = licencia ? 'licencia' : CLAVE_SITUACION[fila.situacion] ?? 'desconocida';
+        const vacaciones = esVacaciones(fila);
+        const licencia = !vacaciones && esLicencia(fila);
+        const clave = vacaciones ? 'vacaciones' : licencia ? 'licencia' : CLAVE_SITUACION[fila.situacion] ?? 'desconocida';
         return `fila-fichada situacion-${clave}`;
       }}
     />
