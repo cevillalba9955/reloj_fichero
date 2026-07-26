@@ -126,6 +126,9 @@
 .fila-fichada.situacion-licencia {
   background: #f5f8ff;
 }
+.fila-fichada.situacion-vacaciones {
+  background: #f6f0fb;
+}
 .fila-vacaciones.pendiente {
   background: #fff7f7;
 }

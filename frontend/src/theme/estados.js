@@ -7,6 +7,7 @@ import {
   FileProtectOutlined,
   WarningOutlined,
   QuestionCircleOutlined,
+  CoffeeOutlined,
 } from '@ant-design/icons';
 
 // Mapa único color+ícono por clave de situación/estado de dominio, reutilizado
@@ -25,6 +26,9 @@ export const ESTADOS_FICHADA = {
   'no-aplica': { color: 'default', icon: MinusCircleOutlined },
   anomalia: { color: 'error', icon: WarningOutlined },
   licencia: { color: 'blue', icon: FileProtectOutlined },
+  // spec 015 feedback — badge propio para vacaciones (lila), pisa cualquier
+  // otra situación (Ausente, Esperando, etc.) del mismo día.
+  vacaciones: { color: 'purple', icon: CoffeeOutlined },
   desconocida: { color: 'default', icon: QuestionCircleOutlined },
 };
 

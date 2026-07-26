@@ -51,7 +51,16 @@ export default function PaginaResumenPeriodo({ cliente = clientePorDefecto }) {
       {estado.tipo === 'con-datos' && (
         <>
           <header className="resumen-encabezado">
-            <h2>Resumen del período {etiquetaPeriodo(estado.vista.periodo)}</h2>
+            <div>
+              <h2>Resumen del período {etiquetaPeriodo(estado.vista.periodo)}</h2>
+              {estado.vista.enCurso && (
+                <p className="resumen-nota-en-curso">
+                  Período en curso: los días futuros todavía no se reflejan en los
+                  acumulados (Ausencias, Licencia, Vacaciones, etc.); se van sumando a
+                  medida que transcurren.
+                </p>
+              )}
+            </div>
             <SelectorPeriodo
               periodos={estado.vista.periodos}
               periodo={estado.vista.periodo}

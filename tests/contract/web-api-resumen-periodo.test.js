@@ -6,6 +6,7 @@ import {
   mesActualPeriodo,
 } from '../helpers/fichadas-hoy-entorno.js';
 import { createFileVacacionesRepository } from '../../src/presentismo/adapters/file-vacaciones-repository.js';
+import { periodoSiguiente } from '../../src/presentismo/domain/calendario-mes.js';
 
 // T005 (feature 011, US1) — Contrato de GET /api/resumen-periodo y
 // GET /api/resumen-periodo/{legajo}. Ver specs/011-resumen-periodo/contracts/
@@ -304,6 +305,32 @@ test('spec 015: vacaciones en el resumen, excluidas de ausencias', async () => {
     const fila1 = v.filas.find((f) => f.legajo === 1);
     assert.equal(fila1.vacaciones, 1);
     assert.equal(fila1.ausencias, ausenciasAntes - 1, 'el día de vacaciones deja de sumar a ausencias');
+  } finally {
+    e.close();
+  }
+});
+
+// spec 015 feedback — `enCurso` avisa que el período mostrado todavía no
+// refleja sus días futuros en los acumulados (no cambia ningún cálculo).
+test('GET /api/resumen-periodo: enCurso es true para el período que contiene a "hoy"', async () => {
+  const e = await crearEntornoFichadasHoy({ padron: PADRON });
+  try {
+    const res = await fetch(`${e.base}/api/resumen-periodo`);
+    const v = await res.json();
+    assert.equal(v.enCurso, true);
+  } finally {
+    e.close();
+  }
+});
+
+test('GET /api/resumen-periodo?periodo=: enCurso es false para un período que no contiene a "hoy"', async () => {
+  const e = await crearEntornoFichadasHoy({ padron: PADRON, incluirMesSiguiente: true });
+  try {
+    const mesSiguiente = periodoSiguiente(mesActualPeriodo());
+    const res = await fetch(`${e.base}/api/resumen-periodo?periodo=${mesSiguiente}`);
+    const v = await res.json();
+    assert.equal(v.periodo, mesSiguiente);
+    assert.equal(v.enCurso, false);
   } finally {
     e.close();
   }

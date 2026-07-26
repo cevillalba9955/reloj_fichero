@@ -165,10 +165,15 @@ export function construirVistaFichadasHoy({ fecha, periodo, diaClasificacion, fi
 // feature 011 — VistaResumenPeriodo / FilaResumenPeriodo (data-model.md):
 // lo que devuelve GET /api/resumen-periodo. `filas` es la salida de
 // service.calcularResumenPeriodo con el `nombre` ya mezclado por el handler.
-export function construirVistaResumenPeriodo({ periodo, periodos, filas = [] }) {
+// `enCurso` (spec 015 feedback): `hoy` cae dentro del período mostrado, así
+// que sus acumulados todavía no reflejan los días futuros del período
+// (FR-008 de resumen-periodo.js) — la UI lo usa para avisarlo, no cambia el
+// cálculo.
+export function construirVistaResumenPeriodo({ periodo, periodos, filas = [], enCurso = false }) {
   return {
     periodo,
     periodos,
+    enCurso,
     filas: filas.map((f) =>
       f.anomalia
         ? {
