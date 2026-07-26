@@ -53,19 +53,21 @@ function parseHoraOpcional(valor, campo, codigo) {
   }
 }
 
-// iteración 2 (US5, FR-016/FR-017) — La fecha debe ser navegable: no futura y
-// de un período con calendario generado ("período de liquidación abierto",
-// research.md §6). Aplica al GET y a los POST de edición; devuelve { hoy,
-// periodos } para reutilizarlos al armar el bloque `navegacion` de la vista.
-async function exigirFechaNavegable(ctx, fecha) {
+// iteración 2 (US5, FR-016/FR-017) — La fecha debe pertenecer a un período
+// con calendario generado ("período de liquidación abierto", research.md
+// §6). `permitirFutura` (default false, usado por los POST de edición):
+// además no debe ser futura — no tiene sentido corregir/pausar/retirar una
+// fichada que todavía no ocurrió. El GET (solo lectura) sí permite ver un
+// día futuro, pasando `permitirFutura: true`. Devuelve { hoy, periodos }
+// para reutilizarlos al armar el bloque `navegacion` de la vista.
+async function exigirFechaNavegable(ctx, fecha, { permitirFutura = false } = {}) {
   const hoy = hoyLocal();
   const periodos = await ctx.repo.listarPeriodos();
-  if (!fechaNavegable(fecha, { hoy, periodos })) {
-    throw new ApiError(
-      400,
-      'FECHA_FUERA_DE_RANGO',
-      `La fecha ${fecha} no es navegable: debe ser hoy o un día previo de un período de liquidación abierto`,
-    );
+  if (!fechaNavegable(fecha, { hoy, periodos, permitirFutura })) {
+    const motivo = permitirFutura
+      ? 'su período debe tener calendario generado'
+      : 'debe ser hoy o un día previo de un período con calendario generado (nunca futura)';
+    throw new ApiError(400, 'FECHA_FUERA_DE_RANGO', `La fecha ${fecha} no es navegable: ${motivo}`);
   }
   return { hoy, periodos };
 }
@@ -164,11 +166,12 @@ async function filaDe(ctx, fecha, legajo) {
 
 export function registrarRutas(router, ctx) {
   // GET /api/fichadas-hoy → VistaFichadasHoy del día actual del servidor.
-  // `?fecha=YYYY-MM-DD` solo para pruebas/soporte (alcance: el día en curso).
+  // `?fecha=YYYY-MM-DD` navega a cualquier día (previo o futuro) de un
+  // período con calendario generado (solo lectura: `permitirFutura: true`).
   router.add('GET', '/api/fichadas-hoy', async ({ query }) => {
     const fecha = query.fecha ?? hoyLocal();
     validarFecha(fecha);
-    const rango = await exigirFechaNavegable(ctx, fecha);
+    const rango = await exigirFechaNavegable(ctx, fecha, { permitirFutura: true });
     return { status: 200, body: await vistaHoy(ctx, fecha, rango) };
   });
 

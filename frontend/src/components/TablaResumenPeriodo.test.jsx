@@ -17,6 +17,7 @@ function fila(over = {}) {
     correcciones: 1,
     feriado: 0,
     licencia: 0,
+    vacaciones: 0,
     anomalia: null,
     ...over,
   };
@@ -39,9 +40,19 @@ test('muestra las columnas Feriados y Licencia', () => {
   expect(encabezados).toContain('Feriados');
   expect(encabezados).toContain('Licencia');
   const celdas = screen.getAllByRole('row')[1].querySelectorAll('td');
-  // Leg, Empleado, Horas, Presentes, Ausencias, Feriados, Licencia, Tarde, Retiros, En Curso.
+  // Leg, Empleado, Horas, Presentes, Ausencias, Feriados, Licencia, Vacaciones, Tarde, Retiros, En Curso.
   expect(celdas[5]).toHaveTextContent('2');
   expect(celdas[6]).toHaveTextContent('3');
+});
+
+// spec 015 — columna Vacaciones (días con la Justificación-espejo de una
+// Asignación de Vacaciones, excluidos de Ausencias).
+test('muestra la columna Vacaciones', () => {
+  render(<TablaResumenPeriodo filas={[fila({ vacaciones: 5 })]} />);
+  const encabezados = screen.getAllByRole('columnheader').map((th) => th.textContent);
+  expect(encabezados).toContain('Vacaciones');
+  const celdas = screen.getAllByRole('row')[1].querySelectorAll('td');
+  expect(celdas[7]).toHaveTextContent('5');
 });
 
 test('una fila con anomalía se muestra señalada, sin acumulados normales', () => {

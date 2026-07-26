@@ -159,6 +159,17 @@ Respuestas:
   `etiquetaMotivo`/`tipoPago` sin cambios (mismo criterio que cualquier
   motivo desactivado, spec 012 Edge Cases).
 
+## Efecto sobre `GET /api/resumen-periodo` existente (011/012)
+
+- Agrega, en cada fila de `filas[]`, un contador nuevo `vacaciones`: días con
+  la Justificación-espejo que genera una Asignación de Vacaciones
+  (`motivoId === 'vacaciones-anual'`). Antes de esta feature esos días sumaban
+  a `ausencias` (`tipoPago: 'No paga'`, mismo criterio que cualquier
+  Justificación no paga, contrato de 012); ahora se excluyen de `ausencias` y
+  se cuentan aparte, igual que `licencia` excluye a la Justificación `Paga`.
+  No rompe el contrato existente: es un contador nuevo, ningún campo previo
+  cambia de nombre ni de tipo.
+
 ## Invariantes de contrato (verificadas por tests)
 
 - `POST /api/vacaciones/asignaciones` nunca deja una asignación a medias:

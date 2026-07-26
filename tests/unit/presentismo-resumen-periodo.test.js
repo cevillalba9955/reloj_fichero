@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { proyectarResumenPeriodo, esLlegadaTarde } from '../../src/presentismo/domain/resumen-periodo.js';
+import { MotivoVacaciones } from '../../src/presentismo/domain/vacaciones.js';
 import { calcularJornadaAuto, aplicarAjustes, EstadoJornada as EstadoJornadaDom } from '../../src/presentismo/domain/jornada.js';
 import { crearCorreccion } from '../../src/presentismo/domain/correccion.js';
 import { Clasificacion } from '../../src/presentismo/domain/calendario-mes.js';
@@ -252,6 +253,34 @@ test('feriado cuenta días Feriado; licencia cuenta Justificación Paga; ausenci
   assert.equal(r.licencia, 1);
   assert.equal(r.ausencias, 2, 'la No paga y la sin justificar cuentan; la Paga no');
   assert.equal(r.detalle.find((d) => d.fecha === '2026-07-10').justificacion.tipoPago, 'Paga');
+});
+
+// spec 015 — `vacaciones` cuenta la Justificación-espejo de una Asignación de
+// Vacaciones (motivoId 'vacaciones-anual', "No paga"); a diferencia de
+// cualquier OTRA Justificación "No paga" (que sigue sumando a `ausencias`,
+// test de arriba), esta se excluye de `ausencias` y tiene su propio contador.
+test('vacaciones cuenta la Justificación-espejo de una Asignación de Vacaciones, excluida de ausencias', () => {
+  const r = proyectarResumenPeriodo({
+    resumen: resumen([
+      jornada('2026-07-10', {
+        estado: 'Sin fichadas',
+        entrada: null,
+        salida: null,
+        totalDiario: 0,
+        justificacion: { motivoId: MotivoVacaciones.id, etiquetaMotivo: 'Vacaciones', tipoPago: 'No paga' },
+      }),
+      jornada('2026-07-13', {
+        estado: 'Sin fichadas',
+        entrada: null,
+        salida: null,
+        totalDiario: 0,
+        justificacion: { motivoId: 'sin_aviso', etiquetaMotivo: 'Sin Aviso', tipoPago: 'No paga' },
+      }),
+    ]),
+    hoy: HOY,
+  });
+  assert.equal(r.vacaciones, 1);
+  assert.equal(r.ausencias, 1, 'la vacación no cuenta como ausencia; la otra No paga sí');
 });
 
 test('requiereJustificacionRevision se expone en el detalle del día', () => {

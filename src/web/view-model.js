@@ -124,22 +124,26 @@ function diaVecino(fecha, delta) {
 }
 
 // feature 010, iteración 2 (research.md §6) — Predicado ÚNICO de navegabilidad:
-// fecha <= hoy (nunca futuro, FR-017) y período con calendario generado (la
-// materialización operativa de "período de liquidación abierto" mientras el
-// cierre de período del Principio VI no exista; cuando exista, la condición
-// "y no cerrado" se agrega SOLO acá).
-export function fechaNavegable(fecha, { hoy, periodos = [] }) {
-  return fecha <= hoy && periodos.includes(periodoDeFecha(fecha));
+// período con calendario generado (la materialización operativa de "período
+// de liquidación abierto" mientras el cierre de período del Principio VI no
+// exista; cuando exista, la condición "y no cerrado" se agrega SOLO acá).
+// `permitirFutura` (default false): navegar/VER un día futuro está permitido
+// (GET, `construirNavegacion`); EDITARLO (correcciones/pausas/retiros) no —
+// esos POST siguen llamando sin la opción, que exige `fecha <= hoy`.
+export function fechaNavegable(fecha, { hoy, periodos = [], permitirFutura = false }) {
+  return (permitirFutura || fecha <= hoy) && periodos.includes(periodoDeFecha(fecha));
 }
 
 // Bloque `navegacion` de la VistaFichadasHoy (data-model.md): la UI no
 // re-deriva la regla — navega solo a las fechas que el servidor le ofrece.
+// Permite días futuros (solo lectura): la restricción de "no futuro" es
+// exclusiva de las operaciones de edición, no de la navegación/visualización.
 export function construirNavegacion({ fecha, hoy, periodos = [] }) {
   const anterior = diaVecino(fecha, -1);
   const siguiente = diaVecino(fecha, 1);
   return {
-    anterior: fechaNavegable(anterior, { hoy, periodos }) ? anterior : null,
-    siguiente: fechaNavegable(siguiente, { hoy, periodos }) ? siguiente : null,
+    anterior: fechaNavegable(anterior, { hoy, periodos, permitirFutura: true }) ? anterior : null,
+    siguiente: fechaNavegable(siguiente, { hoy, periodos, permitirFutura: true }) ? siguiente : null,
     esHoy: fecha === hoy,
   };
 }
@@ -179,6 +183,7 @@ export function construirVistaResumenPeriodo({ periodo, periodos, filas = [] }) 
             correcciones: 0,
             feriado: 0,
             licencia: 0,
+            vacaciones: 0,
             anomalia: f.anomalia,
           }
         : {
@@ -195,6 +200,8 @@ export function construirVistaResumenPeriodo({ periodo, periodos, filas = [] }) 
             // Paga del período, junto a los 7 acumulados existentes.
             feriado: f.feriado ?? 0,
             licencia: f.licencia ?? 0,
+            // spec 015 — días con Justificación de Vacaciones del período.
+            vacaciones: f.vacaciones ?? 0,
             anomalia: null,
           },
     ),

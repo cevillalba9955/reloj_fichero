@@ -159,6 +159,18 @@ test('un período que todavía no pasó (mes en curso) NO muestra "Cerrar perío
   expect(screen.queryByText('Cerrar período')).not.toBeInTheDocument();
 });
 
+// Doble clic en una celda navega a "Fichadas de hoy" con esa fecha (vía
+// `onIrAFichadas`, provisto por App.jsx).
+test('doble clic en una celda llama a onIrAFichadas con la fecha de esa celda', async () => {
+  const cliente = clienteMock();
+  const onIrAFichadas = vi.fn();
+  render(<PaginaCalendario cliente={cliente} onIrAFichadas={onIrAFichadas} />);
+  await screen.findByRole('grid');
+
+  fireEvent.doubleClick(screen.getByRole('gridcell'));
+  expect(onIrAFichadas).toHaveBeenCalledWith('2026-07-01');
+});
+
 test('un período cerrado sigue mostrando "Reabrir período" aunque todavía sea el mes en curso', async () => {
   const vistaCerrada = vista({ cerrado: true, cierre: { autor: 'ui', fechaHora: '2026-07-20T00:00:00.000Z' } });
   const cliente = clienteMock({

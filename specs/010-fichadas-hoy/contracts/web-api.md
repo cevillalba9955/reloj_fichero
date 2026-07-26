@@ -14,14 +14,16 @@ Devuelve la `VistaFichadasHoy` del día solicitado (data-model.md), incluido el 
 
 Parámetro opcional de query `?fecha=YYYY-MM-DD` — **parte oficial del contrato desde
 la iteración 2** (research.md §6): por defecto `hoyLocal()` del servidor (mismo helper
-que 007/008); una fecha explícita debe cumplir el predicado de navegabilidad
-(`fecha <= hoy` y período con calendario generado — "período de liquidación abierto",
-FR-016/FR-017).
+que 007/008); una fecha explícita debe cumplir el predicado de navegabilidad de solo
+lectura (`permitirFutura: true` — período con calendario generado, "período de
+liquidación abierto", FR-016/FR-017; **sí** admite un día futuro, a diferencia de los
+POST de edición más abajo).
 
 - **200** `VistaFichadasHoy`
 - **400** `FECHA_INVALIDA` si el formato no es `YYYY-MM-DD`.
-- **400** `FECHA_FUERA_DE_RANGO` si la fecha es futura o su período no tiene
-  calendario generado (período no abierto).
+- **400** `FECHA_FUERA_DE_RANGO` si el período de la fecha no tiene calendario
+  generado (período no abierto). Una fecha futura de un período CON calendario
+  generado es válida (200): navegar/ver no es lo mismo que editar.
 - **500** `ERROR_CALCULANDO_FICHADAS_HOY` si el servicio falla al calcular algún
   empleado (no aborta toda la vista por un solo legajo con anomalía — eso se refleja
   como `anomalias` en su fila, no como error HTTP).
@@ -118,11 +120,13 @@ el `/tick` respondiera; no hace falta un paso de importación separado).
 ## Validación de fecha en los POST de edición (iteración 2)
 
 `POST /correcciones`, `POST /pausas` y `POST /retiros-anticipados` aplican sobre la
-`fecha` del body el **mismo predicado de navegabilidad** que el `GET` (research.md
-§6): fecha futura o de un período sin calendario generado → **400**
+`fecha` del body el predicado de navegabilidad de `fechaNavegable`/
+`exigirFechaNavegable` (research.md §6) **sin** `permitirFutura` (a diferencia del
+`GET`, que sí lo pasa): fecha futura O de un período sin calendario generado → **400**
 `FECHA_FUERA_DE_RANGO` (antes de cualquier validación de negocio). Esto habilita la
-edición de días previos dentro del período abierto (US5, FR-003/FR-006/FR-007) y
-bloquea en el servidor lo que la UI ya no ofrece.
+edición de días previos dentro del período abierto (US5, FR-003/FR-006/FR-007), pero
+no de un día futuro — no tiene sentido corregir/pausar/retirar una fichada que
+todavía no ocurrió, aunque ese día ya se pueda VER por el `GET`.
 
 `POST /consultar-reloj` no acepta fecha: siempre opera sobre el día actual (FR-008);
 la UI solo muestra el botón cuando `navegacion.esHoy` es `true`.

@@ -5,6 +5,7 @@ import {
   fechaDelMes,
   mesActualPeriodo,
 } from '../helpers/fichadas-hoy-entorno.js';
+import { createFileVacacionesRepository } from '../../src/presentismo/adapters/file-vacaciones-repository.js';
 
 // T005 (feature 011, US1) — Contrato de GET /api/resumen-periodo y
 // GET /api/resumen-periodo/{legajo}. Ver specs/011-resumen-periodo/contracts/
@@ -41,7 +42,7 @@ test('GET /api/resumen-periodo → 200 con la forma de VistaResumenPeriodo', asy
       for (const campo of [
         'legajo', 'nombre', 'horasTrabajadas', 'completas', 'incompletas',
         'ausencias', 'llegadasTarde', 'retirosAnticipados', 'correcciones', 'anomalia',
-        'feriado', 'licencia',
+        'feriado', 'licencia', 'vacaciones',
       ]) {
         assert.ok(campo in fila, `cada fila debe incluir "${campo}"`);
       }
@@ -268,6 +269,41 @@ test('feature 012: feriado/licencia en el resumen y justificacion en el detalle'
     const dia = detalle.dias.find((d) => d.fecha === FECHA_LICENCIA);
     assert.equal(dia.justificacion.motivoId, 'examen');
     assert.equal(dia.justificacion.tipoPago, 'Paga');
+  } finally {
+    e.close();
+  }
+});
+
+// spec 015 — nuevo contador `vacaciones`: días con la Justificación-espejo de
+// una Asignación de Vacaciones (motivoId 'vacaciones-anual', "No paga"),
+// excluidos de `ausencias` a diferencia de cualquier otra Justificación
+// "No paga" (que sí sigue sumando ahí, ver test de feature 012 arriba).
+test('spec 015: vacaciones en el resumen, excluidas de ausencias', async () => {
+  const FECHA_VACACIONES = fechaDelMes(1); // día 1: siempre <= hoy
+  const e = await crearEntornoFichadasHoy({
+    padron: [{ legajo: 1, categoria: 'ADMIN', nombre: 'Ana Pérez' }],
+    clasificaciones: { [FECHA_VACACIONES]: 'Laborable' },
+  });
+  try {
+    const antes = await (await fetch(`${e.base}/api/resumen-periodo`)).json();
+    const ausenciasAntes = antes.filas.find((f) => f.legajo === 1).ausencias;
+    assert.ok(ausenciasAntes > 0, 'sin vacaciones asignadas, el día 1 (sin fichadas) ya cuenta como ausencia');
+
+    const vacacionesRepo = createFileVacacionesRepository({ repoDir: e.repoDir });
+    await vacacionesRepo.guardarLegajo(1, { saldo: 10, ultimoIncrementoAplicado: null, movimientos: [] });
+
+    const alta = await fetch(`${e.base}/api/vacaciones/asignaciones`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ legajo: 1, fechaInicio: FECHA_VACACIONES, cantidadDias: 1, autor: 'rrhh' }),
+    });
+    assert.equal(alta.status, 200);
+
+    const res = await fetch(`${e.base}/api/resumen-periodo`);
+    const v = await res.json();
+    const fila1 = v.filas.find((f) => f.legajo === 1);
+    assert.equal(fila1.vacaciones, 1);
+    assert.equal(fila1.ausencias, ausenciasAntes - 1, 'el día de vacaciones deja de sumar a ausencias');
   } finally {
     e.close();
   }

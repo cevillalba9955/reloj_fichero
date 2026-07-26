@@ -35,12 +35,30 @@ export default function App({
   clienteVacaciones = clienteVacacionesPorDefecto,
 }) {
   const [pestania, setPestania] = useState('fichadas-hoy');
+  // Fecha con la que se llega a "Fichadas de hoy" desde un doble clic en una
+  // celda del Calendario; una navegación manual por el menú la resetea (solo
+  // debe aplicar la próxima vez que se entre a la pestaña por ese camino).
+  const [fechaFichadasHoy, setFechaFichadasHoy] = useState(null);
+
+  function cambiarSeccion(seccion) {
+    setFechaFichadasHoy(null);
+    setPestania(seccion);
+  }
+
+  function irAFichadasHoy(fecha) {
+    setFechaFichadasHoy(fecha);
+    setPestania('fichadas-hoy');
+  }
 
   return (
-    <AppShell seccion={pestania} onCambiarSeccion={setPestania}>
-      {pestania === 'fichadas-hoy' && <PaginaFichadasHoy cliente={clienteFichadas} />}
+    <AppShell seccion={pestania} onCambiarSeccion={cambiarSeccion}>
+      {pestania === 'fichadas-hoy' && (
+        <PaginaFichadasHoy cliente={clienteFichadas} fechaInicial={fechaFichadasHoy} />
+      )}
 
-      {pestania === 'calendario' && <PaginaCalendario cliente={clienteCalendario} />}
+      {pestania === 'calendario' && (
+        <PaginaCalendario cliente={clienteCalendario} onIrAFichadas={irAFichadasHoy} />
+      )}
 
       {pestania === 'resumen-periodo' && <PaginaResumenPeriodo cliente={clienteResumenPeriodo} />}
 
