@@ -13,6 +13,17 @@ function validarLegajo(legajo) {
   exigir(Number.isInteger(legajo) && legajo >= 1, 'VACACIONES_INVALIDA', `Legajo inválido "${legajo}"`);
 }
 
+// Mismo criterio best-effort que resumen-periodo-handlers.js: sin padrón de
+// categorías disponible, se lista sin nombres antes que romper la vista.
+async function nombresPorLegajo(ctx) {
+  try {
+    const lista = await ctx.categoryProvider.listar();
+    return new Map(lista.map((e) => [e.legajo, e.nombre ?? null]));
+  } catch {
+    return new Map();
+  }
+}
+
 // Mapea el `.httpCode` de un error del servicio al status HTTP
 // correspondiente (contracts/web-api.md). Cualquier otro error del dominio
 // cae en 400 VACACIONES_INVALIDA.
@@ -35,8 +46,12 @@ export function registrarRutas(router, ctx) {
   // incremento de cada legajo activo del padrón.
   router.add('GET', '/api/vacaciones', async () => {
     const empleados = await ctx.activeEmployeesProvider.getActiveEmployees();
-    const legajos = await ctx.service.listarVacaciones(empleados);
-    return { status: 200, body: { legajos } };
+    const [legajos, nombres] = await Promise.all([
+      ctx.service.listarVacaciones(empleados),
+      nombresPorLegajo(ctx),
+    ]);
+    const conNombre = legajos.map((f) => ({ ...f, nombre: nombres.get(f.legajo) ?? null }));
+    return { status: 200, body: { legajos: conNombre } };
   });
 
   // GET /api/vacaciones/:legajo (US2, FR-009) — historial completo de

@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import PaginaFichadasHoy from './PaginaFichadasHoy.jsx';
-import { seleccionarOpcion } from '../test-utils/antd.js';
+import { seleccionarOpcion, escribirFecha } from '../test-utils/antd.js';
 
 // T016 (feature 010, US1) — la página carga la vista al montar, muestra el
 // error con reintento, y renderiza la tabla con los datos recibidos.
@@ -131,7 +131,7 @@ test('"Justificar ausencia" abre el diálogo, carga motivos recién al abrir y g
   expect(clienteJustificaciones.obtenerMotivos).toHaveBeenCalledTimes(1);
 
   fireEvent.change(within(dialogo).getByLabelText('Legajo'), { target: { value: '5' } });
-  fireEvent.change(within(dialogo).getByLabelText(/^Fecha/), { target: { value: '2026-08-03' } });
+  escribirFecha(/^Fecha/, '2026-08-03');
   await seleccionarOpcion(/Motivo/, 'Vacaciones (Paga)');
   fireEvent.click(within(dialogo).getByText('Guardar'));
 
@@ -176,7 +176,7 @@ test('el botón "Justificación" de una fila precarga legajo y la fecha del día
   // La fila de "Fichadas de hoy" (FilaFichadaHoy) no trae `fecha` propia: la
   // fecha del día se toma de `estado.vista.fecha` (regresión encontrada en
   // verificación manual — la fila solo tiene legajo/nombre/entrada/salida/...).
-  expect(within(dialogo).getByLabelText(/^Fecha/)).toHaveValue('2026-07-20');
+  expect(within(dialogo).getByLabelText(/^Fecha/)).toHaveValue('20/07/2026');
 
   await seleccionarOpcion(/Motivo/, 'Vacaciones (Paga)');
   fireEvent.click(within(dialogo).getByText('Guardar'));

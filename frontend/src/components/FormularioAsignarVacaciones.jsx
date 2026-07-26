@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Input, Button, Alert, Space } from 'antd';
+import CampoFecha from './CampoFecha.jsx';
 
 // spec 015 (US1) — Asigna un período de vacaciones (fecha de inicio +
 // cantidad de días corridos) a un legajo. `fila` es opcional: si viene
@@ -8,13 +9,12 @@ import { Input, Button, Alert, Space } from 'antd';
 // fecha de inicio ni cantidad de días válida (FR-003); componente de
 // presentación, no llama a la API directamente.
 
-export default function FormularioAsignarVacaciones({ fila = null, onGuardar, onCancelar }) {
+export default function FormularioAsignarVacaciones({ fila = null, onGuardar, onExito, onCancelar }) {
   const [legajo, setLegajo] = useState(fila?.legajo != null ? String(fila.legajo) : '');
   const [fechaInicio, setFechaInicio] = useState('');
   const [cantidadDias, setCantidadDias] = useState('');
   const [error, setError] = useState(null);
   const [enviando, setEnviando] = useState(false);
-  const [resultado, setResultado] = useState(null);
 
   useEffect(() => {
     setLegajo(fila?.legajo != null ? String(fila.legajo) : '');
@@ -36,7 +36,7 @@ export default function FormularioAsignarVacaciones({ fila = null, onGuardar, on
         fechaInicio: fechaInicio.trim(),
         cantidadDias: Number(cantidadDias),
       });
-      setResultado(r);
+      onExito(r);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -59,7 +59,7 @@ export default function FormularioAsignarVacaciones({ fila = null, onGuardar, on
       )}
       <label>
         Fecha de inicio
-        <Input type="date" value={fechaInicio} onChange={(ev) => setFechaInicio(ev.target.value)} />
+        <CampoFecha value={fechaInicio} onChange={setFechaInicio} />
       </label>
       <label>
         Cantidad de días (corridos)
@@ -71,19 +71,11 @@ export default function FormularioAsignarVacaciones({ fila = null, onGuardar, on
         />
       </label>
       {error && <Alert type="error" showIcon role="alert" message={`No se pudo asignar: ${error}`} />}
-      {resultado && (
-        <Alert
-          type="success"
-          showIcon
-          role="status"
-          message={`Asignado del ${resultado.fechaInicio} al ${resultado.fechaFin} (${resultado.cantidadDias} días). Saldo resultante: ${resultado.saldoResultante}.`}
-        />
-      )}
       <Space className="acciones">
         <Button type="primary" htmlType="submit" disabled={!puedeGuardar}>
           Guardar
         </Button>
-        <Button onClick={onCancelar}>{resultado ? 'Cerrar' : 'Cancelar'}</Button>
+        <Button onClick={onCancelar}>Cancelar</Button>
       </Space>
     </form>
   );

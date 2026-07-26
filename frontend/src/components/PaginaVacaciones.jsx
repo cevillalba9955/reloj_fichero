@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Alert } from 'antd';
 import { crearClienteVacaciones } from '../api/vacaciones-client.js';
 import TablaVacaciones from './TablaVacaciones.jsx';
 import FormularioAsignarVacaciones from './FormularioAsignarVacaciones.jsx';
 import HistorialVacaciones from './HistorialVacaciones.jsx';
+import Dialogo from './Dialogo.jsx';
 
 // spec 015 — Página "Vacaciones": control anual de saldo/antigüedad (US2),
 // asignación de un período (US1) e historial de movimientos (US2) de un
@@ -15,6 +17,8 @@ export default function PaginaVacaciones({ cliente = clientePorDefecto }) {
   const [estado, setEstado] = useState({ tipo: 'cargando' });
   const [seleccionado, setSeleccionado] = useState(null); // fila de TablaVacaciones
   const [historial, setHistorial] = useState(null);
+  const [asignando, setAsignando] = useState(null); // fila cuya asignación se está editando (modal)
+  const [mensajeAsignacion, setMensajeAsignacion] = useState(null); // confirmación mostrada en la página, no en el modal
 
   const cargarListado = useCallback(async () => {
     setEstado({ tipo: 'cargando' });
@@ -29,6 +33,15 @@ export default function PaginaVacaciones({ cliente = clientePorDefecto }) {
   useEffect(() => {
     cargarListado();
   }, [cargarListado]);
+
+  // Refresca los datos tras asignar/revertir sin pasar por el estado
+  // "cargando": ese estado desmonta todo el bloque "con-datos" (tabla +
+  // modal de asignación abierto), lo que hacía que el modal se cerrara y
+  // volviera a abrirse solo, en blanco, al terminar de asignar.
+  const refrescarListado = useCallback(async () => {
+    const { legajos } = await cliente.listar();
+    setEstado({ tipo: 'con-datos', legajos });
+  }, [cliente]);
 
   const cargarHistorial = useCallback(
     async (legajo) => {
@@ -47,15 +60,25 @@ export default function PaginaVacaciones({ cliente = clientePorDefecto }) {
   // legajo seleccionado, sin recargar toda la página (quickstart.md Escenario 5.3).
   async function asignar(datos) {
     const resultado = await cliente.asignar(datos);
-    await Promise.all([cargarListado(), cargarHistorial(datos.legajo)]);
+    await Promise.all([refrescarListado(), cargarHistorial(datos.legajo)]);
     return resultado;
+  }
+
+  // El modal se cierra apenas se confirma la asignación; la confirmación se
+  // muestra en la página (no dentro del formulario).
+  function cerrarAsignacionConExito(resultado) {
+    setAsignando(null);
+    setMensajeAsignacion(
+      `Asignado del ${resultado.fechaInicio} al ${resultado.fechaFin} ` +
+        `(${resultado.cantidadDias} días). Saldo resultante: ${resultado.saldoResultante}.`,
+    );
   }
 
   // spec 015 (US4) — revertir una asignación vigente: repone el saldo y
   // refresca listado + historial, mismo criterio que asignar().
   async function revertir(asignacionId) {
     await cliente.revertir(asignacionId, {});
-    await Promise.all([cargarListado(), cargarHistorial(seleccionado.legajo)]);
+    await Promise.all([refrescarListado(), cargarHistorial(seleccionado.legajo)]);
   }
 
   return (
@@ -78,26 +101,53 @@ export default function PaginaVacaciones({ cliente = clientePorDefecto }) {
       {estado.tipo === 'con-datos' && (
         <>
           <h2>Control de vacaciones anual</h2>
-          <TablaVacaciones legajos={estado.legajos} onSeleccionar={setSeleccionado} />
 
-          {seleccionado && (
+          {mensajeAsignacion && (
+            <Alert
+              type="success"
+              showIcon
+              closable
+              role="status"
+              message={mensajeAsignacion}
+              onClose={() => setMensajeAsignacion(null)}
+              className="vacaciones-mensaje"
+            />
+          )}
+
+          <TablaVacaciones
+            legajos={estado.legajos}
+            onSeleccionar={setSeleccionado}
+            onAsignar={(fila) => {
+              setSeleccionado(fila);
+              setAsignando(fila);
+              setMensajeAsignacion(null);
+            }}
+            legajoSeleccionado={seleccionado?.legajo ?? null}
+          />
+
+          {seleccionado && historial && (
             <div className="vacaciones-detalle">
-              <FormularioAsignarVacaciones
-                fila={seleccionado}
-                onGuardar={asignar}
-                onCancelar={() => setSeleccionado(null)}
+              <h3>Historial — legajo {seleccionado.legajo}</h3>
+              <HistorialVacaciones
+                movimientos={historial.movimientos}
+                asignaciones={historial.asignaciones}
+                onRevertir={revertir}
               />
-              {historial && (
-                <>
-                  <h3>Historial — legajo {seleccionado.legajo}</h3>
-                  <HistorialVacaciones
-                    movimientos={historial.movimientos}
-                    asignaciones={historial.asignaciones}
-                    onRevertir={revertir}
-                  />
-                </>
-              )}
             </div>
+          )}
+
+          {asignando && (
+            <Dialogo
+              etiqueta={`Asignar vacaciones — legajo ${asignando.legajo}`}
+              onCerrar={() => setAsignando(null)}
+            >
+              <FormularioAsignarVacaciones
+                fila={asignando}
+                onGuardar={asignar}
+                onExito={cerrarAsignacionConExito}
+                onCancelar={() => setAsignando(null)}
+              />
+            </Dialogo>
           )}
         </>
       )}

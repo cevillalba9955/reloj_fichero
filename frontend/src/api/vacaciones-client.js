@@ -18,7 +18,7 @@ export function crearClienteVacaciones({ fetchImpl, base = '/api' } = {}) {
   }
 
   return {
-    // GET /api/vacaciones → { legajos: [{ legajo, fechaIngreso, antiguedadAnios, saldo, proximoIncremento, pendienteFechaIngreso }] }
+    // GET /api/vacaciones → { legajos: [{ legajo, nombre, fechaIngreso, antiguedadAnios, saldo, proximoIncremento, proximoIncrementoDias, pendienteFechaIngreso }] }
     listar() {
       return pedir('/vacaciones');
     },

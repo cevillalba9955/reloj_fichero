@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import PaginaVacaciones from './PaginaVacaciones.jsx';
+import { escribirFecha } from '../test-utils/antd.js';
 
 // spec 015 — la página carga el listado al montar, permite reintentar tras
 // un error, seleccionar un legajo para ver su historial y asignar
@@ -12,6 +13,7 @@ function legajoFila(over = {}) {
     antiguedadAnios: 8,
     saldo: 10,
     proximoIncremento: '2026-11-01',
+    proximoIncrementoDias: 21,
     pendienteFechaIngreso: false,
     ...over,
   };
@@ -72,16 +74,43 @@ test('asignar vacaciones refresca el listado y el historial sin recargar toda la
   });
   render(<PaginaVacaciones cliente={cliente} />);
   await screen.findByRole('table');
-  fireEvent.click(screen.getAllByRole('row')[1]);
-  await screen.findByText(/Historial/);
+  fireEvent.click(screen.getByRole('button', { name: 'Asignar vacaciones' }));
+  await screen.findByLabelText(/Fecha de inicio/);
 
-  fireEvent.change(screen.getByLabelText(/Fecha de inicio/), { target: { value: '2026-01-10' } });
+  escribirFecha(/Fecha de inicio/, '2026-01-10');
   fireEvent.change(screen.getByLabelText(/Cantidad de días/), { target: { value: '21' } });
   fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
   await waitFor(() => expect(cliente.asignar).toHaveBeenCalledWith({ legajo: 1, fechaInicio: '2026-01-10', cantidadDias: 21 }));
   await waitFor(() => expect(cliente.listar).toHaveBeenCalledTimes(2), 'recarga el listado tras asignar');
   await waitFor(() => expect(cliente.consultar).toHaveBeenCalledTimes(2), 'recarga el historial tras asignar');
+
+  // spec 015 feedback — el modal se cierra solo al confirmar; la
+  // confirmación se muestra en la página, no dentro del modal.
+  expect(screen.queryByLabelText(/Fecha de inicio/)).not.toBeInTheDocument();
+  expect(await screen.findByText(/Asignado del 2026-01-10 al 2026-01-30/)).toBeInTheDocument();
+});
+
+test('el mensaje de confirmación se puede cerrar y se limpia al abrir una nueva asignación', async () => {
+  const cliente = clienteMock({
+    asignar: vi.fn().mockResolvedValue({ asignacionId: 'a1', fechaInicio: '2026-01-10', fechaFin: '2026-01-30', cantidadDias: 21, saldoResultante: -11 }),
+  });
+  render(<PaginaVacaciones cliente={cliente} />);
+  await screen.findByRole('table');
+  fireEvent.click(screen.getByRole('button', { name: 'Asignar vacaciones' }));
+  escribirFecha(/Fecha de inicio/, '2026-01-10');
+  fireEvent.change(screen.getByLabelText(/Cantidad de días/), { target: { value: '21' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+  const mensaje = await screen.findByText(/Asignado del 2026-01-10 al 2026-01-30/);
+
+  // Se puede cerrar a mano (botón de cierre del Alert de antd).
+  fireEvent.click(mensaje.closest('.ant-alert').querySelector('.ant-alert-close-icon'));
+  await waitFor(() => expect(screen.queryByText(/Asignado del 2026-01-10/)).not.toBeInTheDocument());
+
+  // También se limpia solo al abrir una nueva asignación.
+  fireEvent.click(screen.getByRole('button', { name: 'Asignar vacaciones' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+  expect(screen.queryByText(/Asignado del 2026-01-10/)).not.toBeInTheDocument();
 });
 
 // spec 015 (US4) — revertir una asignación vigente desde el historial.

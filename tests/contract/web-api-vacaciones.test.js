@@ -6,7 +6,7 @@ import {
   fechaDelMesSiguiente,
 } from '../helpers/fichadas-hoy-entorno.js';
 import { createFileVacacionesRepository } from '../../src/presentismo/adapters/file-vacaciones-repository.js';
-import { calcularIncrementosPendientes } from '../../src/presentismo/domain/vacaciones.js';
+import { calcularIncrementosPendientes, calcularAntiguedadAnios, diasPorAntiguedad } from '../../src/presentismo/domain/vacaciones.js';
 import { loadVacacionesConfig } from '../../src/presentismo/config/vacaciones-config.js';
 import { hoyLocal } from '../../src/presentismo/domain/calendario-mes.js';
 
@@ -229,11 +229,18 @@ test('GET /api/vacaciones → 200, lista antigüedad/saldo/próximo incremento; 
     assert.equal(legajo1.pendienteFechaIngreso, false);
     assert.ok(Number.isInteger(legajo1.antiguedadAnios));
     assert.match(legajo1.proximoIncremento, /^\d{4}-\d{2}-\d{2}$/);
+    const config = loadVacacionesConfig('./config/vacaciones.json');
+    const antiguedadAlProximoIncremento = calcularAntiguedadAnios('2018-03-01', legajo1.proximoIncremento);
+    assert.equal(
+      legajo1.proximoIncrementoDias,
+      diasPorAntiguedad(config.escalaAntiguedad, antiguedadAlProximoIncremento),
+    );
 
     const legajo2 = legajos.find((l) => l.legajo === 2);
     assert.equal(legajo2.fechaIngreso, null);
     assert.equal(legajo2.antiguedadAnios, null);
     assert.equal(legajo2.proximoIncremento, null);
+    assert.equal(legajo2.proximoIncrementoDias, null);
     assert.equal(legajo2.pendienteFechaIngreso, true, 'Acceptance Scenario US2.3');
     assert.equal(legajo2.saldo, 0, 'legajo nuevo sin movimientos: saldo implícito 0');
   } finally {

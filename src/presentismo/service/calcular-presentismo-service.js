@@ -32,6 +32,7 @@ import {
   calcularAntiguedadAnios,
   proximoIncremento,
   calcularIncrementosPendientes,
+  diasPorAntiguedad,
 } from '../domain/vacaciones.js';
 import { assertCumplePuerto } from '../ports/index.js';
 import { createNullLogger } from '../logging/presentismo-logger.js';
@@ -772,16 +773,26 @@ export function createCalcularPresentismoService({
           antiguedadAnios: null,
           saldo: datosLegajo.saldo,
           proximoIncremento: null,
+          proximoIncrementoDias: null,
           pendienteFechaIngreso: true,
         });
         continue;
       }
+      const fechaProximoIncremento = proximoIncremento(vacacionesConfig.incrementoAnual, hoy);
       filas.push({
         legajo: empleado.legajo,
         fechaIngreso: empleado.fechaIngreso,
         antiguedadAnios: calcularAntiguedadAnios(empleado.fechaIngreso, hoy),
         saldo: datosLegajo.saldo,
-        proximoIncremento: proximoIncremento(vacacionesConfig.incrementoAnual, hoy),
+        proximoIncremento: fechaProximoIncremento,
+        // Días que se sumarán al saldo en ese ciclo: por la antigüedad QUE
+        // TENDRÁ el legajo en esa fecha futura (research.md §4/§5 — misma
+        // regla de "antigüedad a la fecha del ciclo" que calcularIncrementosPendientes),
+        // no la antigüedad de hoy.
+        proximoIncrementoDias: diasPorAntiguedad(
+          vacacionesConfig.escalaAntiguedad,
+          calcularAntiguedadAnios(empleado.fechaIngreso, fechaProximoIncremento),
+        ),
         pendienteFechaIngreso: false,
       });
     }

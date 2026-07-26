@@ -21,18 +21,22 @@ Respuesta:
     "legajos": [
       {
         "legajo": 1234,
+        "nombre": "Gómez, María",
         "fechaIngreso": "2018-03-01",
         "antiguedadAnios": 8,
         "saldo": 3,
         "proximoIncremento": "2026-11-01",
+        "proximoIncrementoDias": 21,
         "pendienteFechaIngreso": false
       },
       {
         "legajo": 5678,
+        "nombre": null,
         "fechaIngreso": null,
         "antiguedadAnios": null,
         "saldo": 0,
         "proximoIncremento": null,
+        "proximoIncrementoDias": null,
         "pendienteFechaIngreso": true
       }
     ]
@@ -41,6 +45,16 @@ Respuesta:
   `pendienteFechaIngreso: true` (FR-012, Acceptance Scenario US2.3): el
   padrón no tiene `fechaIngreso` cargada para ese legajo; no bloquea el
   listado del resto.
+
+  `proximoIncrementoDias` es la cantidad de días que se sumarán al saldo en
+  `proximoIncremento`, según la escala de antigüedad (`escalaAntiguedad`) QUE
+  TENDRÁ el legajo en esa fecha futura (no la antigüedad de hoy — mismo
+  criterio que `calcularIncrementosPendientes`, research.md §4/§5).
+
+  `nombre` sale de `ctx.categoryProvider.listar()` (mismo criterio best-
+  effort que `GET /api/resumen-periodo`, 011): `null` si el legajo no
+  tiene categoría cargada o si el padrón de categorías no está disponible;
+  nunca bloquea el listado.
 
 ## `GET /api/vacaciones/{legajo}`
 
