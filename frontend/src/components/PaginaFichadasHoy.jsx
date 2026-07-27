@@ -11,6 +11,7 @@ import BotonConsultarReloj from './BotonConsultarReloj.jsx';
 import NavegacionDia from './NavegacionDia.jsx';
 import Dialogo from './Dialogo.jsx';
 import { leerSesion, guardarSesion } from '../utils/sesion-storage.js';
+import { nombreDiaSemana } from '../utils/fechas.js';
 
 // feature 010 — Página "Fichadas de Hoy": carga la vista del día al montar,
 // con estados cargando / con-datos / error (reintento) (US1); permite corregir
@@ -182,7 +183,9 @@ export default function PaginaFichadasHoy({
         <>
           <header className="fichadas-encabezado">
             <div className="fichadas-titulo">
-              <h2>Fichadas del {estado.vista.fecha}</h2>
+              <h2>
+                Fichadas del {estado.vista.fecha} ({nombreDiaSemana(estado.vista.fecha)})
+              </h2>
               <p className="dia-clasificacion">
                 {ETIQUETA_DIA[estado.vista.diaClasificacion] ?? estado.vista.diaClasificacion}
               </p>
