@@ -91,6 +91,22 @@
   registrada con su autor, fecha, valor anterior, valor nuevo y motivo, y prevalece
   sobre el valor calculado hasta que se la revierta.
 
+### Session 2026-07-27 (redondeo a múltiplos de 30 minutos)
+
+- Q: Detectado sobre un caso real (legajo con entrada tardía a las `07:28` y salida en
+  horario a las `16:00`, total real `8:32`), ¿las horas trabajadas de una jornada se
+  pagan al minuto exacto o redondeadas a una grilla de 30 minutos? → A: Se pagan en
+  múltiplos de 30 minutos, truncando siempre hacia abajo (`8:32` → `8:30`; nunca se
+  acredita de más respecto de lo realmente trabajado).
+- Q: ¿El redondeo se aplica sobre el total final de horas trabajadas de la jornada, o
+  redondeando por separado la hora de entrada y la de salida antes de restar? → A:
+  Sobre el total final: la hora efectiva de entrada/salida se calcula igual que hoy
+  (FR-014, con su propio margen de tolerancia) y recién al final se trunca la
+  duración resultante a múltiplos de 30 minutos.
+- Q: ¿Aplica a todas las modalidades de liquidación o solo a la que motivó el caso? →
+  A: A todas las modalidades por igual (`Mensual` y `Quincenal`): es una regla general
+  de cómo se paga el tiempo trabajado, no una particularidad de una categoría.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Armar el calendario laboral del mes (Priority: P1)
@@ -163,7 +179,8 @@ margen de tolerancia). No requiere interfaz de usuario ni conexión al reloj.
 3. **Given** un día `Laborable` con fichadas del legajo `1234` a las `08:10` y a las
    `16:05`, **When** se calculan las horas del día, **Then** la entrada queda fuera
    del margen de apertura, se computa el horario parcial desde `08:10` hasta la hora
-   oficial de cierre `16:00` y el resultado es `7:50` horas.
+   oficial de cierre `16:00` (`7:50` reales) y, truncado a múltiplos de 30 minutos
+   (FR-047), el resultado pagado es `7:30` horas.
 4. **Given** un día `Laborable` con fichadas del legajo `1234` a las `07:15` y a las
    `14:00`, **When** se calculan las horas del día, **Then** la salida queda fuera
    del margen de cierre, se computa el horario parcial desde la hora oficial de
@@ -171,7 +188,8 @@ margen de tolerancia). No requiere interfaz de usuario ni conexión al reloj.
 5. **Given** un día `Laborable` con fichadas del legajo `1234` a las `08:30`, `11:00`
    y `14:45`, **When** se calculan las horas del día, **Then** se toma `08:30` como
    entrada y `14:45` como salida, la fichada intermedia de `11:00` se ignora para el
-   cálculo y el resultado es `6:15` horas.
+   cálculo y, truncado a múltiplos de 30 minutos (FR-047) sobre las `6:15` reales, el
+   resultado pagado es `6:00` horas.
 6. **Given** un día `Laborable` sin ninguna fichada del legajo `1234`, **When** se
    calculan las horas del día, **Then** el resultado es `0:00` horas y el día queda
    marcado como `Sin fichadas`.
@@ -196,6 +214,12 @@ margen de tolerancia). No requiere interfaz de usuario ni conexión al reloj.
 12. **Given** el legajo `1234` con una Categoría que no está configurada en el sistema,
     **When** se intenta calcular su presentismo, **Then** el empleado queda sin cálculo
     y la anomalía se reporta, sin inventar parámetros de jornada.
+13. **Given** un día `Laborable` de una modalidad con margen de apertura de 15 minutos
+    y fichadas del legajo `59` a las `07:28:31` y a las `16:07:49`, **When** se
+    calculan las horas del día, **Then** la entrada queda fuera del margen (`07:28` >
+    `07:15`) y se usa la hora real, la salida cae dentro del margen de cierre y se
+    normaliza a `16:00`, el total real es `8:32`, y el resultado pagado —truncado a
+    múltiplos de 30 minutos (FR-047)— es `8:30` horas.
 
 ---
 
@@ -341,6 +365,11 @@ horas efectivas aplicadas, las fichadas descartadas y el motivo de descarte.
 - **Pausa afectada por un recálculo**: si tras cargar una Pausa cambia el horario
   efectivo (nuevas fichadas o una corrección manual), la porción descontada puede
   variar; la Pausa sigue vigente y la jornada se señala para revisión.
+- **Total ya alineado a la grilla de 30 minutos**: truncar un total que ya es múltiplo
+  de 30 (por ejemplo, la jornada esperada completa) no lo modifica.
+- **Descuento de Pausas que desalinea un total ya truncado**: si el total automático
+  truncado (FR-047) menos el descuento de una Pausa intermedia (FR-038) deja un valor
+  que ya no es múltiplo de 30, se vuelve a truncar hacia abajo antes de acreditarlo.
 
 ## Requirements *(mandatory)*
 
@@ -453,6 +482,22 @@ Una Jornada es la combinación de un Día del mes y un empleado.
   DEBE registrarlas igualmente y reportarlas por separado, identificando el día, el
   legajo y las fichadas involucradas, para que el trabajo fuera de calendario quede
   visible aunque se liquide por otra vía.
+- **FR-047** *(añadido 2026-07-27, sesión de clarificación)*: Las horas trabajadas de
+  una jornada, una vez computadas según FR-014 (u obtenidas de una corrección de
+  horario según FR-026), DEBEN truncarse hacia abajo al múltiplo de 30 minutos
+  anterior antes de acreditarse al total del período (por ejemplo, `8:32` reales se
+  pagan como `8:30`). Este truncamiento:
+  - Aplica por igual a todas las modalidades de liquidación (FR-031).
+  - Aplica al total ya neto del descuento de Pausas intermedias (FR-038): si restar
+    una pausa deja el total desalineado de la grilla de 30 minutos, se vuelve a
+    truncar hacia abajo.
+  - NO DEBE aplicarse a un valor de corrección manual explícito (`valorCorregido`,
+    FR-026): un usuario responsable puede fijar cualquier valor, incluso uno que no
+    sea múltiplo de 30, y ese valor prevalece sin truncarse.
+  - NO DEBE aplicarse al crédito fijo de un día `Feriado` (FR-020) ni al de una
+    Justificación `Paga` (feature 012): ambos acreditan la jornada esperada completa
+    de la modalidad tal cual está configurada, no una duración derivada de horarios
+    reales.
 
 #### Resumen del período
 
@@ -667,6 +712,10 @@ niveles). Ver [contracts/cli-presentismo.md](./contracts/cli-presentismo.md).
 - **SC-015**: El 100% de las Pausas intermedias descuentan exactamente la porción de su
   intervalo que se solapa con el horario efectivo trabajado, ningún total diario queda
   negativo por una pausa, y toda Pausa queda registrada con autor, intervalo y motivo.
+- **SC-016**: El 100% de los totales diarios derivados de horarios reales (cálculo
+  automático, corrección de horario o descuento de pausas) son múltiplos de 30
+  minutos, nunca por encima del valor realmente trabajado — excepto un valor de
+  corrección manual explícito, que puede ser cualquier cantidad.
 
 ## Assumptions
 
