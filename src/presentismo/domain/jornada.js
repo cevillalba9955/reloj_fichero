@@ -1,4 +1,4 @@
-import { clamp, enVentana } from './tiempo.js';
+import { clamp, enVentana, redondearHorasAbajo } from './tiempo.js';
 import { Clasificacion } from './calendario-mes.js';
 import { descuentoPausas } from './pausa.js';
 
@@ -6,6 +6,13 @@ import { descuentoPausas } from './pausa.js';
 // determinista (FR-023). Reglas consolidadas en research §7. Trabaja en
 // minutos-del-día. Este módulo produce el resultado AUTOMÁTICO; correcciones
 // manuales y pausas (US3) se aplican encima con aplicarAjustes().
+//
+// Se paga en múltiplos de 30 min, truncando siempre hacia abajo
+// (redondearHorasAbajo, tiempo.js): aplica a cualquier total DERIVADO de
+// fichadas/horarios reales (auto, corrección de horario, descuento de
+// pausas). NO aplica a un `valorCorregido` explícito (override manual) ni al
+// crédito fijo de Feriado/Justificación Paga (`jornadaEsperada`, ya alineado
+// a la grilla de 30 min por configuración).
 
 export const EstadoJornada = Object.freeze({
   COMPLETA: 'Completa',
@@ -76,7 +83,9 @@ export function calcularJornadaAuto({ clasificacion, fichadas = [], params }) {
   if (entrada && salida) {
     const entradaEfectiva = horaEfectivaEntrada(entrada.hora, params);
     const salidaEfectiva = horaEfectivaSalida(salida.hora, params);
-    const horasAuto = clamp(salidaEfectiva - entradaEfectiva, 0, params.jornadaEsperada);
+    // Se paga en múltiplos de 30 min, siempre truncando hacia abajo (nunca de
+    // más respecto de lo realmente trabajado).
+    const horasAuto = redondearHorasAbajo(clamp(salidaEfectiva - entradaEfectiva, 0, params.jornadaEsperada));
     return {
       ...base,
       estado: EstadoJornada.COMPLETA,
@@ -188,9 +197,8 @@ export function aplicarAjustes(auto, { correccion = null, pausas = [], params = 
     let totalDerivado = 0;
     if (entradaEfectiva != null && salidaEfectiva != null) {
       const bruto = Math.max(0, salidaEfectiva - entradaEfectiva);
-      totalDerivado = Math.max(
-        0,
-        (params ? clamp(bruto, 0, params.jornadaEsperada) : bruto) - descuento,
+      totalDerivado = redondearHorasAbajo(
+        Math.max(0, (params ? clamp(bruto, 0, params.jornadaEsperada) : bruto) - descuento),
       );
     }
     const requiereRevision =
@@ -246,7 +254,7 @@ export function aplicarAjustes(auto, { correccion = null, pausas = [], params = 
       return {
         ...auto,
         descuentoPausas: descuento,
-        totalDiario: Math.max(0, auto.totalDiario - descuento),
+        totalDiario: redondearHorasAbajo(Math.max(0, auto.totalDiario - descuento)),
         correccionVigente: false,
         pausas,
         requiereRevision: false,
@@ -272,7 +280,7 @@ export function aplicarAjustes(auto, { correccion = null, pausas = [], params = 
   return {
     ...auto,
     descuentoPausas: descuento,
-    totalDiario: Math.max(0, auto.totalDiario - descuento),
+    totalDiario: redondearHorasAbajo(Math.max(0, auto.totalDiario - descuento)),
     correccionVigente: false,
     pausas,
     requiereRevision: false,

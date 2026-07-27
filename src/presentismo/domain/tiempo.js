@@ -43,6 +43,13 @@ export function clamp(x, lo, hi) {
   return Math.max(lo, Math.min(hi, x));
 }
 
+// Redondea minutos trabajados hacia abajo al múltiplo de 30 anterior (se paga
+// en múltiplos de media hora; nunca se acredita de más respecto de lo
+// realmente trabajado). 08:32 (512 min) → 08:30 (510 min).
+export function redondearHorasAbajo(minutos) {
+  return Math.floor(minutos / 30) * 30;
+}
+
 // Pertenencia a una ventana [ini, fin] con límites INCLUSIVOS (spec, Edge
 // Cases: "una fichada a las 07:30 con margen ... sigue dentro").
 export function enVentana(min, [ini, fin]) {

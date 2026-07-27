@@ -6,6 +6,7 @@ import {
   overlap,
   clamp,
   enVentana,
+  redondearHorasAbajo,
 } from '../../src/presentismo/domain/tiempo.js';
 
 test('parseHoraMinuto: HH:MM y HH:MM:SS', () => {
@@ -36,6 +37,15 @@ test('overlap: solapamiento de intervalos', () => {
   assert.equal(overlap(420, 960, 1000, 1100), 0, 'sin solape');
   assert.equal(overlap(420, 960, 300, 500), 80, 'solape parcial por izquierda');
   assert.equal(overlap(420, 960, 900, 1100), 60, 'solape parcial por derecha');
+});
+
+test('redondearHorasAbajo: trunca al múltiplo de 30 anterior', () => {
+  assert.equal(redondearHorasAbajo(512), 510, '8:32 → 8:30');
+  assert.equal(redondearHorasAbajo(540), 540, 'ya es múltiplo, no cambia');
+  assert.equal(redondearHorasAbajo(0), 0);
+  assert.equal(redondearHorasAbajo(29), 0);
+  assert.equal(redondearHorasAbajo(59), 30);
+  assert.equal(redondearHorasAbajo(1), 0);
 });
 
 test('clamp y enVentana', () => {
