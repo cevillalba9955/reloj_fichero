@@ -36,11 +36,11 @@ test('US2-2 llegada temprana / salida tardía sin extras → 9:00', () => {
   assert.equal(r.horasAuto, 540);
 });
 
-test('US2-3 entrada fuera de margen → parcial 7:50', () => {
+test('US2-3 entrada fuera de margen → parcial 7:50 truncado a 7:30 (múltiplos de 30 min)', () => {
   const r = calc(Clasificacion.LABORABLE, [490, 965]); // 08:10, 16:05
   assert.equal(r.entradaEfectiva, 490);
   assert.equal(r.salidaEfectiva, 960);
-  assert.equal(r.horasAuto, 470); // 7:50
+  assert.equal(r.horasAuto, 450); // 7:50 → trunca a 7:30
 });
 
 test('US2-4 salida fuera de margen → parcial 7:00', () => {
@@ -50,12 +50,12 @@ test('US2-4 salida fuera de margen → parcial 7:00', () => {
   assert.equal(r.horasAuto, 420); // 7:00
 });
 
-test('US2-5 fichada intermedia ignorada → 6:15', () => {
+test('US2-5 fichada intermedia ignorada → 6:15 truncado a 6:00 (múltiplos de 30 min)', () => {
   const r = calc(Clasificacion.LABORABLE, [510, 660, 885]); // 08:30, 11:00, 14:45
   assert.equal(r.estado, EstadoJornada.COMPLETA);
   assert.equal(r.entrada.hora, 510);
   assert.equal(r.salida.hora, 885);
-  assert.equal(r.horasAuto, 375); // 6:15
+  assert.equal(r.horasAuto, 360); // 6:15 → trunca a 6:00
   assert.equal(r.fichadasNoUsadas.length, 1, 'la de 11:00 no se usa');
 });
 
@@ -141,12 +141,12 @@ function correccionDe(campos) {
 }
 
 test('corrección de entrada recalcula entrada efectiva y el total (FR-003/FR-005)', () => {
-  // Entrada real 08:10 (fuera de margen) + salida 15:58 → auto 7:50.
+  // Entrada real 08:10 (fuera de margen) + salida 15:58 → auto 7:50, truncado a 7:30.
   const auto = calc(Clasificacion.LABORABLE, [490, 958]);
-  assert.equal(auto.totalDiario, 470);
+  assert.equal(auto.totalDiario, 450);
   // Corregida a 07:05 (dentro de margen) → efectiva 07:00, total 9:00.
   const ajustada = aplicarAjustes(auto, {
-    correccion: correccionDe({ entradaCorregida: 425, valorCalculado: 470 }),
+    correccion: correccionDe({ entradaCorregida: 425, valorCalculado: 450 }),
     params: PARAMS,
   });
   assert.equal(ajustada.entradaEfectiva, 420);
@@ -307,4 +307,22 @@ test('fichadas en un No Laborable justificado señalan requiereJustificacionRevi
     params: PARAMS,
   });
   assert.equal(ajustada.requiereJustificacionRevision, true);
+});
+
+// Redondeo a múltiplos de 30 min (se paga en múltiplos de media hora,
+// truncando siempre hacia abajo): caso real reportado, legajo 59, 22/07/2026.
+// Margen de apertura 15 min (quincenal_operarios): entrada 07:28 queda fuera
+// del margen (umbral 07:15) → TARDE, se usa la hora real (no se redondea a
+// 07:00 como con el margen de 30). Salida 16:00 en horario. Total real
+// 8:32 (512 min) → se paga 8:30 (510 min).
+test('entrada tarde 07:28 + salida 16:00 en horario → 8:30 (trunca 8:32 a múltiplo de 30, margen 15 min)', () => {
+  const paramsMargen15 = { ...PARAMS, margenApertura: 15, margenCierre: 15 };
+  const r = calcularJornadaAuto({
+    clasificacion: Clasificacion.LABORABLE,
+    fichadas: [{ id: 'e', hora: 448 }, { id: 's', hora: 960 }], // 07:28, 16:00
+    params: paramsMargen15,
+  });
+  assert.equal(r.entradaEfectiva, 448, 'fuera del margen de 15 min: no se redondea a 07:00');
+  assert.equal(r.salidaEfectiva, 960);
+  assert.equal(r.horasAuto, 510, '8:32 reales → se pagan 8:30');
 });

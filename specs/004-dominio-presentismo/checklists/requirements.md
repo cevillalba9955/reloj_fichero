@@ -43,3 +43,11 @@
   FR-030, con auditoría obligatoria (autor, fecha, valor anterior, valor nuevo,
   motivo) y protección frente a recálculos (FR-029).
 - Todos los ítems de la checklist pasan. El spec queda listo para `/speckit-plan`.
+- **Enmienda 2026-07-27** (retroactiva, post-implementación): se agregó FR-047 (pago
+  en múltiplos de 30 minutos, truncando hacia abajo) tras detectarse en producción un
+  caso real (legajo 59, entrada tardía `07:28`) sin esta regla documentada en ningún
+  spec. Se actualizaron los Acceptance Scenarios 3 y 5 de la User Story 2 (sus
+  resultados ya no son al minuto exacto), se agregó el Acceptance Scenario 13, dos
+  edge cases y SC-016. Implementado y testeado antes de esta enmienda
+  (`src/presentismo/domain/tiempo.js`/`jornada.js`); la enmienda documenta la regla
+  ya vigente, no dispara trabajo nuevo.

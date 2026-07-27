@@ -151,9 +151,10 @@ test('[US2] modalidades distintas → parámetros propios (US2-11)', async () =>
   const { svc } = await armar({ categorias: { 1: 'ADMIN', 2: 'PROD' }, fichadas });
   const [admin] = await svc.calcularEmpleado(1, '202607');
   const prod = (await svc.calcularEmpleado(2, '202607')).find((r) => r.tramo === 'Q1');
-  // ADMIN (07-16): entrada 06:05→07:00, salida 13:58→13:58 => 6:58 = 418.
+  // ADMIN (07-16): entrada 06:05→07:00, salida 13:58→13:58 => 6:58 = 418,
+  // truncado a múltiplos de 30 min → 6:30 = 390.
   const jAdmin = admin.jornadas.find((j) => j.fecha === '2026-07-01');
-  assert.equal(jAdmin.totalDiario, 418);
+  assert.equal(jAdmin.totalDiario, 390);
   // PROD (06-14, margen 15): entrada 06:05→06:00, salida 13:58→14:00 => 8:00 = 480.
   const jProd = prod.jornadas.find((j) => j.fecha === '2026-07-01');
   assert.equal(jProd.totalDiario, 480);

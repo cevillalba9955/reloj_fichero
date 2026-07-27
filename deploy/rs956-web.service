@@ -28,12 +28,16 @@ Restart=on-failure
 RestartSec=10
 TimeoutStopSec=30
 
-# Endurecimiento básico. La web lee la config y el build del frontend, y escribe
-# calendarios (generar/reclasificar) bajo data/ y logs bajo logs/.
+# Endurecimiento básico. La web sirve el build del frontend, escribe
+# calendarios (generar/reclasificar) bajo data/ y logs bajo logs/, y desde las
+# features 014/015 también persiste ediciones de la página de Configuración y
+# de Vacaciones (config/categorias.json, config/motivos-ausencia.json,
+# config/vacaciones.json): config/ DEBE ser escribible o esas escrituras
+# atómicas (temp + rename) fallan con EROFS bajo ProtectSystem=strict.
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/rs956/logs /opt/rs956/data
+ReadWritePaths=/opt/rs956/logs /opt/rs956/data /opt/rs956/config
 PrivateTmp=true
 
 [Install]

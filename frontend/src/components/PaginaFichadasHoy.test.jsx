@@ -44,7 +44,7 @@ test('carga la vista al montar y muestra la tabla', async () => {
   render(<PaginaFichadasHoy cliente={cliente} />);
   expect(await screen.findByRole('table')).toBeInTheDocument();
   expect(cliente.obtenerFichadasHoy).toHaveBeenCalledTimes(1);
-  expect(screen.getByText(/Fichadas del 2026-07-16/)).toBeInTheDocument();
+  expect(screen.getByText(/Fichadas del 2026-07-16 \(Jueves\)/)).toBeInTheDocument();
   expect(screen.getByText('Ana Pérez')).toBeInTheDocument();
 });
 

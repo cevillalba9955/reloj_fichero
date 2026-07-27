@@ -225,6 +225,13 @@ sudo systemctl enable --now rs956-web.service        # arranque al boot + ya
 Si `node` no está en `/usr/bin/node`, editar `ExecStart` del unit con la ruta real
 (`which node`).
 
+> **`config/` debe ser escribible por `rs956-web.service`**: desde las páginas de
+> Configuración y Vacaciones (features 014/015), el proceso web persiste ediciones en
+> `config/categorias.json`, `config/motivos-ausencia.json` y `config/vacaciones.json`.
+> El unit ya incluye `/opt/rs956/config` en `ReadWritePaths` (junto a `logs`/`data`,
+> bajo `ProtectSystem=strict`); si se personaliza el unit sin copiar `deploy/
+> rs956-web.service` tal cual, esas escrituras fallan con `EROFS`.
+
 ### 8.4 Verificación
 
 ```bash
