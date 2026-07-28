@@ -7,6 +7,7 @@ import { generarCalendario, reclasificarDia, periodoSiguiente } from '../../src/
 import { createFilePresentismoRepository } from '../../src/presentismo/adapters/file-presentismo-repository.js';
 import { registrarFichadas } from '../../src/presentismo/adapters/file-fichadas-archive.js';
 import { rutaCarpetaPeriodo, ARCHIVO_PADRON } from '../../src/presentismo/domain/periodo-storage.js';
+import { rolesPermisivoPath } from './acl-entorno.js';
 
 // Entorno de pruebas de la feature 010 (contract + integration): servidor web
 // real (crearApp) sobre directorios temporales, con calendario del período
@@ -98,6 +99,9 @@ export async function crearEntornoFichadasHoy({
     PRESENTISMO_REPO_DIR: repoDir,
     PRESENTISMO_LOG_DIR: logDir,
     PRESENTISMO_CATEGORIAS_CONFIG: './config/categorias.json',
+    // feature 016 — permisivo por defecto (ver tests/helpers/acl-entorno.js);
+    // los tests de control de acceso lo sobreescriben vía `envExtra`.
+    ACL_ROLES_CONFIG: rolesPermisivoPath(),
     ...envExtra,
   };
   const app = crearApp({ env });

@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { ApiError } from './router.js';
+import { exigirRol } from '../acl/autorizacion.js';
 import {
   construirVistaCalendario,
   hoyLocal,
@@ -90,7 +91,7 @@ export function registrarRutas(router, ctx) {
   // Orden: formato → ya-generado (idempotente) → no-contiguo → generar. Sin
   // tope de mes futuro (corrección 2026-07-17, ver research.md D4): un
   // período futuro es generable igual que cualquier otro si es contiguo.
-  router.add('POST', '/api/calendarios/:periodo/generar', async ({ params }) => {
+  router.add('POST', '/api/calendarios/:periodo/generar', exigirRol(ctx, 'editor', async ({ params }) => {
     const { periodo } = params;
     validarPeriodo(periodo); // 400 PERIODO_INVALIDO
 
@@ -121,7 +122,7 @@ export function registrarRutas(router, ctx) {
     }
     await asegurarPadronDelPeriodo(ctx, periodo);
     return { status: 200, body: await vistaDe(ctx, periodo) };
-  });
+  }));
 
   // POST /api/calendarios/:periodo/reclasificar (US3) — se registra abajo.
   registrarReclasificar(router, ctx);
@@ -134,7 +135,7 @@ export function registrarRutas(router, ctx) {
 // el calendario del período. Idempotente: cerrar uno ya cerrado (o reabrir uno
 // ya abierto) también devuelve 200 y actualiza el autor/fecha del intento.
 function registrarCerrarReabrir(router, ctx) {
-  router.add('POST', '/api/calendarios/:periodo/cerrar', async ({ params, body }) => {
+  router.add('POST', '/api/calendarios/:periodo/cerrar', exigirRol(ctx, 'editor', async ({ params, body }) => {
     validarPeriodo(params.periodo);
     const { autor = null } = body ?? {};
     try {
@@ -146,9 +147,9 @@ function registrarCerrarReabrir(router, ctx) {
       throw err;
     }
     return { status: 200, body: await vistaDe(ctx, params.periodo) };
-  });
+  }));
 
-  router.add('POST', '/api/calendarios/:periodo/reabrir', async ({ params, body }) => {
+  router.add('POST', '/api/calendarios/:periodo/reabrir', exigirRol(ctx, 'editor', async ({ params, body }) => {
     validarPeriodo(params.periodo);
     const { autor = null } = body ?? {};
     try {
@@ -160,14 +161,14 @@ function registrarCerrarReabrir(router, ctx) {
       throw err;
     }
     return { status: 200, body: await vistaDe(ctx, params.periodo) };
-  });
+  }));
 }
 
 // US3 (feature 007) — reclasifica un día con la clasificación indicada y
 // devuelve la vista actualizada. La confirmación explícita ocurre en el cliente
 // (FR-016); acá se valida y se delega en el dominio (FR-017).
 function registrarReclasificar(router, ctx) {
-  router.add('POST', '/api/calendarios/:periodo/reclasificar', async ({ params, body }) => {
+  router.add('POST', '/api/calendarios/:periodo/reclasificar', exigirRol(ctx, 'editor', async ({ params, body }) => {
     validarPeriodo(params.periodo);
     const { fecha, clasificacion, autor } = body ?? {};
     if (typeof fecha !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
@@ -190,5 +191,5 @@ function registrarReclasificar(router, ctx) {
       throw new ApiError(400, 'RECLASIFICACION_INVALIDA', err.message);
     }
     return { status: 200, body: await vistaDe(ctx, params.periodo) };
-  });
+  }));
 }

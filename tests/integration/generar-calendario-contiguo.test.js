@@ -11,6 +11,7 @@ import {
   periodoSiguiente,
 } from '../../src/presentismo/domain/calendario-mes.js';
 import { createFilePresentismoRepository } from '../../src/presentismo/adapters/file-presentismo-repository.js';
+import { rolesPermisivoPath } from '../helpers/acl-entorno.js';
 
 // Feature 008 — Integración: flujo de generación contigua desde la API.
 // La secuencia generada nunca deja huecos (FR-008). Los períodos se anclan al
@@ -35,6 +36,7 @@ before(async () => {
     PRESENTISMO_REPO_DIR: repoDir,
     PRESENTISMO_LOG_DIR: logDir,
     PRESENTISMO_CATEGORIAS_CONFIG: './config/categorias.json',
+    ACL_ROLES_CONFIG: rolesPermisivoPath(),
   };
   const app = crearApp({ env });
   server = createServer((req, res) => app(req, res).catch((e) => { res.writeHead(500); res.end(String(e)); }));

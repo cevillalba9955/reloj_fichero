@@ -1,4 +1,5 @@
 import { ApiError } from './router.js';
+import { exigirRol } from '../acl/autorizacion.js';
 import { leerParametrosEditables, escribirParametrosEditables } from '../../config/env-file.js';
 import {
   loadMotivosAusenciaConfig,
@@ -63,14 +64,17 @@ function aCambiosEnv(bodyCamelCase) {
   return cambios;
 }
 
+// feature 016 (FR-007): TODAS las rutas de Configuración requieren rol
+// `configurador`, incluidos los `GET` — ni Lector ni Editor pueden siquiera
+// ver esta sección. `exigirRol` envuelve cada handler al registrarlo.
 export function registrarRutas(router, ctx) {
   // --- Reloj y servicio (US1, US4 — .env) ---------------------------------
 
-  router.add('GET', '/api/configuracion/reloj', async () => {
+  router.add('GET', '/api/configuracion/reloj', exigirRol(ctx, 'configurador', async () => {
     return { status: 200, body: aRespuestaReloj(leerParametrosEditables(ctx.rutaEnv)) };
-  });
+  }));
 
-  router.add('PUT', '/api/configuracion/reloj', async ({ body }) => {
+  router.add('PUT', '/api/configuracion/reloj', exigirRol(ctx, 'configurador', async ({ body }) => {
     try {
       escribirParametrosEditables(ctx.rutaEnv, aCambiosEnv(body));
     } catch (err) {
@@ -78,9 +82,9 @@ export function registrarRutas(router, ctx) {
       relanzarComoConfiguracionInvalida(err);
     }
     return { status: 200, body: aRespuestaReloj(leerParametrosEditables(ctx.rutaEnv)) };
-  });
+  }));
 
-  router.add('POST', '/api/configuracion/reloj/probar-conexion', async ({ body }) => {
+  router.add('POST', '/api/configuracion/reloj/probar-conexion', exigirRol(ctx, 'configurador', async ({ body }) => {
     const { host, port } = body ?? {};
     if (typeof host !== 'string' || host.trim() === '' || !Number.isInteger(port)) {
       throw new ApiError(400, 'CONFIGURACION_INVALIDA', 'Se requiere host (string) y port (entero)');
@@ -90,7 +94,7 @@ export function registrarRutas(router, ctx) {
       throw new ApiError(502, 'SERVICIO_FICHADAS_NO_DISPONIBLE', resultado.motivo);
     }
     return { status: 200, body: { ok: resultado.ok, motivo: resultado.motivo ?? undefined } };
-  });
+  }));
 
   // --- Motivos de ausencia (US2) -------------------------------------------
   // Se relee el archivo en cada request (no ctx.motivosAusenciaConfig, la
@@ -98,13 +102,13 @@ export function registrarRutas(router, ctx) {
   // siempre trabaje con el estado más reciente, incluidos cambios hechos en
   // la misma sesión.
 
-  router.add('GET', '/api/configuracion/motivos-ausencia', async () => {
+  router.add('GET', '/api/configuracion/motivos-ausencia', exigirRol(ctx, 'configurador', async () => {
     const config = loadMotivosAusenciaConfig(ctx.motivosAusenciaConfigPath);
     const motivos = [...config.motivos.values()];
     return { status: 200, body: { motivos } };
-  });
+  }));
 
-  router.add('POST', '/api/configuracion/motivos-ausencia', async ({ body }) => {
+  router.add('POST', '/api/configuracion/motivos-ausencia', exigirRol(ctx, 'configurador', async ({ body }) => {
     const { id, etiqueta, tipoPago, activo } = body ?? {};
     if (typeof id !== 'string' || id.trim() === '') {
       throw new ApiError(400, 'CONFIGURACION_INVALIDA', 'El motivo requiere un "id" no vacío');
@@ -121,9 +125,9 @@ export function registrarRutas(router, ctx) {
     }
     saveMotivosAusenciaConfig(ctx.motivosAusenciaConfigPath, actualizado);
     return { status: 201, body: actualizado.motivos.get(id) };
-  });
+  }));
 
-  router.add('PUT', '/api/configuracion/motivos-ausencia/:id', async ({ params, body }) => {
+  router.add('PUT', '/api/configuracion/motivos-ausencia/:id', exigirRol(ctx, 'configurador', async ({ params, body }) => {
     const config = loadMotivosAusenciaConfig(ctx.motivosAusenciaConfigPath);
     if (!config.motivos.has(params.id)) {
       throw new ApiError(404, 'MOTIVO_NO_ENCONTRADO', `no existe un motivo con id "${params.id}"`);
@@ -136,19 +140,19 @@ export function registrarRutas(router, ctx) {
     }
     saveMotivosAusenciaConfig(ctx.motivosAusenciaConfigPath, actualizado);
     return { status: 200, body: actualizado.motivos.get(params.id) };
-  });
+  }));
 
   // --- Categorías, modalidades y esquema semanal (US3) ---------------------
   // Igual que motivos: se relee `categorias.json` en cada request, no
   // ctx.categoriasConfig (la versión "viva" que consume el cálculo de
   // presentismo — ver comentario en wiring.js).
 
-  router.add('GET', '/api/configuracion/categorias', async () => {
+  router.add('GET', '/api/configuracion/categorias', exigirRol(ctx, 'configurador', async () => {
     const config = loadCategoriasConfig(ctx.categoriasConfigPath);
     return { status: 200, body: serializarCategoriasConfig(config) };
-  });
+  }));
 
-  router.add('PUT', '/api/configuracion/categorias/esquema-semanal', async ({ body }) => {
+  router.add('PUT', '/api/configuracion/categorias/esquema-semanal', exigirRol(ctx, 'configurador', async ({ body }) => {
     const config = loadCategoriasConfig(ctx.categoriasConfigPath);
     let actualizado;
     try {
@@ -158,9 +162,9 @@ export function registrarRutas(router, ctx) {
     }
     saveCategoriasConfig(ctx.categoriasConfigPath, actualizado);
     return { status: 200, body: { esquemaSemanal: serializarCategoriasConfig(actualizado).esquemaSemanal } };
-  });
+  }));
 
-  router.add('POST', '/api/configuracion/categorias/modalidades', async ({ body }) => {
+  router.add('POST', '/api/configuracion/categorias/modalidades', exigirRol(ctx, 'configurador', async ({ body }) => {
     const { nombre, ...datos } = body ?? {};
     if (typeof nombre !== 'string' || nombre.trim() === '') {
       throw new ApiError(400, 'CONFIGURACION_INVALIDA', 'La modalidad requiere un "nombre" no vacío');
@@ -174,9 +178,9 @@ export function registrarRutas(router, ctx) {
     }
     saveCategoriasConfig(ctx.categoriasConfigPath, actualizado);
     return { status: 201, body: serializarCategoriasConfig(actualizado).modalidades[nombre] };
-  });
+  }));
 
-  router.add('PUT', '/api/configuracion/categorias/modalidades/:nombre', async ({ params, body }) => {
+  router.add('PUT', '/api/configuracion/categorias/modalidades/:nombre', exigirRol(ctx, 'configurador', async ({ params, body }) => {
     const config = loadCategoriasConfig(ctx.categoriasConfigPath);
     if (!config.modalidades.has(params.nombre)) {
       throw new ApiError(404, 'MODALIDAD_NO_ENCONTRADA', `no existe una modalidad "${params.nombre}"`);
@@ -189,9 +193,9 @@ export function registrarRutas(router, ctx) {
     }
     saveCategoriasConfig(ctx.categoriasConfigPath, actualizado);
     return { status: 200, body: serializarCategoriasConfig(actualizado).modalidades[params.nombre] };
-  });
+  }));
 
-  router.add('DELETE', '/api/configuracion/categorias/modalidades/:nombre', async ({ params }) => {
+  router.add('DELETE', '/api/configuracion/categorias/modalidades/:nombre', exigirRol(ctx, 'configurador', async ({ params }) => {
     const config = loadCategoriasConfig(ctx.categoriasConfigPath);
     if (!config.modalidades.has(params.nombre)) {
       throw new ApiError(404, 'MODALIDAD_NO_ENCONTRADA', `no existe una modalidad "${params.nombre}"`);
@@ -207,9 +211,9 @@ export function registrarRutas(router, ctx) {
     }
     saveCategoriasConfig(ctx.categoriasConfigPath, actualizado);
     return { status: 200, body: { eliminada: true } };
-  });
+  }));
 
-  router.add('POST', '/api/configuracion/categorias/categorias', async ({ body }) => {
+  router.add('POST', '/api/configuracion/categorias/categorias', exigirRol(ctx, 'configurador', async ({ body }) => {
     const { codigo, modalidad } = body ?? {};
     if (typeof codigo !== 'string' || codigo.trim() === '') {
       throw new ApiError(400, 'CONFIGURACION_INVALIDA', 'La categoría requiere un "codigo" no vacío');
@@ -227,9 +231,9 @@ export function registrarRutas(router, ctx) {
     const actualizado = agregarCategoria(config, codigo, modalidad);
     saveCategoriasConfig(ctx.categoriasConfigPath, actualizado);
     return { status: 201, body: serializarCategoriasConfig(actualizado).categorias[codigo] };
-  });
+  }));
 
-  router.add('PUT', '/api/configuracion/categorias/categorias/:codigo', async ({ params, body }) => {
+  router.add('PUT', '/api/configuracion/categorias/categorias/:codigo', exigirRol(ctx, 'configurador', async ({ params, body }) => {
     const { modalidad } = body ?? {};
     const config = loadCategoriasConfig(ctx.categoriasConfigPath);
     if (!config.categorias.has(params.codigo)) {
@@ -241,5 +245,5 @@ export function registrarRutas(router, ctx) {
     const actualizado = editarCategoriaModalidad(config, params.codigo, modalidad);
     saveCategoriasConfig(ctx.categoriasConfigPath, actualizado);
     return { status: 200, body: serializarCategoriasConfig(actualizado).categorias[params.codigo] };
-  });
+  }));
 }

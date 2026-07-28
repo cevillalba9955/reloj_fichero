@@ -1,4 +1,5 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderConRol } from '../test-utils/rol.jsx';
 import BotonConsultarReloj from './BotonConsultarReloj.jsx';
 import PaginaFichadasHoy from './PaginaFichadasHoy.jsx';
 
@@ -10,7 +11,7 @@ test('mientras la consulta está en curso, el botón queda deshabilitado', async
   const onConsultar = vi.fn(
     () => new Promise((r) => { liberar = () => r({ resultado: 'ok', fichadasNuevas: 0 }); }),
   );
-  render(<BotonConsultarReloj onConsultar={onConsultar} />);
+  renderConRol('editor', <BotonConsultarReloj onConsultar={onConsultar} />);
 
   fireEvent.click(screen.getByText('Consultar reloj'));
   expect(screen.getByRole('button', { name: /Consultando/ })).toBeDisabled();
@@ -25,14 +26,14 @@ test('mientras la consulta está en curso, el botón queda deshabilitado', async
 
 test('una consulta omitida (ya en curso en el servicio) se informa sin error', async () => {
   const onConsultar = vi.fn().mockResolvedValue({ resultado: 'omitido', fichadasNuevas: 0 });
-  render(<BotonConsultarReloj onConsultar={onConsultar} />);
+  renderConRol('editor', <BotonConsultarReloj onConsultar={onConsultar} />);
   fireEvent.click(screen.getByText('Consultar reloj'));
   expect(await screen.findByRole('status')).toHaveTextContent('Ya había una consulta en curso');
 });
 
 test('un fallo muestra el error y permite reintentar', async () => {
   const onConsultar = vi.fn().mockRejectedValue(new Error('el servicio de fichadas no responde'));
-  render(<BotonConsultarReloj onConsultar={onConsultar} />);
+  renderConRol('editor', <BotonConsultarReloj onConsultar={onConsultar} />);
   fireEvent.click(screen.getByText('Consultar reloj'));
   expect(await screen.findByRole('alert')).toHaveTextContent('el servicio de fichadas no responde');
   expect(screen.getByText('Consultar reloj')).not.toBeDisabled();
@@ -72,7 +73,7 @@ test('en la página, una consulta exitosa refresca la tabla con la vista devuelt
       vista: vista([{ ...filaBase, entrada: '07:03', situacion: 'PRESENTE' }]),
     }),
   };
-  render(<PaginaFichadasHoy cliente={cliente} />);
+  renderConRol('editor', <PaginaFichadasHoy cliente={cliente} />);
   await screen.findByRole('table');
   expect(screen.getByRole('table')).toHaveTextContent('ESPERANDO');
 
@@ -86,7 +87,7 @@ test('en la página, un fallo de la consulta no pierde la tabla existente (FR-01
     obtenerFichadasHoy: vi.fn().mockResolvedValue(vista([filaBase])),
     consultarReloj: vi.fn().mockRejectedValue(new Error('HTTP 502')),
   };
-  render(<PaginaFichadasHoy cliente={cliente} />);
+  renderConRol('editor', <PaginaFichadasHoy cliente={cliente} />);
   await screen.findByRole('table');
 
   fireEvent.click(screen.getByText('Consultar reloj'));

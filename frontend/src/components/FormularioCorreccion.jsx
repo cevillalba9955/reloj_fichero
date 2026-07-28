@@ -1,18 +1,23 @@
 import { useState } from 'react';
 import { Input, Button, Alert, Space } from 'antd';
+import { useRol } from '../contexto/RolContext.jsx';
 
 // feature 010 (US2) — Corrección manual de entrada/salida con justificación
 // OBLIGATORIA (FR-004): "Guardar" queda deshabilitado sin motivo. Componente de
 // presentación: recibe `onGuardar` (async) del contenedor; no llama a la API.
+// feature 016 (FR-005/FR-011): además queda deshabilitado para quien no tiene
+// rol Editor (o superior) — la API ya lo rechaza (FR-009), esto solo evita que
+// Lector intente una operación que el servidor va a rechazar igual.
 
 export default function FormularioCorreccion({ fila, onGuardar, onCancelar }) {
+  const { puede } = useRol();
   const [entrada, setEntrada] = useState(fila.entrada ?? '');
   const [salida, setSalida] = useState(fila.salida ?? '');
   const [motivo, setMotivo] = useState('');
   const [error, setError] = useState(null);
   const [enviando, setEnviando] = useState(false);
 
-  const puedeGuardar = motivo.trim().length > 0 && !enviando;
+  const puedeGuardar = motivo.trim().length > 0 && !enviando && puede('editor');
 
   async function guardar(ev) {
     ev.preventDefault();

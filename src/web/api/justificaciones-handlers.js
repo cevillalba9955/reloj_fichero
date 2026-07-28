@@ -1,4 +1,5 @@
 import { ApiError } from './router.js';
+import { exigirRol } from '../acl/autorizacion.js';
 import { hoyLocal } from '../view-model.js';
 import { justificacionVigenteDe } from '../../presentismo/domain/justificacion.js';
 import { MotivoVacaciones } from '../../presentismo/domain/vacaciones.js';
@@ -82,7 +83,7 @@ export function registrarRutas(router, ctx) {
   // POST /api/justificaciones (US1) — día único (`hasta` ausente) o rango
   // `[fecha, hasta]` (FR-003a). Ver contracts/web-api.md para la forma de la
   // respuesta y los códigos de error.
-  router.add('POST', '/api/justificaciones', async ({ body }) => {
+  router.add('POST', '/api/justificaciones', exigirRol(ctx, 'editor', async ({ body }) => {
     const { legajo, fecha, hasta = null, motivoId, autor = null } = body ?? {};
     validarLegajo(legajo);
     validarFecha(fecha);
@@ -114,14 +115,14 @@ export function registrarRutas(router, ctx) {
       if (err instanceof ApiError) throw err;
       relanzarComoApiError(err);
     }
-  });
+  }));
 
   // DELETE /api/justificaciones (US3) — revierte la Justificación vigente.
   // spec 015 (research.md §1, guardrail de origen): una Justificación-espejo
   // de vacaciones (motivoId 'vacaciones-anual') NUNCA se revierte por acá,
   // para no dejar el saldo/asignación de vacaciones desincronizados del
   // calendario — se revierte desde la Asignación de Vacaciones.
-  router.add('DELETE', '/api/justificaciones', async ({ body }) => {
+  router.add('DELETE', '/api/justificaciones', exigirRol(ctx, 'editor', async ({ body }) => {
     const { legajo, fecha, autor = null } = body ?? {};
     validarLegajo(legajo);
     validarFecha(fecha);
@@ -144,5 +145,5 @@ export function registrarRutas(router, ctx) {
       if (err instanceof ApiError) throw err;
       relanzarComoApiError(err);
     }
-  });
+  }));
 }

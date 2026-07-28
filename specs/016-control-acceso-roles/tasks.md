@@ -40,10 +40,10 @@ tests backend en `tests/` (repo root), tests frontend co-ubicados
 
 **Purpose**: Crear los puntos de entrada (config, ruta, clientes, contexto) vacíos antes de implementar la lógica.
 
-- [ ] T001 [P] Crear `config/roles.example.json` (plantilla, sin nombres reales de APEX) y `config/roles.json` de desarrollo, con la forma `{ "rolPorDefecto": "lector", "mapeo": { "...": "editor", "...": "configurador" } }` (contracts/web-api-acl.md, data-model.md)
-- [ ] T002 [P] Crear `src/web/api/acl-handlers.js` con `export function registrarRutas(router, ctx) {}` vacío, y registrarlo en `src/web/server.js` (import + llamada, junto a los demás `registrarRutas*`)
-- [ ] T003 [P] Crear `frontend/src/api/acl-client.js` con `export function crearClienteAcl({ fetchImpl, base = '/api' } = {}) {}` vacío (mismo patrón que `frontend/src/api/configuracion-client.js`)
-- [ ] T004 [P] Crear `frontend/src/contexto/RolContext.jsx` esqueleto: `RolContext`, `RolProvider` y el hook `useRol()`, sin lógica de fetch todavía
+- [X] T001 [P] Crear `config/roles.example.json` (plantilla, sin nombres reales de APEX) y `config/roles.json` de desarrollo, con la forma `{ "rolPorDefecto": "lector", "mapeo": { "...": "editor", "...": "configurador" } }` (contracts/web-api-acl.md, data-model.md)
+- [X] T002 [P] Crear `src/web/api/acl-handlers.js` con `export function registrarRutas(router, ctx) {}` vacío, y registrarlo en `src/web/server.js` (import + llamada, junto a los demás `registrarRutas*`)
+- [X] T003 [P] Crear `frontend/src/api/acl-client.js` con `export function crearClienteAcl({ fetchImpl, base = '/api' } = {}) {}` vacío (mismo patrón que `frontend/src/api/configuracion-client.js`)
+- [X] T004 [P] Crear `frontend/src/contexto/RolContext.jsx` esqueleto: `RolContext`, `RolProvider` y el hook `useRol()`, sin lógica de fetch todavía
 
 **Checkpoint**: los puntos de entrada existen, vacíos; el resto de la app sigue funcionando exactamente igual que antes de esta feature.
 
@@ -55,15 +55,15 @@ tests backend en `tests/` (repo root), tests frontend co-ubicados
 
 **⚠️ CRITICAL**: Ninguna historia puede implementarse sin esto.
 
-- [ ] T005 Implementar `loadRolesConfig(path)` en `src/config/roles-config.js`: parsea `config/roles.json`, valida que `rolPorDefecto` y cada valor de `mapeo` sean uno de `lector`/`editor`/`configurador` (fail-fast, mismo estilo que `env-file.js`), expone `{ rolPorDefecto, mapear(rolOrigen) }` (depende de T001)
-- [ ] T006 [P] Test unitario de `roles-config.js` en `tests/unit/roles-config.test.js`: carga válida, `rolPorDefecto` inválido, valor de `mapeo` inválido, archivo ausente → todo cae a `lector` (depende de T005)
-- [ ] T007 Implementar `src/web/acl/autorizacion.js`: lista `ROLES` ordenada (`lector` < `editor` < `configurador`), `resolverRolActual(req, ctx)` (lee el header configurado — `ctx.aclHeaderRol` —, aplica `ctx.rolesConfig.mapear`, cae a `rolPorDefecto` si el header falta o no está mapeado, FR-004), y `exigirRol(rolMinimo, handler)` (envoltorio de handler del router; lanza `ApiError(403, 'ACCESO_DENEGADO', mensaje)` si el rango no alcanza, FR-009/FR-010) (depende de T005)
-- [ ] T008 [P] Test unitario de `autorizacion.js` en `tests/unit/autorizacion.test.js`: `resolverRolActual` con header ausente/desconocido/mapeado a cada uno de los 3 roles; `exigirRol` con rango suficiente e insuficiente para cada combinación (depende de T007)
-- [ ] T009 Exponer `rolesConfigPath` (default `./config/roles.json`, override por entorno), `aclHeaderRol` (default `x-apex-rol`, override por entorno) y `rolesConfig` (getter con re-lectura por request, mismo criterio que `motivosAusenciaConfig`) desde `src/web/wiring.js` (depende de T005)
-- [ ] T010 Implementar `GET /api/acl/mi-rol` en `src/web/api/acl-handlers.js` — sin `exigirRol`, siempre `200 { rol }` (contracts/web-api-acl.md) (depende de T007, T009, T002)
-- [ ] T011 [P] Test de contrato de `GET /api/acl/mi-rol` en `tests/contract/web-api-acl.test.js`: sin header → `lector`; header mapeado → el rol correspondiente; header con valor no mapeado → `lector` (depende de T010)
-- [ ] T012 Implementar `obtenerMiRol()` en `frontend/src/api/acl-client.js` (depende de T003)
-- [ ] T013 Implementar el fetch inicial (al montar) y `{ rol, puede(rolMinimo) }` en `frontend/src/contexto/RolContext.jsx`; envolver el árbol de `frontend/src/App.jsx` con `RolProvider` (depende de T004, T012)
+- [X] T005 Implementar `loadRolesConfig(path)` en `src/config/roles-config.js`: parsea `config/roles.json`, valida que `rolPorDefecto` y cada valor de `mapeo` sean uno de `lector`/`editor`/`configurador` (fail-fast, mismo estilo que `env-file.js`), expone `{ rolPorDefecto, mapear(rolOrigen) }` (depende de T001)
+- [X] T006 [P] Test unitario de `roles-config.js` en `tests/unit/roles-config.test.js`: carga válida, `rolPorDefecto` inválido, valor de `mapeo` inválido, archivo ausente → todo cae a `lector` (depende de T005)
+- [X] T007 Implementar `src/web/acl/autorizacion.js`: lista `ROLES` ordenada (`lector` < `editor` < `configurador`), `resolverRolActual(req, ctx)` (lee el header configurado — `ctx.aclHeaderRol` —, aplica `ctx.rolesConfig.mapear`, cae a `rolPorDefecto` si el header falta o no está mapeado, FR-004), y `exigirRol(rolMinimo, handler)` (envoltorio de handler del router; lanza `ApiError(403, 'ACCESO_DENEGADO', mensaje)` si el rango no alcanza, FR-009/FR-010) (depende de T005)
+- [X] T008 [P] Test unitario de `autorizacion.js` en `tests/unit/autorizacion.test.js`: `resolverRolActual` con header ausente/desconocido/mapeado a cada uno de los 3 roles; `exigirRol` con rango suficiente e insuficiente para cada combinación (depende de T007)
+- [X] T009 Exponer `rolesConfigPath` (default `./config/roles.json`, override por entorno), `aclHeaderRol` (default `x-apex-rol`, override por entorno) y `rolesConfig` (getter con re-lectura por request, mismo criterio que `motivosAusenciaConfig`) desde `src/web/wiring.js` (depende de T005)
+- [X] T010 Implementar `GET /api/acl/mi-rol` en `src/web/api/acl-handlers.js` — sin `exigirRol`, siempre `200 { rol }` (contracts/web-api-acl.md) (depende de T007, T009, T002)
+- [X] T011 [P] Test de contrato de `GET /api/acl/mi-rol` en `tests/contract/web-api-acl.test.js`: sin header → `lector`; header mapeado → el rol correspondiente; header con valor no mapeado → `lector` (depende de T010)
+- [X] T012 Implementar `obtenerMiRol()` en `frontend/src/api/acl-client.js` (depende de T003)
+- [X] T013 Implementar el fetch inicial (al montar) y `{ rol, puede(rolMinimo) }` en `frontend/src/contexto/RolContext.jsx`; envolver el árbol de `frontend/src/App.jsx` con `RolProvider` (depende de T004, T012)
 
 **Checkpoint**: el mecanismo de resolución de rol funciona de punta a punta (header → API `/api/acl/mi-rol` → contexto de React), pero ninguna ruta de negocio lo exige todavía — es la base común de las 3 historias.
 
@@ -79,22 +79,22 @@ tests backend en `tests/` (repo root), tests frontend co-ubicados
 
 > Escribir estos tests primero: deben fallar (las rutas todavía no exigen rol) antes de T016-T020.
 
-- [ ] T014 [P] [US1] Test de contrato: rol `lector` (sin header) → `403 ACCESO_DENEGADO` en al menos una ruta de escritura de cada handler (`calendarios/:periodo/generar`, `fichadas-hoy/correcciones`, `justificaciones` POST, `vacaciones/asignaciones` POST) y en `GET /api/configuracion/reloj`, en `tests/contract/web-api-acl.test.js`
-- [ ] T015 [P] [US1] Test de integración de los Acceptance Scenarios de US1 (incluye el Edge Case de rol indeterminado) en `tests/integration/control-acceso.integration.test.js`
+- [X] T014 [P] [US1] Test de contrato: rol `lector` (sin header) → `403 ACCESO_DENEGADO` en al menos una ruta de escritura de cada handler (`calendarios/:periodo/generar`, `fichadas-hoy/correcciones`, `justificaciones` POST, `vacaciones/asignaciones` POST) y en `GET /api/configuracion/reloj`, en `tests/contract/web-api-acl.test.js`
+- [X] T015 [P] [US1] Test de integración de los Acceptance Scenarios de US1 (incluye el Edge Case de rol indeterminado) en `tests/integration/control-acceso.integration.test.js`
 
 ### Implementation for User Story 1
 
-- [ ] T016 [US1] Envolver `POST /api/calendarios/:periodo/generar|cerrar|reabrir|reclasificar` con `exigirRol('editor', ...)` en `src/web/api/calendario-handlers.js` (depende de T007)
-- [ ] T017 [US1] Envolver `POST /api/fichadas-hoy/correcciones|pausas|retiros-anticipados|consultar-reloj` con `exigirRol('editor', ...)` en `src/web/api/fichadas-hoy-handlers.js` (depende de T007)
-- [ ] T018 [US1] Envolver `POST`/`DELETE /api/justificaciones` con `exigirRol('editor', ...)` en `src/web/api/justificaciones-handlers.js` (depende de T007)
-- [ ] T019 [US1] Envolver `POST /api/vacaciones/asignaciones` y `DELETE /api/vacaciones/asignaciones/:id` con `exigirRol('editor', ...)` en `src/web/api/vacaciones-handlers.js` (depende de T007)
-- [ ] T020 [US1] Envolver TODAS las rutas (incluidos los `GET`) de `src/web/api/configuracion-handlers.js` con `exigirRol('configurador', ...)` (FR-007) (depende de T007)
-- [ ] T021 [US1] En `frontend/src/components/AppShell.jsx`: mostrar el rol actual (`useRol()`) y ocultar la entrada de navegación "Configuración" salvo `puede('configurador')`; actualizar `AppShell.test.jsx` (depende de T013)
-- [ ] T022 [P] [US1] Ocultar/deshabilitar el control de guardar salvo `puede('editor')` en `frontend/src/components/FormularioCorreccion.jsx`; actualizar `FormularioCorreccion.test.jsx` (depende de T013)
-- [ ] T023 [P] [US1] Ídem en `frontend/src/components/FormularioPausaRetiro.jsx`; actualizar su test (depende de T013)
-- [ ] T024 [P] [US1] Ídem en `frontend/src/components/FormularioJustificacion.jsx`; actualizar su test (depende de T013)
-- [ ] T025 [P] [US1] Ídem en `frontend/src/components/FormularioAsignarVacaciones.jsx`; actualizar su test (depende de T013)
-- [ ] T026 [US1] Ocultar/deshabilitar los botones generar/cerrar/reabrir/reclasificar salvo `puede('editor')` en `frontend/src/components/PaginaCalendario.jsx` (y `DialogoConfirmarReclasificar.jsx` si dispara la acción directamente); actualizar los tests existentes (depende de T013)
+- [X] T016 [US1] Envolver `POST /api/calendarios/:periodo/generar|cerrar|reabrir|reclasificar` con `exigirRol('editor', ...)` en `src/web/api/calendario-handlers.js` (depende de T007)
+- [X] T017 [US1] Envolver `POST /api/fichadas-hoy/correcciones|pausas|retiros-anticipados|consultar-reloj` con `exigirRol('editor', ...)` en `src/web/api/fichadas-hoy-handlers.js` (depende de T007)
+- [X] T018 [US1] Envolver `POST`/`DELETE /api/justificaciones` con `exigirRol('editor', ...)` en `src/web/api/justificaciones-handlers.js` (depende de T007)
+- [X] T019 [US1] Envolver `POST /api/vacaciones/asignaciones` y `DELETE /api/vacaciones/asignaciones/:id` con `exigirRol('editor', ...)` en `src/web/api/vacaciones-handlers.js` (depende de T007)
+- [X] T020 [US1] Envolver TODAS las rutas (incluidos los `GET`) de `src/web/api/configuracion-handlers.js` con `exigirRol('configurador', ...)` (FR-007) (depende de T007)
+- [X] T021 [US1] En `frontend/src/components/AppShell.jsx`: mostrar el rol actual (`useRol()`) y ocultar la entrada de navegación "Configuración" salvo `puede('configurador')`; actualizar `AppShell.test.jsx` (depende de T013)
+- [X] T022 [P] [US1] Ocultar/deshabilitar el control de guardar salvo `puede('editor')` en `frontend/src/components/FormularioCorreccion.jsx`; actualizar `FormularioCorreccion.test.jsx` (depende de T013)
+- [X] T023 [P] [US1] Ídem en `frontend/src/components/FormularioPausaRetiro.jsx`; actualizar su test (depende de T013)
+- [X] T024 [P] [US1] Ídem en `frontend/src/components/FormularioJustificacion.jsx`; actualizar su test (depende de T013)
+- [X] T025 [P] [US1] Ídem en `frontend/src/components/FormularioAsignarVacaciones.jsx`; actualizar su test (depende de T013)
+- [X] T026 [US1] Ocultar/deshabilitar los botones generar/cerrar/reabrir/reclasificar salvo `puede('editor')` en `frontend/src/components/PaginaCalendario.jsx` (y `DialogoConfirmarReclasificar.jsx` si dispara la acción directamente); actualizar los tests existentes. Extendido más allá del alcance literal de la tarea: también se ocultaron los triggers de escritura en `PaginaFichadasHoy.jsx` (Corregir/Excepción/Justificar/Consultar reloj) y `PaginaVacaciones.jsx` (Asignar/Revertir), imprescindibles para que FR-005 se cumpla de punta a punta (depende de T013)
 
 **Checkpoint**: US1 completa — un usuario Lector (o sin rol determinable) puede ver todo y no puede escribir nada, ni siquiera forzando la API directamente.
 
@@ -108,9 +108,9 @@ tests backend en `tests/` (repo root), tests frontend co-ubicados
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T027 [P] [US2] Test de contrato: rol `editor` → `200` en cada ruta de escritura envuelta en T016-T019, y `403 ACCESO_DENEGADO` en `GET /api/configuracion/reloj`, en `tests/contract/web-api-acl.test.js` (depende de T016, T017, T018, T019, T020)
-- [ ] T028 [US2] Test de integración de los Acceptance Scenarios de US2 en `tests/integration/control-acceso.integration.test.js` (depende de T016, T017, T018, T019, T020)
-- [ ] T029 [P] [US2] Test de componente: con rol `editor`, los controles de T022-T026 aparecen habilitados (extiende los tests ya actualizados en esas tareas) (depende de T022, T023, T024, T025, T026)
+- [X] T027 [P] [US2] Test de contrato: rol `editor` → `200` en cada ruta de escritura envuelta en T016-T019, y `403 ACCESO_DENEGADO` en `GET /api/configuracion/reloj`, en `tests/contract/web-api-acl.test.js` (depende de T016, T017, T018, T019, T020)
+- [X] T028 [US2] Test de integración de los Acceptance Scenarios de US2 en `tests/integration/control-acceso.integration.test.js` (depende de T016, T017, T018, T019, T020)
+- [X] T029 [P] [US2] Test de componente: con rol `editor`, los controles de T022-T026 aparecen habilitados (los tests preexistentes de T022-T026, ya migrados a `renderConRol('editor', ...)`, cubren esto: solo pasan si "Guardar"/los triggers están habilitados) (depende de T022, T023, T024, T025, T026)
 
 **Checkpoint**: US1 y US2 verificadas de forma independiente (US2 no agrega implementación nueva, solo prueba el gate ya construido en US1 con un rol distinto).
 
@@ -124,9 +124,9 @@ tests backend en `tests/` (repo root), tests frontend co-ubicados
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T030 [P] [US3] Test de contrato: rol `configurador` → `200` en todas las rutas de `/api/configuracion/*` (T020) y en las rutas de escritura de T016-T019, en `tests/contract/web-api-acl.test.js` (depende de T020)
-- [ ] T031 [US3] Test de integración de los Acceptance Scenarios de US3 en `tests/integration/control-acceso.integration.test.js` (depende de T020)
-- [ ] T032 [P] [US3] Test de componente: con rol `configurador`, `AppShell` muestra la entrada "Configuración" (extiende `AppShell.test.jsx` de T021) (depende de T021)
+- [X] T030 [P] [US3] Test de contrato: rol `configurador` → `200` en todas las rutas de `/api/configuracion/*` (T020) y en las rutas de escritura de T016-T019, en `tests/contract/web-api-acl.test.js` (depende de T020)
+- [X] T031 [US3] Test de integración de los Acceptance Scenarios de US3 en `tests/integration/control-acceso.integration.test.js` (depende de T020)
+- [X] T032 [P] [US3] Test de componente: con rol `configurador`, `AppShell` muestra la entrada "Configuración" (extiende `AppShell.test.jsx` de T021) (depende de T021)
 
 **Checkpoint**: las 3 historias funcionan de forma independiente y en conjunto — control de acceso completo.
 
@@ -136,8 +136,8 @@ tests backend en `tests/` (repo root), tests frontend co-ubicados
 
 **Purpose**: Validación end-to-end y revisión de higiene de seguridad sobre lo construido en las fases anteriores.
 
-- [ ] T033 [P] Ejecutar los escenarios de `quickstart.md` de punta a punta contra `npm run web` (los 3 roles + el Edge Case de rol indeterminado) y dejar constancia del resultado
-- [ ] T034 Revisar que el mensaje de `ACCESO_DENEGADO` en los handlers tocados por T016-T020 no filtre detalles internos (rutas de archivo, contenido de `config/roles.json`) — solo el rol actual y el rol mínimo requerido (Principio V)
+- [X] T033 [P] Ejecutar los escenarios de `quickstart.md` de punta a punta contra `npm run web` (los 3 roles + el Edge Case de rol indeterminado) y dejar constancia del resultado. Resultado: los 5 chequeos de `GET /api/acl/mi-rol` (sin header, `RRHH_LECTOR`, `RRHH_EDITOR`, `RRHH_ADMIN`, header desconocido) y los 5 de autorización (lector→403 en escritura, lector→200 en lectura, lector→403 en Configuración, editor→403 en Configuración, configurador→200 en Configuración) coinciden exactamente con lo esperado contra el proceso real; se evitó deliberadamente ejercer un `PUT` real contra el `.env`/`config/*.json` de desarrollo para no mutar la configuración real de la máquina (esa escritura ya está cubierta de punta a punta por `control-acceso.integration.test.js`, US3, sobre archivos temporales)
+- [X] T034 Revisar que el mensaje de `ACCESO_DENEGADO` en los handlers tocados por T016-T020 no filtre detalles internos (rutas de archivo, contenido de `config/roles.json`) — solo el rol actual y el rol mínimo requerido (Principio V). Confirmado: el único lugar que arma el mensaje es `exigirRol` (`src/web/acl/autorizacion.js`), que solo interpola `rolActual`/`rolMinimo`; `rolesConfigPath` nunca viaja a una respuesta HTTP (grep sobre `src/web/`)
 
 ---
 

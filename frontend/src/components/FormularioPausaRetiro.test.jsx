@@ -1,4 +1,5 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderConRol } from '../test-utils/rol.jsx';
 import FormularioPausaRetiro from './FormularioPausaRetiro.jsx';
 
 // T039 (feature 010, US3) — dos modos (pausa intermedia / retiro anticipado),
@@ -18,7 +19,7 @@ const fila = {
 
 test('sin motivo, "Guardar" está deshabilitado en ambos modos', () => {
   const onGuardar = vi.fn();
-  render(<FormularioPausaRetiro fila={fila} onGuardar={onGuardar} onCancelar={vi.fn()} />);
+  renderConRol('editor', <FormularioPausaRetiro fila={fila} onGuardar={onGuardar} onCancelar={vi.fn()} />);
 
   expect(screen.getByRole('button', { name: 'Guardar' })).toBeDisabled();
   fireEvent.click(screen.getByLabelText('Retiro anticipado'));
@@ -28,7 +29,7 @@ test('sin motivo, "Guardar" está deshabilitado en ambos modos', () => {
 
 test('modo pausa: envía desde/hasta y motivo', async () => {
   const onGuardar = vi.fn().mockResolvedValue(undefined);
-  render(<FormularioPausaRetiro fila={fila} onGuardar={onGuardar} onCancelar={vi.fn()} />);
+  renderConRol('editor', <FormularioPausaRetiro fila={fila} onGuardar={onGuardar} onCancelar={vi.fn()} />);
 
   fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '12:00' } });
   fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '13:00' } });
@@ -47,7 +48,7 @@ test('modo pausa: envía desde/hasta y motivo', async () => {
 
 test('modo retiro: envía la hora del retiro y el motivo', async () => {
   const onGuardar = vi.fn().mockResolvedValue(undefined);
-  render(<FormularioPausaRetiro fila={fila} onGuardar={onGuardar} onCancelar={vi.fn()} />);
+  renderConRol('editor', <FormularioPausaRetiro fila={fila} onGuardar={onGuardar} onCancelar={vi.fn()} />);
 
   fireEvent.click(screen.getByLabelText('Retiro anticipado'));
   fireEvent.change(screen.getByLabelText('Hora del retiro'), { target: { value: '14:30' } });
@@ -65,7 +66,7 @@ test('modo retiro: envía la hora del retiro y el motivo', async () => {
 
 test('un fallo del guardado se muestra como error', async () => {
   const onGuardar = vi.fn().mockRejectedValue(new Error('desde >= hasta'));
-  render(<FormularioPausaRetiro fila={fila} onGuardar={onGuardar} onCancelar={vi.fn()} />);
+  renderConRol('editor', <FormularioPausaRetiro fila={fila} onGuardar={onGuardar} onCancelar={vi.fn()} />);
 
   fireEvent.change(screen.getByLabelText(/Motivo/), { target: { value: 'x' } });
   fireEvent.click(screen.getByText('Guardar'));
@@ -75,8 +76,22 @@ test('un fallo del guardado se muestra como error', async () => {
 test('cancelar invoca onCancelar sin guardar', () => {
   const onGuardar = vi.fn();
   const onCancelar = vi.fn();
-  render(<FormularioPausaRetiro fila={fila} onGuardar={onGuardar} onCancelar={onCancelar} />);
+  renderConRol('editor', <FormularioPausaRetiro fila={fila} onGuardar={onGuardar} onCancelar={onCancelar} />);
   fireEvent.click(screen.getByText('Cancelar'));
   expect(onCancelar).toHaveBeenCalledTimes(1);
+  expect(onGuardar).not.toHaveBeenCalled();
+});
+
+// feature 016 (FR-005/FR-011) — rol lector: "Guardar" queda deshabilitado
+// aunque los campos sean válidos.
+test('rol lector: "Guardar" queda deshabilitado aunque los campos sean válidos', () => {
+  const onGuardar = vi.fn();
+  renderConRol('lector', <FormularioPausaRetiro fila={fila} onGuardar={onGuardar} onCancelar={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '12:00' } });
+  fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '13:00' } });
+  fireEvent.change(screen.getByLabelText(/Motivo/), { target: { value: 'corte de mediodía' } });
+  const guardar = screen.getByRole('button', { name: 'Guardar' });
+  expect(guardar).toBeDisabled();
+  fireEvent.click(guardar);
   expect(onGuardar).not.toHaveBeenCalled();
 });

@@ -1,5 +1,6 @@
 import { Layout, Menu, Breadcrumb, Typography } from 'antd';
 import { CalendarOutlined, ClockCircleOutlined, BarChartOutlined, SettingOutlined, CoffeeOutlined } from '@ant-design/icons';
+import { useRol } from '../contexto/RolContext.jsx';
 
 const { Header, Sider, Content } = Layout;
 
@@ -24,23 +25,34 @@ const TITULOS = {
   configuracion: 'Configuración',
 };
 
+// feature 016 (FR-007, FR-011, FR-012) — "Configuración" solo se muestra a
+// Configurador; el resto de las secciones no cambian por rol (Lector/Editor
+// las ven, con sus controles de escritura ocultos dentro de cada una).
+const ETIQUETAS_ROL = { lector: 'Lector', editor: 'Editor', configurador: 'Configurador' };
+
 export default function AppShell({ seccion, onCambiarSeccion, children }) {
+  const { rol, puede } = useRol();
+  const secciones = SECCIONES.filter((s) => s.key !== 'configuracion' || puede('configurador'));
+
   return (
     <Layout style={{ minHeight: '100vh' }}>
       {/* <Header style={{ display: 'flex', alignItems: 'center' }}>
         // <Typography.Title level={4} style={{ color: '#fff', margin: 0 }}>
         //   Presentismo
-        // </Typography.Title> 
+        // </Typography.Title>
       </Header> */}
       <Layout>
-        <Sider width={220} style={{ borderRight: '1px solid #d9dee3' }}>
+        <Sider width={220} style={{ borderRight: '1px solid #d9dee3', display: 'flex', flexDirection: 'column' }}>
           <Menu
             mode="inline"
             selectedKeys={[seccion]}
-            items={SECCIONES}
+            items={secciones}
             onClick={({ key }) => onCambiarSeccion(key)}
-            style={{ height: '100%', borderInlineEnd: 'none' }}
+            style={{ flex: 1, borderInlineEnd: 'none' }}
           />
+          <div style={{ padding: '12px 16px', fontSize: 12, color: 'rgba(0, 0, 0, 0.45)' }}>
+            {rol ? `Rol: ${ETIQUETAS_ROL[rol] ?? rol}` : null}
+          </div>
         </Sider>
         <Layout style={{ padding: '16px 24px' }}>
           {/* <Breadcrumb

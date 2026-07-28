@@ -1,4 +1,5 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderConRol } from '../test-utils/rol.jsx';
 import FormularioCorreccion from './FormularioCorreccion.jsx';
 
 // T027 (feature 010, US2) — el formulario exige motivo para guardar (FR-004)
@@ -18,7 +19,7 @@ const fila = {
 
 test('sin motivo, "Guardar" está deshabilitado y no se envía nada', () => {
   const onGuardar = vi.fn();
-  render(<FormularioCorreccion fila={fila} onGuardar={onGuardar} onCancelar={vi.fn()} />);
+  renderConRol('editor', <FormularioCorreccion fila={fila} onGuardar={onGuardar} onCancelar={vi.fn()} />);
 
   const guardar = screen.getByRole('button', { name: 'Guardar' });
   expect(guardar).toBeDisabled();
@@ -32,7 +33,7 @@ test('sin motivo, "Guardar" está deshabilitado y no se envía nada', () => {
 
 test('con motivo, envía entrada/salida y el motivo recortado', async () => {
   const onGuardar = vi.fn().mockResolvedValue(undefined);
-  render(<FormularioCorreccion fila={fila} onGuardar={onGuardar} onCancelar={vi.fn()} />);
+  renderConRol('editor', <FormularioCorreccion fila={fila} onGuardar={onGuardar} onCancelar={vi.fn()} />);
 
   fireEvent.change(screen.getByLabelText('Entrada'), { target: { value: '07:05' } });
   fireEvent.change(screen.getByLabelText(/Motivo/), { target: { value: ' error del reloj ' } });
@@ -49,7 +50,7 @@ test('con motivo, envía entrada/salida y el motivo recortado', async () => {
 
 test('un fallo del guardado se muestra como error y el formulario sigue abierto', async () => {
   const onGuardar = vi.fn().mockRejectedValue(new Error('hora inválida'));
-  render(<FormularioCorreccion fila={fila} onGuardar={onGuardar} onCancelar={vi.fn()} />);
+  renderConRol('editor', <FormularioCorreccion fila={fila} onGuardar={onGuardar} onCancelar={vi.fn()} />);
 
   fireEvent.change(screen.getByLabelText(/Motivo/), { target: { value: 'ajuste' } });
   fireEvent.click(screen.getByText('Guardar'));
@@ -61,8 +62,20 @@ test('un fallo del guardado se muestra como error y el formulario sigue abierto'
 test('cancelar invoca onCancelar sin guardar', () => {
   const onGuardar = vi.fn();
   const onCancelar = vi.fn();
-  render(<FormularioCorreccion fila={fila} onGuardar={onGuardar} onCancelar={onCancelar} />);
+  renderConRol('editor', <FormularioCorreccion fila={fila} onGuardar={onGuardar} onCancelar={onCancelar} />);
   fireEvent.click(screen.getByText('Cancelar'));
   expect(onCancelar).toHaveBeenCalledTimes(1);
+  expect(onGuardar).not.toHaveBeenCalled();
+});
+
+// feature 016 (FR-005/FR-011) — rol lector: "Guardar" queda deshabilitado
+// aunque el motivo sea válido; la API lo rechazaría igual (FR-009).
+test('rol lector: "Guardar" queda deshabilitado aunque el motivo sea válido', () => {
+  const onGuardar = vi.fn();
+  renderConRol('lector', <FormularioCorreccion fila={fila} onGuardar={onGuardar} onCancelar={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText(/Motivo/), { target: { value: 'error del reloj' } });
+  const guardar = screen.getByRole('button', { name: 'Guardar' });
+  expect(guardar).toBeDisabled();
+  fireEvent.click(guardar);
   expect(onGuardar).not.toHaveBeenCalled();
 });

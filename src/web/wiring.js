@@ -1,6 +1,7 @@
 import { loadCategoriasConfig } from '../presentismo/config/categorias-config.js';
 import { loadMotivosAusenciaConfig } from '../presentismo/config/motivos-ausencia-config.js';
 import { loadVacacionesConfig } from '../presentismo/config/vacaciones-config.js';
+import { loadRolesConfig } from '../config/roles-config.js';
 import { createFilePresentismoRepository } from '../presentismo/adapters/file-presentismo-repository.js';
 import { createFileVacacionesRepository } from '../presentismo/adapters/file-vacaciones-repository.js';
 import { createPresentismoLogger } from '../presentismo/logging/presentismo-logger.js';
@@ -28,6 +29,11 @@ export function crearContextoWeb(env = process.env) {
   // spec 015 — ruta de la config de vacaciones (incremento anual + escala de
   // antigüedad→días), mismo criterio de override que motivosAusenciaConfigPath.
   const vacacionesConfigPath = env.PRESENTISMO_VACACIONES_CONFIG ?? './config/vacaciones.json';
+  // feature 016 — mapeo fijo rol-de-origen → rol interno (Lector/Editor/
+  // Configurador) y nombre del header del que se lee el rol de origen
+  // (placeholder reemplazable, ver src/web/acl/autorizacion.js).
+  const rolesConfigPath = env.ACL_ROLES_CONFIG ?? './config/roles.json';
+  const aclHeaderRol = (env.ACL_HEADER_ROL || 'x-apex-rol').toLowerCase();
   const controlUrl = env.FICHADAS_CONTROL_URL ?? 'http://127.0.0.1:5006';
   // feature 014 — ruta del `.env` que edita la página de Configuración
   // (contracts/env-config.schema.md). Override solo para tests; en producción
@@ -82,6 +88,15 @@ export function crearContextoWeb(env = process.env) {
       return loadVacacionesConfig(vacacionesConfigPath).escalaAntiguedad;
     },
   };
+  // feature 016 — mismo criterio que motivosAusenciaConfig/vacacionesConfig:
+  // re-lee+re-parsea en cada acceso para que editar config/roles.json a mano
+  // tome efecto sin reiniciar el proceso web (research.md §3).
+  const rolesConfig = {
+    get rolPorDefecto() {
+      return loadRolesConfig(rolesConfigPath).rolPorDefecto;
+    },
+    mapear: (rolOrigen) => loadRolesConfig(rolesConfigPath).mapear(rolOrigen),
+  };
   const repo = createFilePresentismoRepository({ repoDir });
   const vacacionesRepo = createFileVacacionesRepository({ repoDir });
   const logger = createPresentismoLogger({ logDir });
@@ -126,5 +141,9 @@ export function crearContextoWeb(env = process.env) {
     categoriasConfigPath: configPath,
     motivosAusenciaConfigPath,
     vacacionesConfigPath,
+    // feature 016 — control de acceso (src/web/acl/autorizacion.js).
+    rolesConfig,
+    rolesConfigPath,
+    aclHeaderRol,
   };
 }

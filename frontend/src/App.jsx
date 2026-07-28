@@ -10,6 +10,7 @@ import { crearClienteConfiguracion } from './api/configuracion-client.js';
 import PaginaVacaciones from './components/PaginaVacaciones.jsx';
 import { crearClienteVacaciones } from './api/vacaciones-client.js';
 import AppShell from './components/AppShell.jsx';
+import { RolProvider } from './contexto/RolContext.jsx';
 
 // feature 007 — Pantalla principal. Orquesta la carga del último mes generado,
 // los estados (cargando / con datos / vacío global / vacío de un mes / error),
@@ -51,20 +52,22 @@ export default function App({
   }
 
   return (
-    <AppShell seccion={pestania} onCambiarSeccion={cambiarSeccion}>
-      {pestania === 'fichadas-hoy' && (
-        <PaginaFichadasHoy cliente={clienteFichadas} fechaInicial={fechaFichadasHoy} />
-      )}
+    <RolProvider>
+      <AppShell seccion={pestania} onCambiarSeccion={cambiarSeccion}>
+        {pestania === 'fichadas-hoy' && (
+          <PaginaFichadasHoy cliente={clienteFichadas} fechaInicial={fechaFichadasHoy} />
+        )}
 
-      {pestania === 'calendario' && (
-        <PaginaCalendario cliente={clienteCalendario} onIrAFichadas={irAFichadasHoy} />
-      )}
+        {pestania === 'calendario' && (
+          <PaginaCalendario cliente={clienteCalendario} onIrAFichadas={irAFichadasHoy} />
+        )}
 
-      {pestania === 'resumen-periodo' && <PaginaResumenPeriodo cliente={clienteResumenPeriodo} />}
+        {pestania === 'resumen-periodo' && <PaginaResumenPeriodo cliente={clienteResumenPeriodo} />}
 
-      {pestania === 'configuracion' && <PaginaConfiguracion cliente={clienteConfiguracion} />}
+        {pestania === 'configuracion' && <PaginaConfiguracion cliente={clienteConfiguracion} />}
 
-      {pestania === 'vacaciones' && <PaginaVacaciones cliente={clienteVacaciones} />}
-    </AppShell>
+        {pestania === 'vacaciones' && <PaginaVacaciones cliente={clienteVacaciones} />}
+      </AppShell>
+    </RolProvider>
   );
 }

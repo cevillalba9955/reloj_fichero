@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { Input, Radio, Button, Alert, Space } from 'antd';
+import { useRol } from '../contexto/RolContext.jsx';
 
 // feature 010 (US3) — Alta de pausa intermedia o retiro anticipado, ambos con
 // motivo OBLIGATORIO (FR-004): "Guardar" queda deshabilitado sin motivo.
 // Componente de presentación: delega el guardado en el contenedor vía
 // `onGuardar({ modo, desde, hasta, hora, motivo })`; no llama a la API.
+// feature 016 (FR-005/FR-011): además deshabilitado sin rol Editor o superior.
 
 export default function FormularioPausaRetiro({ fila, onGuardar, onCancelar }) {
+  const { puede } = useRol();
   const [modo, setModo] = useState('pausa'); // 'pausa' | 'retiro'
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
@@ -15,7 +18,7 @@ export default function FormularioPausaRetiro({ fila, onGuardar, onCancelar }) {
   const [error, setError] = useState(null);
   const [enviando, setEnviando] = useState(false);
 
-  const puedeGuardar = motivo.trim().length > 0 && !enviando;
+  const puedeGuardar = motivo.trim().length > 0 && !enviando && puede('editor');
 
   async function guardar(ev) {
     ev.preventDefault();

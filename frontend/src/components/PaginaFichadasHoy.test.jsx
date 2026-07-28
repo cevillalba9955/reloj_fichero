@@ -1,4 +1,5 @@
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { renderConRol } from '../test-utils/rol.jsx';
 import PaginaFichadasHoy from './PaginaFichadasHoy.jsx';
 import { seleccionarOpcion, escribirFecha } from '../test-utils/antd.js';
 
@@ -41,7 +42,7 @@ function clienteMock(over = {}) {
 
 test('carga la vista al montar y muestra la tabla', async () => {
   const cliente = clienteMock();
-  render(<PaginaFichadasHoy cliente={cliente} />);
+  renderConRol('editor', <PaginaFichadasHoy cliente={cliente} />);
   expect(await screen.findByRole('table')).toBeInTheDocument();
   expect(cliente.obtenerFichadasHoy).toHaveBeenCalledTimes(1);
   expect(screen.getByText(/Fichadas del 2026-07-16 \(Jueves\)/)).toBeInTheDocument();
@@ -60,7 +61,7 @@ test('navegar al día anterior recarga la vista de esa fecha', async () => {
       Promise.resolve(fecha === '2026-07-15' ? vistaAyer : vista()),
     ),
   });
-  render(<PaginaFichadasHoy cliente={cliente} />);
+  renderConRol('editor', <PaginaFichadasHoy cliente={cliente} />);
   expect(await screen.findByText(/Fichadas del 2026-07-16/)).toBeInTheDocument();
 
   fireEvent.click(screen.getByText('Día anterior'));
@@ -74,7 +75,7 @@ test('el botón de consultar reloj no aparece cuando el día mostrado no es hoy'
       vista({ navegacion: { anterior: '2026-07-14', siguiente: '2026-07-16', esHoy: false } }),
     ),
   });
-  render(<PaginaFichadasHoy cliente={cliente} />);
+  renderConRol('editor', <PaginaFichadasHoy cliente={cliente} />);
   await screen.findByRole('table');
   expect(screen.queryByText(/Consultar reloj/i)).not.toBeInTheDocument();
 });
@@ -82,7 +83,7 @@ test('el botón de consultar reloj no aparece cuando el día mostrado no es hoy'
 // T071 (iteración 2, FR-018) — los formularios de edición se abren como modal.
 test('Corregir abre el formulario dentro de un diálogo modal y Escape lo cierra sin efecto', async () => {
   const cliente = clienteMock();
-  render(<PaginaFichadasHoy cliente={cliente} />);
+  renderConRol('editor', <PaginaFichadasHoy cliente={cliente} />);
   await screen.findByRole('table');
 
   fireEvent.click(screen.getByText('Corregir'));
@@ -97,7 +98,7 @@ test('Corregir abre el formulario dentro de un diálogo modal y Escape lo cierra
 
 test('Pausa / Retiro abre su formulario dentro de un diálogo modal', async () => {
   const cliente = clienteMock();
-  render(<PaginaFichadasHoy cliente={cliente} />);
+  renderConRol('editor', <PaginaFichadasHoy cliente={cliente} />);
   await screen.findByRole('table');
 
   fireEvent.click(screen.getByText('Excepcion'));
@@ -122,7 +123,7 @@ function clienteJustificacionesMock(over = {}) {
 test('"Justificar ausencia" abre el diálogo, carga motivos recién al abrir y guarda', async () => {
   const cliente = clienteMock();
   const clienteJustificaciones = clienteJustificacionesMock();
-  render(<PaginaFichadasHoy cliente={cliente} clienteJustificaciones={clienteJustificaciones} />);
+  renderConRol('editor', <PaginaFichadasHoy cliente={cliente} clienteJustificaciones={clienteJustificaciones} />);
   await screen.findByRole('table');
   expect(clienteJustificaciones.obtenerMotivos).not.toHaveBeenCalled();
 
@@ -168,7 +169,7 @@ test('el botón "Justificación" de una fila precarga legajo y la fecha del día
     ),
   });
   const clienteJustificaciones = clienteJustificacionesMock();
-  render(<PaginaFichadasHoy cliente={cliente} clienteJustificaciones={clienteJustificaciones} />);
+  renderConRol('editor', <PaginaFichadasHoy cliente={cliente} clienteJustificaciones={clienteJustificaciones} />);
   await screen.findByRole('table');
 
   fireEvent.click(screen.getByText('Justificación'));
@@ -213,7 +214,7 @@ test('el botón "Revertir justificación" de una fila llama al cliente y recarga
     ),
   });
   const clienteJustificaciones = clienteJustificacionesMock();
-  render(<PaginaFichadasHoy cliente={cliente} clienteJustificaciones={clienteJustificaciones} />);
+  renderConRol('editor', <PaginaFichadasHoy cliente={cliente} clienteJustificaciones={clienteJustificaciones} />);
   await screen.findByRole('table');
 
   fireEvent.click(screen.getByText('Revertir justificación'));
@@ -233,10 +234,24 @@ test('un fallo de carga muestra el error y Reintentar vuelve a pedir', async () 
       .mockRejectedValueOnce(new Error('boom'))
       .mockResolvedValueOnce(vista()),
   });
-  render(<PaginaFichadasHoy cliente={cliente} />);
+  renderConRol('editor', <PaginaFichadasHoy cliente={cliente} />);
   expect(await screen.findByText(/Ocurrió un error: boom/)).toBeInTheDocument();
 
   fireEvent.click(screen.getByText('Reintentar'));
   await waitFor(() => expect(cliente.obtenerFichadasHoy).toHaveBeenCalledTimes(2));
   expect(await screen.findByRole('table')).toBeInTheDocument();
+});
+
+// feature 016 (FR-005/FR-011) — rol lector: ve la tabla, pero ninguno de los
+// controles de escritura (Corregir, Excepción, Justificar ausencia, Consultar
+// reloj) está disponible.
+test('rol lector: no se muestran los controles de escritura', async () => {
+  const cliente = clienteMock();
+  renderConRol('lector', <PaginaFichadasHoy cliente={cliente} />);
+  expect(await screen.findByRole('table')).toBeInTheDocument();
+
+  expect(screen.queryByText('Corregir')).not.toBeInTheDocument();
+  expect(screen.queryByText('Excepcion')).not.toBeInTheDocument();
+  expect(screen.queryByText('Justificar ausencia')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Consultar reloj/i })).not.toBeInTheDocument();
 });

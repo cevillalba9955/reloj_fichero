@@ -11,6 +11,7 @@ import {
   periodoSiguiente,
 } from '../../src/presentismo/domain/calendario-mes.js';
 import { createFilePresentismoRepository } from '../../src/presentismo/adapters/file-presentismo-repository.js';
+import { rolesPermisivoPath } from '../helpers/acl-entorno.js';
 
 // T012 (feature 007) — Contrato de los GET de la API de calendario.
 // Ver contracts/web-api.md.
@@ -35,6 +36,8 @@ before(async () => {
     PRESENTISMO_REPO_DIR: repoDir,
     PRESENTISMO_LOG_DIR: logDir,
     PRESENTISMO_CATEGORIAS_CONFIG: './config/categorias.json',
+    // feature 016 — permisivo por defecto (no es un test de control de acceso).
+    ACL_ROLES_CONFIG: rolesPermisivoPath(),
   };
   const app = crearApp({ env });
   server = createServer((req, res) => app(req, res).catch((e) => { res.writeHead(500); res.end(String(e)); }));
@@ -151,6 +154,7 @@ async function crearServidorConPeriodos(periodos) {
     PRESENTISMO_REPO_DIR: dir,
     PRESENTISMO_LOG_DIR: lg,
     PRESENTISMO_CATEGORIAS_CONFIG: './config/categorias.json',
+    ACL_ROLES_CONFIG: rolesPermisivoPath(),
   };
   const app = crearApp({ env });
   const srv = createServer((req, res) => app(req, res).catch((e) => { res.writeHead(500); res.end(String(e)); }));
