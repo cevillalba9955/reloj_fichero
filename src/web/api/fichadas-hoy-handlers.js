@@ -1,4 +1,5 @@
 import { ApiError } from './router.js';
+import { exigirRol } from '../acl/autorizacion.js';
 import { construirVistaFichadasHoy, construirFilaFichadaHoy, fechaNavegable, hoyLocal } from '../view-model.js';
 import { RosterNoDisponibleError } from '../../roster/active-employees-provider.js';
 import { parseHoraMinuto } from '../../presentismo/domain/tiempo.js';
@@ -178,7 +179,7 @@ export function registrarRutas(router, ctx) {
   // POST /api/fichadas-hoy/correcciones (US2) — corrige entrada/salida (HH:MM)
   // y/o el total (compat 004), con motivo obligatorio. Devuelve la fila
   // recalculada. Delegan en service.cargarCorreccion (auditoría de 004).
-  router.add('POST', '/api/fichadas-hoy/correcciones', async ({ body }) => {
+  router.add('POST', '/api/fichadas-hoy/correcciones', exigirRol(ctx, 'editor', async ({ body }) => {
     const { legajo, fecha, entrada = null, salida = null, totalHoras = null, autor = null, motivo } = body ?? {};
     validarLegajo(legajo, 'CORRECCION_INVALIDA');
     validarFechaCuerpo(fecha, 'CORRECCION_INVALIDA');
@@ -210,11 +211,11 @@ export function registrarRutas(router, ctx) {
       relanzarErrorEscritura(err, 'CORRECCION_INVALIDA');
     }
     return { status: 200, body: await filaDe(ctx, fecha, legajo) };
-  });
+  }));
 
   // POST /api/fichadas-hoy/pausas (US3) — pausa intermedia [desde, hasta] con
   // motivo obligatorio; descuenta solo el solape con la jornada efectiva.
-  router.add('POST', '/api/fichadas-hoy/pausas', async ({ body }) => {
+  router.add('POST', '/api/fichadas-hoy/pausas', exigirRol(ctx, 'editor', async ({ body }) => {
     const { legajo, fecha, desde, hasta, autor = null, motivo } = body ?? {};
     validarLegajo(legajo, 'PAUSA_INVALIDA');
     validarFechaCuerpo(fecha, 'PAUSA_INVALIDA');
@@ -242,11 +243,11 @@ export function registrarRutas(router, ctx) {
       relanzarErrorEscritura(err, 'PAUSA_INVALIDA');
     }
     return { status: 200, body: await filaDe(ctx, fecha, legajo) };
-  });
+  }));
 
   // POST /api/fichadas-hoy/retiros-anticipados (US3) — construye una Pausa
   // tipo 'retiro_anticipado' desde `hora` hasta el cierre oficial del día.
-  router.add('POST', '/api/fichadas-hoy/retiros-anticipados', async ({ body }) => {
+  router.add('POST', '/api/fichadas-hoy/retiros-anticipados', exigirRol(ctx, 'editor', async ({ body }) => {
     const { legajo, fecha, hora, autor = null, motivo } = body ?? {};
     validarLegajo(legajo, 'RETIRO_INVALIDO');
     validarFechaCuerpo(fecha, 'RETIRO_INVALIDO');
@@ -271,14 +272,14 @@ export function registrarRutas(router, ctx) {
       relanzarErrorEscritura(err, 'RETIRO_INVALIDO');
     }
     return { status: 200, body: await filaDe(ctx, fecha, legajo) };
-  });
+  }));
 
   // POST /api/fichadas-hoy/consultar-reloj (US4) — NO toca el scheduler en este
   // proceso (research.md §4): pide un ciclo por HTTP local al servicio de
   // fichadas (único dueño de la conexión al reloj, Principio III). El sink del
   // scheduler persiste ANTES de responder el /tick, así que la vista
   // recalculada ya incluye las fichadas nuevas.
-  router.add('POST', '/api/fichadas-hoy/consultar-reloj', async () => {
+  router.add('POST', '/api/fichadas-hoy/consultar-reloj', exigirRol(ctx, 'editor', async () => {
     const r = await ctx.consultarReloj.consultar();
     if (!r.ok || r.resultado === 'error') {
       throw new ApiError(
@@ -299,5 +300,5 @@ export function registrarRutas(router, ctx) {
         vista: await vistaHoy(ctx, hoy, { hoy, periodos }),
       },
     };
-  });
+  }));
 }

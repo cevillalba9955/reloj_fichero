@@ -1,0 +1,8 @@
+{
+  "rolPorDefecto": "lector",
+  "mapeo": {
+    "RRHH_LECTOR": "lector",
+    "RRHH_EDITOR": "editor",
+    "RRHH_ADMIN": "configurador"
+  }
+}

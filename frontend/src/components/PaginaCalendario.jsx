@@ -6,6 +6,7 @@ import EncabezadoPeriodo from './EncabezadoPeriodo.jsx';
 import NavegacionMes from './NavegacionMes.jsx';
 import DialogoConfirmarReclasificar from './DialogoConfirmarReclasificar.jsx';
 import { leerSesion, guardarSesion } from '../utils/sesion-storage.js';
+import { useRol } from '../contexto/RolContext.jsx';
 
 // Recuerda el período mostrado entre pestañas (sessionStorage): al volver al
 // Calendario por el menú de la izquierda, retoma el mes que se estaba viendo
@@ -13,6 +14,7 @@ import { leerSesion, guardarSesion } from '../utils/sesion-storage.js';
 const CLAVE_PERIODO_SESION = 'presentismo.calendario.periodo';
 
 export default function PaginaCalendario({ cliente, inicializarDesdeApp, onIrAFichadas }) {
+  const { puede } = useRol();
   const [estado, setEstado] = useState({ tipo: 'cargando' });
   const [ultimo, setUltimo] = useState(null);
   const [periodos, setPeriodos] = useState([]);
@@ -168,7 +170,9 @@ export default function PaginaCalendario({ cliente, inicializarDesdeApp, onIrAFi
           mensaje="Aún no se generó ningún calendario."
           periodo={mesActual}
           generables={generables}
-          onGenerar={() => generarCalendarioDelPeriodo(mesActual)}
+          // feature 016 (FR-005/FR-011): oculta la acción sin rol Editor o
+          // superior — la API ya la rechaza (FR-009).
+          onGenerar={puede('editor') ? () => generarCalendarioDelPeriodo(mesActual) : null}
         />
       )}
 
@@ -177,7 +181,7 @@ export default function PaginaCalendario({ cliente, inicializarDesdeApp, onIrAFi
           mensaje={`El calendario del período ${estado.periodo} aún no fue generado.`}
           periodo={estado.periodo}
           generables={generables}
-          onGenerar={() => generarCalendarioDelPeriodo(estado.periodo)}
+          onGenerar={puede('editor') ? () => generarCalendarioDelPeriodo(estado.periodo) : null}
         />
       )}
 
@@ -187,22 +191,26 @@ export default function PaginaCalendario({ cliente, inicializarDesdeApp, onIrAFi
               <span className="indicador-periodo-cerrado" role="status">
                 Período cerrado
               </span>
-              <button type="button" onClick={cerrarOReabrirPeriodo}>
-                Reabrir período
-              </button>
+              {puede('editor') && (
+                <button type="button" onClick={cerrarOReabrirPeriodo}>
+                  Reabrir período
+                </button>
+              )}
             </div>}
 
            {periodoYaPaso && !estado.vista.cerrado && <div className="encabezado-cierre-periodo">
               <span className="indicador-periodo-cerrado" role="status">
                 Período concluido
               </span>
-              <button type="button" onClick={cerrarOReabrirPeriodo}>
-                Cerrar período
-              </button>
+              {puede('editor') && (
+                <button type="button" onClick={cerrarOReabrirPeriodo}>
+                  Cerrar período
+                </button>
+              )}
             </div>}
           <GrillaMes
             dias={estado.vista.dias}
-            onReclasificar={estado.vista.cerrado ? undefined : pedirReclasificar}
+            onReclasificar={estado.vista.cerrado || !puede('editor') ? undefined : pedirReclasificar}
             onIrAFichadas={onIrAFichadas}
           />
         </section>

@@ -1,4 +1,5 @@
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { renderConRol } from '../test-utils/rol.jsx';
 import PaginaCalendario from './PaginaCalendario.jsx';
 
 function vista(over = {}) {
@@ -47,14 +48,14 @@ test('muestra el estado vacío global cuando no hay calendarios', async () => {
   const cliente = clienteMock({
     listarCalendarios: vi.fn().mockResolvedValue({ periodos: [], ultimo: null }),
   });
-  render(<PaginaCalendario cliente={cliente} />);
+  renderConRol('editor', <PaginaCalendario cliente={cliente} />);
   expect(await screen.findByText(/Aún no se generó ningún calendario/)).toBeInTheDocument();
 });
 
 // Estado con datos: muestra grilla
 test('muestra el calendario cuando hay datos', async () => {
   const cliente = clienteMock();
-  render(<PaginaCalendario cliente={cliente} />);
+  renderConRol('editor', <PaginaCalendario cliente={cliente} />);
   expect(await screen.findByText('Julio 2026')).toBeInTheDocument();
   expect(screen.getByRole('grid')).toBeInTheDocument();
 });
@@ -64,7 +65,7 @@ test('un fallo al iniciar muestra error con reintento', async () => {
   const cliente = clienteMock({
     listarCalendarios: vi.fn().mockRejectedValue(new Error('boom')),
   });
-  render(<PaginaCalendario cliente={cliente} />);
+  renderConRol('editor', <PaginaCalendario cliente={cliente} />);
   expect(await screen.findByText(/Ocurrió un error/)).toBeInTheDocument();
   expect(screen.getByText('Reintentar')).toBeInTheDocument();
 });
@@ -85,7 +86,7 @@ test('reclasificar: cancelar no llama a la API; confirmar sí y refresca la gril
   const cliente = clienteMock({
     reclasificar: vi.fn().mockResolvedValue(vistaFeriado),
   });
-  render(<PaginaCalendario cliente={cliente} />);
+  renderConRol('editor', <PaginaCalendario cliente={cliente} />);
   await screen.findByRole('grid');
 
   // Iniciar reclasificación (ícono → modal de selección → diálogo de
@@ -109,7 +110,7 @@ test('reclasificar: cancelar no llama a la API; confirmar sí y refresca la gril
 test('con el período cerrado, no se ofrece el ícono de reclasificar', async () => {
   const vistaCerrada = vista({ cerrado: true, cierre: { autor: 'ui', fechaHora: '2026-07-20T00:00:00.000Z' } });
   const cliente = clienteMock({ obtenerCalendario: vi.fn().mockResolvedValue(vistaCerrada) });
-  render(<PaginaCalendario cliente={cliente} />);
+  renderConRol('editor', <PaginaCalendario cliente={cliente} />);
   await screen.findByRole('grid');
 
   expect(screen.queryByLabelText(/Reclasificar 2026-07-01/)).not.toBeInTheDocument();
@@ -119,7 +120,7 @@ test('con el período cerrado, no se ofrece el ícono de reclasificar', async ()
 test('un período abierto muestra "Cerrar período"; al hacer clic llama a cliente.cerrarPeriodo y refresca la vista', async () => {
   const vistaCerrada = vista({ cerrado: true, cierre: { autor: 'ui', fechaHora: '2026-07-20T00:00:00.000Z' } });
   const cliente = clienteMock({ cerrarPeriodo: vi.fn().mockResolvedValue(vistaCerrada) });
-  render(<PaginaCalendario cliente={cliente} />);
+  renderConRol('editor', <PaginaCalendario cliente={cliente} />);
   await screen.findByRole('grid');
 
   expect(screen.queryByText('Período cerrado')).not.toBeInTheDocument();
@@ -137,7 +138,7 @@ test('un período cerrado muestra el indicador y "Reabrir período"; al hacer cl
     obtenerCalendario: vi.fn().mockResolvedValue(vistaCerrada),
     reabrirPeriodo: vi.fn().mockResolvedValue(vistaReabierta),
   });
-  render(<PaginaCalendario cliente={cliente} />);
+  renderConRol('editor', <PaginaCalendario cliente={cliente} />);
   await screen.findByRole('grid');
 
   expect(screen.getByText('Período cerrado')).toBeInTheDocument();
@@ -153,7 +154,7 @@ test('un período que todavía no pasó (mes en curso) NO muestra "Cerrar perío
   const cliente = clienteMock({
     listarCalendarios: vi.fn().mockResolvedValue({ periodos: ['202607'], ultimo: '202607', mesActual: '202607' }),
   });
-  render(<PaginaCalendario cliente={cliente} />);
+  renderConRol('editor', <PaginaCalendario cliente={cliente} />);
   await screen.findByRole('grid');
 
   expect(screen.queryByText('Cerrar período')).not.toBeInTheDocument();
@@ -164,7 +165,7 @@ test('un período que todavía no pasó (mes en curso) NO muestra "Cerrar perío
 test('doble clic en una celda llama a onIrAFichadas con la fecha de esa celda', async () => {
   const cliente = clienteMock();
   const onIrAFichadas = vi.fn();
-  render(<PaginaCalendario cliente={cliente} onIrAFichadas={onIrAFichadas} />);
+  renderConRol('editor', <PaginaCalendario cliente={cliente} onIrAFichadas={onIrAFichadas} />);
   await screen.findByRole('grid');
 
   fireEvent.doubleClick(screen.getByRole('gridcell'));
@@ -177,9 +178,20 @@ test('un período cerrado sigue mostrando "Reabrir período" aunque todavía sea
     listarCalendarios: vi.fn().mockResolvedValue({ periodos: ['202607'], ultimo: '202607', mesActual: '202607' }),
     obtenerCalendario: vi.fn().mockResolvedValue(vistaCerrada),
   });
-  render(<PaginaCalendario cliente={cliente} />);
+  renderConRol('editor', <PaginaCalendario cliente={cliente} />);
   await screen.findByRole('grid');
 
   expect(screen.queryByText('Cerrar período')).not.toBeInTheDocument();
   expect(screen.getByText('Reabrir período')).toBeInTheDocument();
+});
+
+// feature 016 (FR-005/FR-011) — rol lector: ve la grilla, pero ni "Cerrar
+// período" ni el ícono de reclasificar están disponibles.
+test('rol lector: no se ofrecen "Cerrar período" ni el ícono de reclasificar', async () => {
+  const cliente = clienteMock();
+  renderConRol('lector', <PaginaCalendario cliente={cliente} />);
+  await screen.findByRole('grid');
+
+  expect(screen.queryByText('Cerrar período')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/Reclasificar 2026-07-01/)).not.toBeInTheDocument();
 });

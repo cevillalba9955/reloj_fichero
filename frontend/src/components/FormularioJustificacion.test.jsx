@@ -1,4 +1,5 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderConRol } from '../test-utils/rol.jsx';
 import FormularioJustificacion from './FormularioJustificacion.jsx';
 import { seleccionarOpcion, escribirFecha } from '../test-utils/antd.js';
 
@@ -14,7 +15,7 @@ const fila = { legajo: 3, nombre: 'Carla Ausente', fecha: '2026-07-10', situacio
 
 test('sin motivo, "Guardar" está deshabilitado y no se envía nada', () => {
   const onGuardar = vi.fn();
-  render(<FormularioJustificacion fila={fila} motivos={MOTIVOS} onGuardar={onGuardar} onCancelar={vi.fn()} />);
+  renderConRol('editor', <FormularioJustificacion fila={fila} motivos={MOTIVOS} onGuardar={onGuardar} onCancelar={vi.fn()} />);
 
   const guardar = screen.getByRole('button', { name: 'Guardar' });
   expect(guardar).toBeDisabled();
@@ -24,7 +25,7 @@ test('sin motivo, "Guardar" está deshabilitado y no se envía nada', () => {
 
 test('con fila precargada, envía legajo/fecha de la fila y el motivo elegido', async () => {
   const onGuardar = vi.fn().mockResolvedValue({ registradas: [{ fecha: '2026-07-10' }], omitidas: [], noAplicables: [] });
-  render(<FormularioJustificacion fila={fila} motivos={MOTIVOS} onGuardar={onGuardar} onCancelar={vi.fn()} />);
+  renderConRol('editor', <FormularioJustificacion fila={fila} motivos={MOTIVOS} onGuardar={onGuardar} onCancelar={vi.fn()} />);
 
   await seleccionarOpcion(/Motivo/, 'Vacaciones (Paga)');
   fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
@@ -37,7 +38,7 @@ test('con fila precargada, envía legajo/fecha de la fila y el motivo elegido', 
 
 test('sin fila (carga general), permite completar legajo, fecha y un rango "hasta"', async () => {
   const onGuardar = vi.fn().mockResolvedValue({ registradas: [], omitidas: [], noAplicables: [] });
-  render(<FormularioJustificacion motivos={MOTIVOS} onGuardar={onGuardar} onCancelar={vi.fn()} />);
+  renderConRol('editor', <FormularioJustificacion motivos={MOTIVOS} onGuardar={onGuardar} onCancelar={vi.fn()} />);
 
   fireEvent.change(screen.getByLabelText('Legajo'), { target: { value: '7' } });
   escribirFecha(/^Fecha/, '2026-08-03');
@@ -52,10 +53,22 @@ test('sin fila (carga general), permite completar legajo, fecha y un rango "hast
 
 test('un error de guardado se muestra sin cerrar', async () => {
   const onGuardar = vi.fn().mockRejectedValue(new Error('el día ya tiene fichadas'));
-  render(<FormularioJustificacion fila={fila} motivos={MOTIVOS} onGuardar={onGuardar} onCancelar={vi.fn()} />);
+  renderConRol('editor', <FormularioJustificacion fila={fila} motivos={MOTIVOS} onGuardar={onGuardar} onCancelar={vi.fn()} />);
 
   await seleccionarOpcion(/Motivo/, 'Vacaciones (Paga)');
   fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
   expect(await screen.findByRole('alert')).toHaveTextContent('el día ya tiene fichadas');
+});
+
+// feature 016 (FR-005/FR-011) — rol lector: "Guardar" queda deshabilitado
+// aunque legajo/fecha/motivo sean válidos.
+test('rol lector: "Guardar" queda deshabilitado aunque los campos sean válidos', async () => {
+  const onGuardar = vi.fn();
+  renderConRol('lector', <FormularioJustificacion fila={fila} motivos={MOTIVOS} onGuardar={onGuardar} onCancelar={vi.fn()} />);
+  await seleccionarOpcion(/Motivo/, 'Vacaciones (Paga)');
+  const guardar = screen.getByRole('button', { name: 'Guardar' });
+  expect(guardar).toBeDisabled();
+  fireEvent.click(guardar);
+  expect(onGuardar).not.toHaveBeenCalled();
 });

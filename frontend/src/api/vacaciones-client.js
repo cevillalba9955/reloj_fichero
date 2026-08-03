@@ -1,9 +1,11 @@
+import { fetchConRol } from '../utils/rol-apex.js';
+
 // spec 015 — Cliente de datos de "Control de Vacaciones Anual". Único acceso
 // a datos de la UI: habla solo con la API `/api` (Principio I). Mismo patrón
 // que justificaciones-client.js.
 
 export function crearClienteVacaciones({ fetchImpl, base = '/api' } = {}) {
-  const doFetch = fetchImpl ?? ((...args) => globalThis.fetch(...args));
+  const doFetch = fetchImpl ?? fetchConRol;
 
   async function pedir(path, opts) {
     const res = await doFetch(`${base}${path}`, opts);

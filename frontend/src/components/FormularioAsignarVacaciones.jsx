@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Input, Button, Alert, Space } from 'antd';
 import CampoFecha from './CampoFecha.jsx';
+import { useRol } from '../contexto/RolContext.jsx';
 
 // spec 015 (US1) — Asigna un período de vacaciones (fecha de inicio +
 // cantidad de días corridos) a un legajo. `fila` es opcional: si viene
@@ -8,8 +9,10 @@ import CampoFecha from './CampoFecha.jsx';
 // Mismo patrón que FormularioJustificacion.jsx: "Guardar" deshabilitado sin
 // fecha de inicio ni cantidad de días válida (FR-003); componente de
 // presentación, no llama a la API directamente.
+// feature 016 (FR-005/FR-011): además deshabilitado sin rol Editor o superior.
 
 export default function FormularioAsignarVacaciones({ fila = null, onGuardar, onExito, onCancelar }) {
+  const { puede } = useRol();
   const [legajo, setLegajo] = useState(fila?.legajo != null ? String(fila.legajo) : '');
   const [fechaInicio, setFechaInicio] = useState('');
   const [cantidadDias, setCantidadDias] = useState('');
@@ -23,7 +26,7 @@ export default function FormularioAsignarVacaciones({ fila = null, onGuardar, on
   const legajoValido = /^\d+$/.test(legajo.trim());
   const fechaValida = /^\d{4}-\d{2}-\d{2}$/.test(fechaInicio.trim());
   const cantidadValida = /^\d+$/.test(String(cantidadDias).trim()) && Number(cantidadDias) > 0;
-  const puedeGuardar = legajoValido && fechaValida && cantidadValida && !enviando;
+  const puedeGuardar = legajoValido && fechaValida && cantidadValida && !enviando && puede('editor');
 
   async function guardar(ev) {
     ev.preventDefault();

@@ -135,7 +135,9 @@ test('sin prop "clienteCalendario" (uso real, como main.jsx) no entra en loop in
   const fetchMock = vi.fn(async (url) => {
     const body = String(url).endsWith('/calendarios')
       ? { periodos: ['202607'], ultimo: '202607' }
-      : vista();
+      : String(url).endsWith('/acl/mi-rol')
+        ? { rol: 'editor' }
+        : vista();
     return { ok: true, status: 200, json: async () => body };
   });
   vi.stubGlobal('fetch', fetchMock);
@@ -147,7 +149,9 @@ test('sin prop "clienteCalendario" (uso real, como main.jsx) no entra en loop in
   // Deja pasar un ciclo de microtasks/efectos extra: si hubiera loop, la
   // cantidad de llamadas seguiría creciendo.
   await new Promise((r) => setTimeout(r, 50));
-  expect(fetchMock).toHaveBeenCalledTimes(2);
+  // feature 016: +1 respecto de antes — RolProvider pide /api/acl/mi-rol una
+  // sola vez al montar (no es parte del loop bajo prueba acá).
+  expect(fetchMock).toHaveBeenCalledTimes(3);
 
   vi.unstubAllGlobals();
 });

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Input, Select, Button, Alert, Space } from 'antd';
 import CampoFecha from './CampoFecha.jsx';
+import { useRol } from '../contexto/RolContext.jsx';
 
 // feature 012 (US1) — Registra el motivo de una ausencia para un día o un
 // rango de días, con motivo OBLIGATORIO elegido de una lista cerrada (FR-003,
@@ -10,8 +11,10 @@ import CampoFecha from './CampoFecha.jsx';
 // mano (por ejemplo, para justificar una licencia futura que todavía no
 // aparece en ninguna tabla). Componente de presentación: recibe `onGuardar`
 // (async) y `motivos` ya cargados del contenedor; no llama a la API.
+// feature 016 (FR-005/FR-011): además deshabilitado sin rol Editor o superior.
 
 export default function FormularioJustificacion({ fila = null, motivos = [], onGuardar, onCancelar }) {
+  const { puede } = useRol();
   const [legajo, setLegajo] = useState(fila?.legajo != null ? String(fila.legajo) : '');
   const [fecha, setFecha] = useState(fila?.fecha ?? '');
   const [hasta, setHasta] = useState('');
@@ -27,7 +30,7 @@ export default function FormularioJustificacion({ fila = null, motivos = [], onG
 
   const legajoValido = /^\d+$/.test(legajo.trim());
   const fechaValida = /^\d{4}-\d{2}-\d{2}$/.test(fecha.trim());
-  const puedeGuardar = legajoValido && fechaValida && motivoId !== '' && !enviando;
+  const puedeGuardar = legajoValido && fechaValida && motivoId !== '' && !enviando && puede('editor');
 
   async function guardar(ev) {
     ev.preventDefault();

@@ -12,6 +12,7 @@ import NavegacionDia from './NavegacionDia.jsx';
 import Dialogo from './Dialogo.jsx';
 import { leerSesion, guardarSesion } from '../utils/sesion-storage.js';
 import { nombreDiaSemana } from '../utils/fechas.js';
+import { useRol } from '../contexto/RolContext.jsx';
 
 // feature 010 — Página "Fichadas de Hoy": carga la vista del día al montar,
 // con estados cargando / con-datos / error (reintento) (US1); permite corregir
@@ -44,6 +45,7 @@ export default function PaginaFichadasHoy({
   // navegación posterior sigue siendo con `fechaSeleccionada` (US5).
   fechaInicial = null,
 }) {
+  const { puede } = useRol();
   const [estado, setEstado] = useState({ tipo: 'cargando' });
   const [correccion, setCorreccion] = useState(null); // fila en corrección
   const [pausaRetiro, setPausaRetiro] = useState(null); // fila en pausa/retiro
@@ -198,9 +200,12 @@ export default function PaginaFichadasHoy({
             />
           </header>
           <div className="fichadas-acciones">
-            {/* La consulta manual al reloj solo aplica al día actual (FR-008). */}
+            {/* La consulta manual al reloj solo aplica al día actual (FR-008);
+                feature 016: además requiere rol Editor o superior — se oculta
+                (no solo se deshabilita) para Lector, que sigue viendo "hoy"
+                sin ese control. */}
             {estado.vista.navegacion?.esHoy ? (
-              <BotonConsultarReloj onConsultar={consultarReloj} />
+              puede('editor') && <BotonConsultarReloj onConsultar={consultarReloj} />
             ) : (
               <Button onClick={() => setFechaSeleccionada(null)}>
                 Volver al dia actual
@@ -208,23 +213,35 @@ export default function PaginaFichadasHoy({
             )}
             {/* feature 012 — entrada general para justificar un día/rango que
                 todavía no aparece en la tabla (por ejemplo, una licencia
-                futura planificada con anticipación). */}
-            <Button onClick={() => abrirJustificacion({})}>
-              Justificar ausencia
-            </Button>
+                futura planificada con anticipación).
+                feature 016 (FR-005/FR-011): oculta para quien no tiene rol
+                Editor o superior — la API ya lo rechaza (FR-009). */}
+            {puede('editor') && (
+              <Button onClick={() => abrirJustificacion({})}>
+                Justificar ausencia
+              </Button>
+            )}
           </div>
           <TablaFichadasHoy
             empleados={estado.vista.empleados}
-            onCorregir={(fila) => {
-              setPausaRetiro(null);
-              setCorreccion(fila);
-            }}
-            onPausaRetiro={(fila) => {
-              setCorreccion(null);
-              setPausaRetiro(fila);
-            }}
-            onJustificar={(fila) => abrirJustificacion({ ...fila, fecha: estado.vista.fecha })}
-            onRevertirJustificacion={revertirJustificacion}
+            onCorregir={
+              puede('editor')
+                ? (fila) => {
+                    setPausaRetiro(null);
+                    setCorreccion(fila);
+                  }
+                : null
+            }
+            onPausaRetiro={
+              puede('editor')
+                ? (fila) => {
+                    setCorreccion(null);
+                    setPausaRetiro(fila);
+                  }
+                : null
+            }
+            onJustificar={puede('editor') ? (fila) => abrirJustificacion({ ...fila, fecha: estado.vista.fecha }) : null}
+            onRevertirJustificacion={puede('editor') ? revertirJustificacion : null}
           />
           {/* FR-018: los formularios de edición se abren como diálogo modal;
               Escape / click en el backdrop equivalen a Cancelar. */}

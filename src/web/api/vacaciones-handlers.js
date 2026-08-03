@@ -1,4 +1,5 @@
 import { ApiError } from './router.js';
+import { exigirRol } from '../acl/autorizacion.js';
 
 // spec 015 — Handlers de la API de "Control de Vacaciones Anual". Delegan en
 // el servicio de presentismo y traducen sus errores `.httpCode` a la forma
@@ -65,7 +66,7 @@ export function registrarRutas(router, ctx) {
 
   // POST /api/vacaciones/asignaciones (US1) — asigna un período de
   // vacaciones a un legajo.
-  router.add('POST', '/api/vacaciones/asignaciones', async ({ body }) => {
+  router.add('POST', '/api/vacaciones/asignaciones', exigirRol(ctx, 'editor', async ({ body }) => {
     const { legajo, fechaInicio, cantidadDias, autor = null } = body ?? {};
     validarLegajo(legajo);
     exigir(
@@ -86,11 +87,11 @@ export function registrarRutas(router, ctx) {
       if (err instanceof ApiError) throw err;
       relanzarComoApiError(err);
     }
-  });
+  }));
 
   // DELETE /api/vacaciones/asignaciones/:id (US4) — revierte una Asignación
   // de Vacaciones vigente.
-  router.add('DELETE', '/api/vacaciones/asignaciones/:id', async ({ params, body }) => {
+  router.add('DELETE', '/api/vacaciones/asignaciones/:id', exigirRol(ctx, 'editor', async ({ params, body }) => {
     const { id } = params;
     const { autor = null } = body ?? {};
     try {
@@ -100,5 +101,5 @@ export function registrarRutas(router, ctx) {
       if (err instanceof ApiError) throw err;
       relanzarComoApiError(err);
     }
-  });
+  }));
 }

@@ -5,6 +5,7 @@ import TablaVacaciones from './TablaVacaciones.jsx';
 import FormularioAsignarVacaciones from './FormularioAsignarVacaciones.jsx';
 import HistorialVacaciones from './HistorialVacaciones.jsx';
 import Dialogo from './Dialogo.jsx';
+import { useRol } from '../contexto/RolContext.jsx';
 
 // spec 015 — Página "Vacaciones": control anual de saldo/antigüedad (US2),
 // asignación de un período (US1) e historial de movimientos (US2) de un
@@ -14,6 +15,7 @@ import Dialogo from './Dialogo.jsx';
 const clientePorDefecto = crearClienteVacaciones();
 
 export default function PaginaVacaciones({ cliente = clientePorDefecto }) {
+  const { puede } = useRol();
   const [estado, setEstado] = useState({ tipo: 'cargando' });
   const [seleccionado, setSeleccionado] = useState(null); // fila de TablaVacaciones
   const [historial, setHistorial] = useState(null);
@@ -117,11 +119,17 @@ export default function PaginaVacaciones({ cliente = clientePorDefecto }) {
           <TablaVacaciones
             legajos={estado.legajos}
             onSeleccionar={setSeleccionado}
-            onAsignar={(fila) => {
-              setSeleccionado(fila);
-              setAsignando(fila);
-              setMensajeAsignacion(null);
-            }}
+            onAsignar={
+              // feature 016 (FR-005/FR-011): oculta la acción para quien no
+              // tiene rol Editor o superior — la API ya lo rechaza (FR-009).
+              puede('editor')
+                ? (fila) => {
+                    setSeleccionado(fila);
+                    setAsignando(fila);
+                    setMensajeAsignacion(null);
+                  }
+                : null
+            }
             legajoSeleccionado={seleccionado?.legajo ?? null}
           />
 
@@ -131,7 +139,7 @@ export default function PaginaVacaciones({ cliente = clientePorDefecto }) {
               <HistorialVacaciones
                 movimientos={historial.movimientos}
                 asignaciones={historial.asignaciones}
-                onRevertir={revertir}
+                onRevertir={puede('editor') ? revertir : null}
               />
             </div>
           )}

@@ -1,4 +1,5 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderConRol } from '../test-utils/rol.jsx';
 import PaginaVacaciones from './PaginaVacaciones.jsx';
 import { escribirFecha } from '../test-utils/antd.js';
 
@@ -41,7 +42,7 @@ function clienteMock(over = {}) {
 
 test('carga el listado al montar y muestra la tabla', async () => {
   const cliente = clienteMock();
-  render(<PaginaVacaciones cliente={cliente} />);
+  renderConRol('editor', <PaginaVacaciones cliente={cliente} />);
   expect(await screen.findByRole('table')).toBeInTheDocument();
   expect(cliente.listar).toHaveBeenCalledTimes(1);
 });
@@ -50,7 +51,7 @@ test('un fallo de carga muestra el error y Reintentar vuelve a pedir', async () 
   const cliente = clienteMock({
     listar: vi.fn().mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce({ legajos: [legajoFila()] }),
   });
-  render(<PaginaVacaciones cliente={cliente} />);
+  renderConRol('editor', <PaginaVacaciones cliente={cliente} />);
   expect(await screen.findByText(/Ocurrió un error: boom/)).toBeInTheDocument();
 
   fireEvent.click(screen.getByText('Reintentar'));
@@ -60,7 +61,7 @@ test('un fallo de carga muestra el error y Reintentar vuelve a pedir', async () 
 
 test('clic en un legajo carga su historial', async () => {
   const cliente = clienteMock();
-  render(<PaginaVacaciones cliente={cliente} />);
+  renderConRol('editor', <PaginaVacaciones cliente={cliente} />);
   await screen.findByRole('table');
 
   fireEvent.click(screen.getAllByRole('row')[1]);
@@ -72,7 +73,7 @@ test('asignar vacaciones refresca el listado y el historial sin recargar toda la
   const cliente = clienteMock({
     asignar: vi.fn().mockResolvedValue({ asignacionId: 'a1', fechaInicio: '2026-01-10', fechaFin: '2026-01-30', cantidadDias: 21, saldoResultante: -11 }),
   });
-  render(<PaginaVacaciones cliente={cliente} />);
+  renderConRol('editor', <PaginaVacaciones cliente={cliente} />);
   await screen.findByRole('table');
   fireEvent.click(screen.getByRole('button', { name: 'Asignar vacaciones' }));
   await screen.findByLabelText(/Fecha de inicio/);
@@ -95,7 +96,7 @@ test('el mensaje de confirmación se puede cerrar y se limpia al abrir una nueva
   const cliente = clienteMock({
     asignar: vi.fn().mockResolvedValue({ asignacionId: 'a1', fechaInicio: '2026-01-10', fechaFin: '2026-01-30', cantidadDias: 21, saldoResultante: -11 }),
   });
-  render(<PaginaVacaciones cliente={cliente} />);
+  renderConRol('editor', <PaginaVacaciones cliente={cliente} />);
   await screen.findByRole('table');
   fireEvent.click(screen.getByRole('button', { name: 'Asignar vacaciones' }));
   escribirFecha(/Fecha de inicio/, '2026-01-10');
@@ -121,7 +122,7 @@ test('revertir una asignación refresca el listado y el historial', async () => 
     ),
     revertir: vi.fn().mockResolvedValue({ id: 'a1', revertida: true, saldoResultante: 31 }),
   });
-  render(<PaginaVacaciones cliente={cliente} />);
+  renderConRol('editor', <PaginaVacaciones cliente={cliente} />);
   await screen.findByRole('table');
   fireEvent.click(screen.getAllByRole('row')[1]);
   await screen.findByRole('button', { name: 'Revertir' });
@@ -131,4 +132,21 @@ test('revertir una asignación refresca el listado y el historial', async () => 
   await waitFor(() => expect(cliente.revertir).toHaveBeenCalledWith('a1', {}));
   await waitFor(() => expect(cliente.listar).toHaveBeenCalledTimes(2), 'recarga el listado tras revertir');
   await waitFor(() => expect(cliente.consultar).toHaveBeenCalledTimes(2), 'recarga el historial tras revertir');
+});
+
+// feature 016 (FR-005/FR-011) — rol lector: ve la tabla y el historial, sin
+// "Asignar vacaciones" ni "Revertir".
+test('rol lector: no se muestran los controles de escritura', async () => {
+  const cliente = clienteMock({
+    consultar: vi.fn().mockResolvedValue(
+      detalle({ asignaciones: [{ id: 'a1', fechaInicio: '2026-01-10', fechaFin: '2026-01-30', cantidadDias: 21, vigente: true }] }),
+    ),
+  });
+  renderConRol('lector', <PaginaVacaciones cliente={cliente} />);
+  await screen.findByRole('table');
+  expect(screen.queryByRole('button', { name: 'Asignar vacaciones' })).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getAllByRole('row')[1]);
+  await waitFor(() => expect(cliente.consultar).toHaveBeenCalled());
+  expect(screen.queryByRole('button', { name: 'Revertir' })).not.toBeInTheDocument();
 });

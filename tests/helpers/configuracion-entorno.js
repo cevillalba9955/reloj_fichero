@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:http';
 import { crearApp } from '../../src/web/server.js';
+import { rolesPermisivoPath } from './acl-entorno.js';
 
 // feature 014 — Entorno de pruebas de contrato/integración de la página de
 // Configuración: servidor web real (crearApp) sobre un `.env` y unos JSON de
@@ -53,6 +54,9 @@ export async function crearEntornoConfiguracion({
     PRESENTISMO_MOTIVOS_AUSENCIA_CONFIG: motivosPath,
     PRESENTISMO_REPO_DIR: join(raiz, 'repo'),
     PRESENTISMO_LOG_DIR: join(raiz, 'logs'),
+    // feature 016 — permisivo por defecto (ver tests/helpers/acl-entorno.js);
+    // esta página ahora requiere rol configurador (FR-007) para operar.
+    ACL_ROLES_CONFIG: rolesPermisivoPath(),
     ...envExtra,
   };
   const app = crearApp({ env });
