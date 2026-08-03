@@ -104,6 +104,21 @@ export default function PaginaVacaciones({ cliente = clientePorDefecto }) {
         <>
           <h2>Control de vacaciones anual</h2>
 
+          {(() => {
+            // La fecha de próximo incremento anual es la misma para todos
+            // los legajos (no depende de fechaIngreso, solo de "hoy" +
+            // config de incrementoAnual) — se muestra una sola vez acá en
+            // vez de repetirla en cada fila de la grilla.
+            const proximaFechaIncremento = estado.legajos.find((f) => f.proximoIncremento)?.proximoIncremento;
+            return (
+              proximaFechaIncremento && (
+                <p className="vacaciones-proximo-incremento">
+                  Próxima fecha de incremento: {proximaFechaIncremento}
+                </p>
+              )
+            );
+          })()}
+
           {mensajeAsignacion && (
             <Alert
               type="success"

@@ -86,7 +86,7 @@ export default function FormularioConexionReloj({ cliente }) {
   }
 
   return (
-    <Form form={form} layout="vertical" onFinish={guardar} className="formulario-conexion-reloj">
+    <Form form={form} layout="horizontal" onFinish={guardar} className="formulario-conexion-reloj">
       <Form.Item
         label="IP / host del reloj"
         name="host"
@@ -102,15 +102,23 @@ export default function FormularioConexionReloj({ cliente }) {
         <InputNumber min={1} max={65535} style={{ width: '100%' }} />
       </Form.Item>
 
-      <h4>Parámetros del servicio</h4>
 
       <Form.Item
         label="Tiempo de espera por consulta (ms)"
         name="timeoutMs"
         rules={[{ required: true, type: 'number', min: 1, message: 'Debe ser un entero positivo' }]}
-      >
+        >
         <InputNumber min={1} style={{ width: '100%' }} />
       </Form.Item>
+
+      <Space>
+        <Button onClick={probarConexion} loading={probando} disabled={guardando}>
+          Probar conexión
+        </Button>
+      </Space>
+
+      <h4>Parámetros del servicio</h4>
+
       <Form.Item
         label="Frecuencia de re-consulta (ms)"
         name="tickIntervalMs"
@@ -180,10 +188,7 @@ export default function FormularioConexionReloj({ cliente }) {
         />
       )}
 
-      <Space>
-        <Button onClick={probarConexion} loading={probando} disabled={guardando}>
-          Probar conexión
-        </Button>
+      <Space>  
         <Button type="primary" htmlType="submit" loading={guardando} disabled={probando}>
           Guardar
         </Button>

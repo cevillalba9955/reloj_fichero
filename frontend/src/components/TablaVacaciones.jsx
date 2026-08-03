@@ -25,14 +25,16 @@ export default function TablaVacaciones({ legajos, onSeleccionar = null, onAsign
           `${fila.antiguedadAnios} año(s)`
         ),
     },
+    { title: 'Fecha ingreso', key: 'fechaIngreso', render: (_, fila) => fila.fechaIngreso ?? '—' },
     { title: 'Saldo', dataIndex: 'saldo', key: 'saldo' },
     {
+      // La fecha del próximo incremento es común a todos los legajos (no
+      // depende de fechaIngreso) y se muestra una sola vez fuera de la
+      // grilla (ver PaginaVacaciones); acá solo la cantidad de días.
       title: 'Próximo incremento',
       key: 'proximoIncremento',
       render: (_, fila) =>
-        fila.proximoIncremento
-          ? `${fila.proximoIncremento} (+${fila.proximoIncrementoDias} día(s))`
-          : '—',
+        fila.proximoIncrementoDias != null ? `+${fila.proximoIncrementoDias} día(s)` : '—',
     },
   ];
 

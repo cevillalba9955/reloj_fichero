@@ -18,12 +18,13 @@ function clienteMock() {
   };
 }
 
-test('muestra las 3 pestañas de Configuración', async () => {
+test('muestra las 4 pestañas de Configuración', async () => {
   render(<PaginaConfiguracion cliente={clienteMock()} />);
 
   expect(screen.getByRole('tab', { name: 'Reloj y servicio' })).toBeInTheDocument();
   expect(screen.getByRole('tab', { name: 'Motivos de ausencia' })).toBeInTheDocument();
   expect(screen.getByRole('tab', { name: 'Categorías y modalidades' })).toBeInTheDocument();
+  expect(screen.getByRole('tab', { name: 'Padrón' })).toBeInTheDocument();
 });
 
 test('permite cambiar entre pestañas', async () => {

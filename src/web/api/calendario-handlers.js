@@ -40,15 +40,29 @@ function periodoRequeridoAntesDe(periodo, periodos) {
   return periodoSiguiente(max);
 }
 
-// 013-reestructurar-data-periodos (FR-003): si `P<periodo>/padron.json` no
-// existe todavía, lo crea a partir del padrón ya cableado (`ctx.categoryProvider`,
-// snapshot local del mes en curso). Best-effort: si esa fuente todavía no
-// tiene nada que ofrecer (p. ej. nunca se corrió `sincronizar-padron`), no
-// bloquea la generación del calendario (edge case del spec: no fallar de
-// forma confusa).
+// 013-reestructurar-data-periodos (FR-003) + fix vacaciones: si
+// `P<periodo>/padron.json` no existe todavía, lo crea. Al iniciar el período
+// EN CURSO (el único caso en que Oracle tiene sentido: solo expone el padrón
+// activo AHORA, no el de un período pasado) se intenta primero sincronizar
+// desde Oracle (`ctx.sincronizarPadronOracle`, trae fechaIngreso real). Si
+// Oracle no está configurado/disponible, o el período no es el actual (por
+// ejemplo, completar un hueco atrasado), cae al fallback de copiar el
+// snapshot local ya cableado (`ctx.categoryProvider`). Best-effort en ambos
+// casos: si ninguna fuente tiene nada que ofrecer todavía, no bloquea la
+// generación del calendario (edge case del spec: no fallar de forma confusa).
 async function asegurarPadronDelPeriodo(ctx, periodo) {
   const filePath = join(rutaCarpetaPeriodo(ctx.repoDir, periodo), ARCHIVO_PADRON);
   if (existsSync(filePath)) return;
+
+  if (periodo === mesActualPeriodo() && ctx.sincronizarPadronOracle) {
+    try {
+      await ctx.sincronizarPadronOracle();
+      return;
+    } catch {
+      // Oracle no configurado/disponible: cae al fallback de copiar el snapshot local.
+    }
+  }
+
   try {
     const activos = await ctx.categoryProvider.listar();
     if (activos.length === 0) return;

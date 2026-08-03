@@ -3,6 +3,7 @@ import { crearClienteConfiguracion } from '../api/configuracion-client.js';
 import FormularioConexionReloj from './FormularioConexionReloj.jsx';
 import TablaMotivosAusencia from './TablaMotivosAusencia.jsx';
 import FormularioCategoriasModalidades from './FormularioCategoriasModalidades.jsx';
+import PanelPadron from './PanelPadron.jsx';
 
 // feature 014 — Página "Configuración": tres secciones independientes (una
 // por historia de usuario), cada una con su propio guardado — un error de
@@ -28,6 +29,11 @@ export default function PaginaConfiguracion({ cliente = clientePorDefecto }) {
       key: 'categorias',
       label: 'Categorías y modalidades',
       children: <FormularioCategoriasModalidades cliente={cliente} />,
+    },
+    {
+      key: 'padron',
+      label: 'Padrón',
+      children: <PanelPadron cliente={cliente} />,
     },
   ];
 
