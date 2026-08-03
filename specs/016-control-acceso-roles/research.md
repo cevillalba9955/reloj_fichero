@@ -48,6 +48,25 @@ está ausente, vacío, o su valor no aparece en el mapeo, el rol resuelto es
   explícitamente la Assumption del spec ("no se requiere una pantalla de
   inicio de sesión propia de esta aplicación").
 
+**Actualización (2026-07-28) — mecanismo real confirmado**: la app se
+embebe como **iframe** dentro de una página de APEX (`research/p00023.yaml`,
+página 23 "FICHADA", región tipo URL). Un iframe no puede recibir un header
+inyectado desde afuera (eso solo lo hace un proxy intermedio, que acá no
+existe), así que el "header HTTP" de la decisión de arriba se sigue
+usando tal cual del lado del backend, pero quien se lo pasa al frontend
+cambia: APEX pasa el rol directo por el query string de la URL del
+iframe (`?rol=...`, sustituyendo un ítem de APEX), y el frontend
+(`frontend/src/utils/rol-apex.js`) lo lee una vez al cargar y lo reenvía
+como el mismo header `X-Apex-Rol` en cada llamada a `/api/*`. Riesgo
+aceptado explícitamente: ese valor es editable desde las herramientas de
+desarrollador del navegador; se acepta por ser una app de red interna.
+Detalle completo, incluida la configuración necesaria del lado de APEX:
+[contracts/apex-iframe-embed.md](./contracts/apex-iframe-embed.md).
+`exigirRol`/`resolverRolActual` (`src/web/acl/autorizacion.js`) no
+cambiaron nada — la interfaz reemplazable ya prevista acá absorbió el
+mecanismo real sin tocar la lógica de autorización, tal como estaba
+planeado.
+
 ## 2. Dónde y cómo se aplica la autorización
 
 **Decisión**: un módulo nuevo (`src/web/acl/autorizacion.js`) resuelve el rol

@@ -1,10 +1,12 @@
+import { fetchConRol } from '../utils/rol-apex.js';
+
 // feature 010 — Cliente de datos de la página "Fichadas de Hoy". Es el ÚNICO
 // acceso a datos de la UI: habla solo con la API `/api` (Principio I). No
 // conoce Oracle, el reloj ni el filesystem del dominio. `fetchImpl` es
 // inyectable para tests. Mismo patrón que calendario-client.js.
 
 export function crearClienteFichadasHoy({ fetchImpl, base = '/api' } = {}) {
-  const doFetch = fetchImpl ?? ((...args) => globalThis.fetch(...args));
+  const doFetch = fetchImpl ?? fetchConRol;
 
   async function pedir(path, opts) {
     const res = await doFetch(`${base}${path}`, opts);

@@ -1,9 +1,11 @@
+import { fetchConRol } from '../utils/rol-apex.js';
+
 // feature 016 — Cliente de datos del Control de Acceso. Único acceso a
 // datos de la UI: habla solo con la API `/api` (Principio I). Mismo patrón
 // que configuracion-client.js / resumen-periodo-client.js.
 
 export function crearClienteAcl({ fetchImpl, base = '/api' } = {}) {
-  const doFetch = fetchImpl ?? ((...args) => globalThis.fetch(...args));
+  const doFetch = fetchImpl ?? fetchConRol;
 
   async function pedir(path) {
     const res = await doFetch(`${base}${path}`);

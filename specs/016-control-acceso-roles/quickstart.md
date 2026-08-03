@@ -4,6 +4,13 @@ Guía de validación end-to-end de las 3 historias de usuario. Formas de
 request/response en `contracts/web-api-acl.md`; reglas de resolución del rol
 en `data-model.md` y `research.md`.
 
+Los ejemplos de acá usan `curl` con el header `X-Apex-Rol` directamente
+contra la API — siguen siendo válidos tal cual, porque el backend nunca
+cambió. Para probar desde el navegador simulando cómo lo hace APEX (rol
+en la URL del iframe, no un header), ver
+[contracts/apex-iframe-embed.md](./contracts/apex-iframe-embed.md)
+("Cómo probarlo").
+
 ## Prerrequisitos
 
 - Node.js 20+, dependencias instaladas (`npm install` en la raíz y en
@@ -56,9 +63,10 @@ npm run web
    curl -i http://localhost:4173/api/acl/mi-rol -H "X-Apex-Rol: RRHH_EDITOR"
    ```
    Esperado: `{ "rol": "editor" }`.
-2. Desde la interfaz (con ese mismo header, si se prueba vía un proxy que lo
-   inyecte, o simulándolo en el cliente HTTP de prueba), completar de punta a
-   punta: corregir una fichada, registrar una pausa/retiro anticipado,
+2. Desde la interfaz, entrando con `?rol=RRHH_EDITOR` en la URL (simula lo
+   que hace APEX al armar la URL del iframe, ver
+   `contracts/apex-iframe-embed.md`), completar de punta a punta: corregir
+   una fichada, registrar una pausa/retiro anticipado,
    justificar y luego quitar la justificación de una ausencia, asignar y
    revertir una asignación de vacaciones, y generar/cerrar/reabrir un
    período. Todas deben completarse con éxito, igual que antes de esta

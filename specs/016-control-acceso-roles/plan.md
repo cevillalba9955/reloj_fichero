@@ -8,9 +8,13 @@
 
 Agrega control de acceso por rol (Lector / Editor / Configurador,
 jerárquicos y acumulativos) a la API web y a la SPA React existentes. El
-rol de cada request se resuelve leyendo un header de identidad (placeholder
-reemplazable, ver research.md — el mecanismo real de APEX aún no está
-definido) y traduciéndolo con un mapeo fijo nuevo (`config/roles.json`); si
+rol de cada request se resuelve leyendo un header de identidad (`X-Apex-Rol`)
+y traduciéndolo con un mapeo fijo nuevo (`config/roles.json`); el backend
+no sabe ni le importa quién pone ese header — la app está embebida como
+iframe en una página de APEX, que pasa el rol por la URL del iframe y el
+frontend lo reenvía como ese header en cada llamada a `/api` (mecanismo
+confirmado 2026-07-28, ver research.md §1 y
+`contracts/apex-iframe-embed.md`). Si
 no se puede resolver, el rol cae a `lector` (FR-004). El servidor rechaza
 con `403 ACCESO_DENEGADO` toda operación de escritura que el rol no
 autorice, y toda operación (lectura o escritura) sobre `/api/configuracion/*`
@@ -63,10 +67,10 @@ comparaciones en memoria sobre un objeto ya parseado (mismo costo que releer
 `categorias.json`/`motivos-ausencia.json` hoy, despreciable para el volumen
 de uso de este sistema); no agrega latencia perceptible a ninguna ruta.
 
-**Constraints**: El mecanismo real de identificación de usuario vía APEX no
-está definido (fuera de alcance, ver Assumptions del spec) — esta feature
-solo entrega el punto de enchufe reemplazable (research.md §1) y el mapeo
-fijo. Ningún control de acceso puede depender únicamente de la interfaz
+**Constraints**: El rol viaja en la URL del iframe (`?rol=...`), editable
+desde las herramientas de desarrollador del navegador — riesgo aceptado
+explícitamente (2026-07-28) por ser una app de red interna; ver
+`contracts/apex-iframe-embed.md`. Ningún control de acceso puede depender únicamente de la interfaz
 (FR-009); todo chequeo relevante también se aplica en el servidor. No se
 agrega pantalla de login propia. No se modifica el campo `autor` de texto
 libre ya existente en vacaciones ni se construye auditoría de cambios
