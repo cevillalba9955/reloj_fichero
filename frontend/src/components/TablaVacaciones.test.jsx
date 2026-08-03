@@ -17,13 +17,15 @@ function legajoFila(over = {}) {
   };
 }
 
-test('muestra una fila por legajo con antigüedad, saldo y próximo incremento (con la cantidad de días)', () => {
+test('muestra una fila por legajo con fecha de ingreso, antigüedad, saldo y próximo incremento (solo la cantidad de días)', () => {
   render(<TablaVacaciones legajos={[legajoFila()]} />);
   const filas = screen.getAllByRole('row').slice(1);
   expect(filas).toHaveLength(1);
+  expect(filas[0]).toHaveTextContent('2018-03-01');
   expect(filas[0]).toHaveTextContent('8 año(s)');
   expect(filas[0]).toHaveTextContent('3');
-  expect(filas[0]).toHaveTextContent('2026-11-01 (+21 día(s))');
+  expect(filas[0]).toHaveTextContent('+21 día(s)');
+  expect(filas[0]).not.toHaveTextContent('2026-11-01 (+21');
   expect(filas[0]).not.toHaveClass('pendiente');
 });
 

@@ -47,6 +47,15 @@ test('carga el listado al montar y muestra la tabla', async () => {
   expect(cliente.listar).toHaveBeenCalledTimes(1);
 });
 
+// La fecha de próximo incremento es común a todos los legajos: se muestra
+// una sola vez fuera de la grilla, no repetida por fila.
+test('muestra la fecha de próximo incremento una sola vez, fuera de la grilla', async () => {
+  const cliente = clienteMock();
+  renderConRol('editor', <PaginaVacaciones cliente={cliente} />);
+  await screen.findByRole('table');
+  expect(await screen.findByText('Próxima fecha de incremento: 2026-11-01')).toBeInTheDocument();
+});
+
 test('un fallo de carga muestra el error y Reintentar vuelve a pedir', async () => {
   const cliente = clienteMock({
     listar: vi.fn().mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce({ legajos: [legajoFila()] }),

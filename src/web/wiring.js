@@ -10,6 +10,7 @@ import { createFilePadronCategoryProvider } from '../presentismo/adapters/file-p
 import { createArchiveFichadasProvider } from '../presentismo/adapters/archive-fichadas-provider.js';
 import { createLocalFileActiveEmployeesProvider } from '../roster/local-file-active-employees-provider.js';
 import { createConsultarRelojCliente } from '../presentismo/service/consultar-reloj-cliente.js';
+import { crearSincronizadorPadron } from './padron-sync.js';
 
 // feature 007 — Cableado del backend web. Resuelve configuración desde el
 // entorno (sin argumentos CLI) con la misma precedencia y defaults que
@@ -108,6 +109,10 @@ export function crearContextoWeb(env = process.env) {
   const fichadasProvider = createArchiveFichadasProvider({ repoDir });
   const activeEmployeesProvider = createLocalFileActiveEmployeesProvider({ repoDir });
   const consultarReloj = createConsultarRelojCliente({ baseUrl: controlUrl });
+  // fix vacaciones — sincroniza el padrón (legajo+categoría+nombre+fechaIngreso)
+  // desde Oracle bajo demanda: al iniciar un período nuevo (calendario-handlers.js)
+  // y desde el botón manual de la página Configuración (padron-handlers.js).
+  const sincronizarPadronOracle = crearSincronizadorPadron({ repoDir, env });
   const service = createCalcularPresentismoService({
     repo,
     categoriasConfig,
@@ -132,6 +137,7 @@ export function crearContextoWeb(env = process.env) {
     categoryProvider,
     activeEmployeesProvider,
     consultarReloj,
+    sincronizarPadronOracle,
     modoResumenPeriodo,
     // feature 014 — rutas de archivo que necesita configuracion-handlers.js
     // para leer/escribir (env-file.js reescribe rutaEnv; categorias-config.js

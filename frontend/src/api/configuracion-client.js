@@ -50,5 +50,8 @@ export function crearClienteConfiguracion({ fetchImpl, base = '/api' } = {}) {
     eliminarModalidad: (nombre) => pedir(`/configuracion/categorias/modalidades/${encodeURIComponent(nombre)}`, { method: 'DELETE' }),
     crearCategoria: (categoria) => post('/configuracion/categorias/categorias', categoria),
     editarCategoria: (codigo, cambios) => put(`/configuracion/categorias/categorias/${encodeURIComponent(codigo)}`, cambios),
+
+    // fix vacaciones — botón manual de sincronización del padrón desde Oracle.
+    sincronizarPadron: () => post('/padron/sincronizar', {}),
   };
 }
