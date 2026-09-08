@@ -13,7 +13,7 @@ function vista(over = {}) {
     resumen: {
       encabezado: { periodoId: '202607', tramo: 'Mes', empleados: 2, totalHoras: 930, rangoFechas: { desde: '2026-07-01', hasta: '2026-07-31' } },
       filas: [
-        { legajo: 1, nombre: 'Ana Pérez', modalidad: 'Mensual', horasTrabajadas: 930, completas: 2, incompletas: 1, ausencias: 0, llegadasTarde: 0, retirosAnticipados: 0, correcciones: 1, feriado: 0, licencia: 0, vacaciones: 0, anomalia: null },
+        { legajo: 1, nombre: 'Ana Pérez', modalidad: 'Mensual', horasTrabajadas: 930, completas: 8, incompletas: 1, ausencias: 0, llegadasTarde: 2, retirosAnticipados: 0, correcciones: 1, feriado: 1, licencia: 0, vacaciones: 0, anomalia: null },
         { legajo: 9, nombre: 'Zoe Anómala', modalidad: null, horasTrabajadas: 0, completas: 0, incompletas: 0, ausencias: 0, llegadasTarde: 0, retirosAnticipados: 0, correcciones: 0, feriado: 0, licencia: 0, vacaciones: 0, anomalia: 'empleado sin categoría en el padrón' },
       ],
     },
@@ -63,9 +63,24 @@ test('detalle: renderiza los días del empleado, sus marcas y el subtotal en H:M
   expect(screen.getByText('Subtotal horas: 15:30')).toBeInTheDocument();
 });
 
-test('no muestra la columna Modalidad', () => {
+test('la grilla de resumen no tiene columnas Modalidad, Incompletas ni Correcc.', () => {
   render(<InformeCierrePrintable vista={vista()} onCerrar={() => {}} />);
-  expect(screen.queryByText('Modalidad')).not.toBeInTheDocument();
+  const tablaResumen = document.querySelector('.informe-resumen');
+  expect(within(tablaResumen).queryByText('Modalidad')).not.toBeInTheDocument();
+  expect(within(tablaResumen).queryByText('Incompletas')).not.toBeInTheDocument();
+  expect(within(tablaResumen).queryByText('Correcc.')).not.toBeInTheDocument();
+});
+
+test('la grilla de resumen oculta los ceros y muestra sólo los valores > 0', () => {
+  render(<InformeCierrePrintable vista={vista()} onCerrar={() => {}} />);
+  const tablaResumen = document.querySelector('.informe-resumen');
+  // fila 1: completas 8, llegadasTarde 2, feriado 1; el resto en 0 → sin texto
+  expect(within(tablaResumen).getByText('8')).toBeInTheDocument();
+  expect(within(tablaResumen).getByText('2')).toBeInTheDocument();
+  // "15:30" aparece 2 veces: la fila del empleado y el total del pie
+  expect(within(tablaResumen).getAllByText('15:30')).toHaveLength(2);
+  // ningún cero visible (celdas en 0 quedan vacías)
+  expect(within(tablaResumen).queryByText('0')).not.toBeInTheDocument();
 });
 
 test('ofrece la acción "Descargar PDF"', () => {

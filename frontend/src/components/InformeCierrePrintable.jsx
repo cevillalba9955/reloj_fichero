@@ -22,6 +22,15 @@ function horas(min) {
   return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
 }
 
+// En la grilla de resumen los ceros se ocultan para que resalten las celdas
+// con valores. `num` para contadores, `hhmm` para la columna de horas.
+function num(v) {
+  return v ? v : '';
+}
+function hhmm(min) {
+  return min ? horas(min) : '';
+}
+
 function marcasDia(d) {
   const marcas = [];
   if (d.corregida) marcas.push('corregida');
@@ -66,11 +75,9 @@ function TablaResumen({ resumen }) {
           <th>Nombre</th>
           <th>Horas computadas</th>
           <th>Completas</th>
-          <th>Incompletas</th>
           <th>Ausencias</th>
           <th>Ll. tarde</th>
           <th>Ret. antic.</th>
-          <th>Correcc.</th>
           <th>Feriado</th>
           <th>Licencia</th>
           <th>Vacaciones</th>
@@ -82,21 +89,19 @@ function TablaResumen({ resumen }) {
             <td>{f.legajo}</td>
             <td>{f.nombre ?? '—'}</td>
             {f.anomalia ? (
-              <td colSpan={10} className="celda-anomalia" role="alert">
+              <td colSpan={8} className="celda-anomalia" role="alert">
                 Anomalía: {f.anomalia}
               </td>
             ) : (
               <>
-                <td>{horas(f.horasTrabajadas)}</td>
-                <td>{f.completas}</td>
-                <td>{f.incompletas}</td>
-                <td>{f.ausencias}</td>
-                <td>{f.llegadasTarde}</td>
-                <td>{f.retirosAnticipados}</td>
-                <td>{f.correcciones}</td>
-                <td>{f.feriado}</td>
-                <td>{f.licencia}</td>
-                <td>{f.vacaciones}</td>
+                <td>{hhmm(f.horasTrabajadas)}</td>
+                <td>{num(f.completas)}</td>
+                <td>{num(f.ausencias)}</td>
+                <td>{num(f.llegadasTarde)}</td>
+                <td>{num(f.retirosAnticipados)}</td>
+                <td>{num(f.feriado)}</td>
+                <td>{num(f.licencia)}</td>
+                <td>{num(f.vacaciones)}</td>
               </>
             )}
           </tr>
@@ -106,7 +111,7 @@ function TablaResumen({ resumen }) {
         <tr>
           <td colSpan={2}>Total ({resumen.encabezado.empleados} empleados)</td>
           <td>{horas(resumen.encabezado.totalHoras)}</td>
-          <td colSpan={9} />
+          <td colSpan={7} />
         </tr>
       </tfoot>
     </table>
