@@ -11,9 +11,9 @@ function vista(over = {}) {
     sello: { periodoId: '202607', tramo: 'Mes', modo: 'automatico', emitidoEn: '2026-08-01T10:00:00.000Z', autor: 'ana' },
     obsoleto: false,
     resumen: {
-      encabezado: { periodoId: '202607', tramo: 'Mes', empleados: 2, totalHoras: 15.5, rangoFechas: { desde: '2026-07-01', hasta: '2026-07-31' } },
+      encabezado: { periodoId: '202607', tramo: 'Mes', empleados: 2, totalHoras: 930, rangoFechas: { desde: '2026-07-01', hasta: '2026-07-31' } },
       filas: [
-        { legajo: 1, nombre: 'Ana Pérez', modalidad: 'Mensual', horasTrabajadas: 15.5, completas: 2, incompletas: 1, ausencias: 0, llegadasTarde: 0, retirosAnticipados: 0, correcciones: 1, feriado: 0, licencia: 0, vacaciones: 0, anomalia: null },
+        { legajo: 1, nombre: 'Ana Pérez', modalidad: 'Mensual', horasTrabajadas: 930, completas: 2, incompletas: 1, ausencias: 0, llegadasTarde: 0, retirosAnticipados: 0, correcciones: 1, feriado: 0, licencia: 0, vacaciones: 0, anomalia: null },
         { legajo: 9, nombre: 'Zoe Anómala', modalidad: null, horasTrabajadas: 0, completas: 0, incompletas: 0, ausencias: 0, llegadasTarde: 0, retirosAnticipados: 0, correcciones: 0, feriado: 0, licencia: 0, vacaciones: 0, anomalia: 'empleado sin categoría en el padrón' },
       ],
     },
@@ -21,10 +21,10 @@ function vista(over = {}) {
       encabezado: { periodoId: '202607', tramo: 'Mes', empleados: 2 },
       secciones: [
         {
-          legajo: 1, nombre: 'Ana Pérez', modalidad: 'Mensual', anomalia: null, subtotalHoras: 15.5,
+          legajo: 1, nombre: 'Ana Pérez', modalidad: 'Mensual', anomalia: null, subtotalHoras: 930,
           dias: [
-            { fecha: '2026-07-01', diaSemana: 'Miércoles', clasificacion: 'Laborable', estado: 'Completa', entrada: '07:00', salida: '15:30', horas: 8, llegadaTarde: false, corregida: true, pausas: [], justificacion: null, requiereJustificacionRevision: false },
-            { fecha: '2026-07-02', diaSemana: 'Jueves', clasificacion: 'Laborable', estado: 'Incompleta', entrada: '07:00', salida: null, horas: 7.5, llegadaTarde: false, corregida: false, pausas: [], justificacion: { motivoId: 'enf', etiquetaMotivo: 'Enfermedad', tipoPago: 'Paga' }, requiereJustificacionRevision: false },
+            { fecha: '2026-07-01', diaSemana: 'Miércoles', clasificacion: 'Laborable', estado: 'Completa', entrada: '07:00', salida: '15:00', horas: 480, llegadaTarde: false, corregida: true, pausas: [], justificacion: null, requiereJustificacionRevision: false },
+            { fecha: '2026-07-02', diaSemana: 'Jueves', clasificacion: 'Laborable', estado: 'Incompleta', entrada: '07:00', salida: null, horas: 450, llegadaTarde: false, corregida: false, pausas: [], justificacion: { motivoId: 'enf', etiquetaMotivo: 'Enfermedad', tipoPago: 'Paga' }, requiereJustificacionRevision: false },
           ],
         },
         { legajo: 9, nombre: 'Zoe Anómala', modalidad: null, anomalia: 'empleado sin categoría en el padrón', subtotalHoras: 0, dias: [] },
@@ -54,12 +54,23 @@ test('resumen: una fila por empleado, total general y fila de anomalía señalad
   expect(within(tablaResumen).getByText(/Total \(2 empleados\)/)).toBeInTheDocument();
 });
 
-test('detalle: renderiza los días del empleado, sus marcas y el subtotal', () => {
+test('detalle: renderiza los días del empleado, sus marcas y el subtotal en H:MM', () => {
   render(<InformeCierrePrintable vista={vista()} onCerrar={() => {}} />);
   expect(screen.getByText('2026-07-01')).toBeInTheDocument();
   expect(screen.getByText(/corregida/)).toBeInTheDocument();
   expect(screen.getByText(/Enfermedad \(Paga\)/)).toBeInTheDocument();
-  expect(screen.getByText(/Subtotal horas: 15,5|Subtotal horas: 15\.5/)).toBeInTheDocument();
+  // las horas del dominio están en minutos → se muestran como H:MM (930 → 15:30)
+  expect(screen.getByText('Subtotal horas: 15:30')).toBeInTheDocument();
+});
+
+test('no muestra la columna Modalidad', () => {
+  render(<InformeCierrePrintable vista={vista()} onCerrar={() => {}} />);
+  expect(screen.queryByText('Modalidad')).not.toBeInTheDocument();
+});
+
+test('ofrece la acción "Descargar PDF"', () => {
+  render(<InformeCierrePrintable vista={vista()} onCerrar={() => {}} />);
+  expect(screen.getByRole('button', { name: 'Descargar PDF' })).toBeInTheDocument();
 });
 
 test('pendientes: lista jornadas incompletas, anomalías y ajustes', () => {

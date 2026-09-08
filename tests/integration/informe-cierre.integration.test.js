@@ -82,6 +82,14 @@ test('cerrar el período emite y guarda el informe (modo automático); reabrir l
     const g4 = await getJson(e, `/api/calendarios/${P}/informe-cierre`);
     assert.equal(g4.body.obsoleto, false);
     assert.equal(g4.body.sello.modo, 'automatico');
+
+    // el detalle omite los días No Laborables (sábados/domingos)
+    for (const seccion of g4.body.detalle.secciones) {
+      assert.ok(
+        seccion.dias.every((d) => d.clasificacion !== 'No Laborable'),
+        'ningún renglón del detalle debe ser un día No Laborable',
+      );
+    }
   } finally {
     e.close();
   }
