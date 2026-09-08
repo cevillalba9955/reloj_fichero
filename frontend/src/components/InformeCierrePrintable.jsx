@@ -56,6 +56,7 @@ const ESTILOS = `
   .informe-detalle td:nth-child(n+4):nth-child(-n+7) { text-align: right; }
   .fila-anomalia td, .celda-anomalia { color: #a8071a; }
   .subtotal-empleado { margin: 2px 0 10px; font-weight: 600; }
+  .leyenda-presentismo { margin: 2px 0 10px; }
   .pendientes-lista h5 { margin: 8px 0 2px; }
   .pendientes-vacio { font-style: italic; }
   @media print {
@@ -67,54 +68,70 @@ const ESTILOS = `
 `;
 
 function TablaResumen({ resumen }) {
+  const { encabezado } = resumen;
+  const pct =
+    encabezado.presentismoGeneral != null
+      ? (encabezado.presentismoGeneral * 100).toLocaleString('es-AR', { maximumFractionDigits: 1 })
+      : null;
   return (
-    <table className="informe-tabla informe-resumen">
-      <thead>
-        <tr>
-          <th>Legajo</th>
-          <th>Nombre</th>
-          <th>Horas computadas</th>
-          <th>Completas</th>
-          <th>Ausencias</th>
-          <th>Ll. tarde</th>
-          <th>Ret. antic.</th>
-          <th>Feriado</th>
-          <th>Licencia</th>
-          <th>Vacaciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        {resumen.filas.map((f) => (
-          <tr key={f.legajo} className={f.anomalia ? 'fila-anomalia' : undefined}>
-            <td>{f.legajo}</td>
-            <td>{f.nombre ?? '—'}</td>
-            {f.anomalia ? (
-              <td colSpan={8} className="celda-anomalia" role="alert">
-                Anomalía: {f.anomalia}
-              </td>
-            ) : (
-              <>
-                <td>{hhmm(f.horasTrabajadas)}</td>
-                <td>{num(f.completas)}</td>
-                <td>{num(f.ausencias)}</td>
-                <td>{num(f.llegadasTarde)}</td>
-                <td>{num(f.retirosAnticipados)}</td>
-                <td>{num(f.feriado)}</td>
-                <td>{num(f.licencia)}</td>
-                <td>{num(f.vacaciones)}</td>
-              </>
-            )}
+    <>
+      <table className="informe-tabla informe-resumen">
+        <thead>
+          <tr>
+            <th>Legajo</th>
+            <th>Nombre</th>
+            <th>Horas</th>
+            <th>Completas</th>
+            <th>Ausencias</th>
+            <th>Ll. tarde</th>
+            <th>Ret. antic.</th>
+            <th>Feriado</th>
+            <th>Licencia</th>
+            <th>Vacaciones</th>
           </tr>
-        ))}
-      </tbody>
-      <tfoot>
-        <tr>
-          <td colSpan={2}>Total ({resumen.encabezado.empleados} empleados)</td>
-          <td>{horas(resumen.encabezado.totalHoras)}</td>
-          <td colSpan={7} />
-        </tr>
-      </tfoot>
-    </table>
+        </thead>
+        <tbody>
+          {resumen.filas.map((f) => (
+            <tr key={f.legajo} className={f.anomalia ? 'fila-anomalia' : undefined}>
+              <td>{f.legajo}</td>
+              <td>{f.nombre ?? '—'}</td>
+              {f.anomalia ? (
+                <td colSpan={8} className="celda-anomalia" role="alert">
+                  Anomalía: {f.anomalia}
+                </td>
+              ) : (
+                <>
+                  <td>{hhmm(f.horasTrabajadas)}</td>
+                  <td>{num(f.completas)}</td>
+                  <td>{num(f.ausencias)}</td>
+                  <td>{num(f.llegadasTarde)}</td>
+                  <td>{num(f.retirosAnticipados)}</td>
+                  <td>{num(f.feriado)}</td>
+                  <td>{num(f.licencia)}</td>
+                  <td>{num(f.vacaciones)}</td>
+                </>
+              )}
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colSpan={2}>Total ({encabezado.empleados} empleados)</td>
+            <td>{horas(encabezado.totalHoras)}</td>
+            <td />
+            <td>{num(encabezado.totalAusencias)}</td>
+            <td colSpan={5} />
+          </tr>
+        </tfoot>
+      </table>
+      {pct != null && (
+        <p className="leyenda-presentismo">
+          Presentismo general: <strong>{pct} %</strong> — {horas(encabezado.totalHoras)} hs computadas /{' '}
+          {horas(encabezado.totalHorasEsperadas)} hs esperadas ({encabezado.empleados} empleados). Ausencias totales:{' '}
+          {encabezado.totalAusencias}.
+        </p>
+      )}
+    </>
   );
 }
 

@@ -42,6 +42,7 @@ function filaNormal(over = {}) {
     nombre: 'Ada Lovelace',
     modalidad: 'Mensual',
     horasTrabajadas: horas,
+    horasEsperadas: horas,
     completas: 1,
     incompletas: 0,
     ausencias: 0,
@@ -87,6 +88,25 @@ test('resumen.encabezado: totalHoras = Σ filas, empleados = filas.length', () =
   assert.equal(resumen.encabezado.empleados, 2);
   assert.equal(resumen.filas.length, 2);
   assert.deepEqual(resumen.encabezado.rangoFechas, base.rangoFechas);
+});
+
+test('resumen.encabezado: total de ausencias, horas esperadas y presentismo general', () => {
+  const filas = [
+    filaNormal({ legajo: 1, horasTrabajadas: 300, horasEsperadas: 400, ausencias: 2 }),
+    filaNormal({ legajo: 2, horasTrabajadas: 100, horasEsperadas: 100, ausencias: 5 }),
+    filaAnomalia, // no aporta a los totales
+  ];
+  const { resumen } = construirInformeCierre({ ...base, filas });
+  assert.equal(resumen.encabezado.totalAusencias, 7);
+  assert.equal(resumen.encabezado.totalHorasEsperadas, 500);
+  // 400 computadas / 500 esperadas = 0.8
+  assert.equal(resumen.encabezado.presentismoGeneral, 0.8);
+});
+
+test('resumen.encabezado: presentismoGeneral null si no hay horas esperadas', () => {
+  const { resumen } = construirInformeCierre({ ...base, filas: [filaAnomalia] });
+  assert.equal(resumen.encabezado.totalHorasEsperadas, 0);
+  assert.equal(resumen.encabezado.presentismoGeneral, null);
 });
 
 test('cuadre resumen ↔ detalle: subtotalHoras de cada sección = horasTrabajadas de su fila (SC-002)', () => {

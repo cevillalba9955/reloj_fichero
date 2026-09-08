@@ -11,10 +11,14 @@ function vista(over = {}) {
     sello: { periodoId: '202607', tramo: 'Mes', modo: 'automatico', emitidoEn: '2026-08-01T10:00:00.000Z', autor: 'ana' },
     obsoleto: false,
     resumen: {
-      encabezado: { periodoId: '202607', tramo: 'Mes', empleados: 2, totalHoras: 930, rangoFechas: { desde: '2026-07-01', hasta: '2026-07-31' } },
+      encabezado: {
+        periodoId: '202607', tramo: 'Mes', empleados: 2, totalHoras: 930,
+        totalAusencias: 3, totalHorasEsperadas: 1200, presentismoGeneral: 930 / 1200,
+        rangoFechas: { desde: '2026-07-01', hasta: '2026-07-31' },
+      },
       filas: [
-        { legajo: 1, nombre: 'Ana Pérez', modalidad: 'Mensual', horasTrabajadas: 930, completas: 8, incompletas: 1, ausencias: 0, llegadasTarde: 2, retirosAnticipados: 0, correcciones: 1, feriado: 1, licencia: 0, vacaciones: 0, anomalia: null },
-        { legajo: 9, nombre: 'Zoe Anómala', modalidad: null, horasTrabajadas: 0, completas: 0, incompletas: 0, ausencias: 0, llegadasTarde: 0, retirosAnticipados: 0, correcciones: 0, feriado: 0, licencia: 0, vacaciones: 0, anomalia: 'empleado sin categoría en el padrón' },
+        { legajo: 1, nombre: 'Ana Pérez', modalidad: 'Mensual', horasTrabajadas: 930, horasEsperadas: 1200, completas: 8, incompletas: 1, ausencias: 3, llegadasTarde: 2, retirosAnticipados: 0, correcciones: 1, feriado: 1, licencia: 0, vacaciones: 0, anomalia: null },
+        { legajo: 9, nombre: 'Zoe Anómala', modalidad: null, horasTrabajadas: 0, horasEsperadas: 0, completas: 0, incompletas: 0, ausencias: 0, llegadasTarde: 0, retirosAnticipados: 0, correcciones: 0, feriado: 0, licencia: 0, vacaciones: 0, anomalia: 'empleado sin categoría en el padrón' },
       ],
     },
     detalle: {
@@ -63,12 +67,32 @@ test('detalle: renderiza los días del empleado, sus marcas y el subtotal en H:M
   expect(screen.getByText('Subtotal horas: 15:30')).toBeInTheDocument();
 });
 
-test('la grilla de resumen no tiene columnas Modalidad, Incompletas ni Correcc.', () => {
+test('la grilla de resumen no tiene columnas Modalidad, Incompletas ni Correcc. y el header de horas es "Horas"', () => {
   render(<InformeCierrePrintable vista={vista()} onCerrar={() => {}} />);
   const tablaResumen = document.querySelector('.informe-resumen');
   expect(within(tablaResumen).queryByText('Modalidad')).not.toBeInTheDocument();
   expect(within(tablaResumen).queryByText('Incompletas')).not.toBeInTheDocument();
   expect(within(tablaResumen).queryByText('Correcc.')).not.toBeInTheDocument();
+  expect(within(tablaResumen).queryByText('Horas computadas')).not.toBeInTheDocument();
+  expect(within(tablaResumen).getByRole('columnheader', { name: 'Horas' })).toBeInTheDocument();
+});
+
+test('totaliza ausencias en el pie de la grilla y muestra la leyenda de presentismo general', () => {
+  render(<InformeCierrePrintable vista={vista()} onCerrar={() => {}} />);
+  // total de ausencias en el pie (fila 1 tiene 3; total 3)
+  const tablaResumen = document.querySelector('.informe-resumen');
+  expect(within(tablaResumen).getAllByText('3').length).toBeGreaterThanOrEqual(2);
+  // leyenda: % de presentismo general (930 / 1200 = 77,5 %) + total ausencias
+  const leyenda = screen.getByText(/Presentismo general:/);
+  expect(leyenda).toHaveTextContent(/77[.,]5\s*%/);
+  expect(leyenda).toHaveTextContent(/Ausencias totales:\s*3/);
+});
+
+test('sin horas esperadas no muestra la leyenda de presentismo', () => {
+  const v = vista();
+  v.resumen.encabezado.presentismoGeneral = null;
+  render(<InformeCierrePrintable vista={v} onCerrar={() => {}} />);
+  expect(screen.queryByText(/Presentismo general:/)).not.toBeInTheDocument();
 });
 
 test('la grilla de resumen oculta los ceros y muestra sólo los valores > 0', () => {
