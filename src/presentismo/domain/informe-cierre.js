@@ -48,10 +48,14 @@ function filaResumenDe(fila) {
   const salida = { legajo: fila.legajo, nombre: fila.nombre ?? null, modalidad: fila.modalidad ?? null };
   if (fila.anomalia) {
     for (const c of CONTADORES) salida[c] = 0;
+    salida.presentismoIndividual = null;
     salida.anomalia = fila.anomalia;
     return salida;
   }
   for (const c of CONTADORES) salida[c] = fila[c] ?? 0;
+  // 018 — presentismo individual (ratio 0..1, o null); ya calculado por
+  // proyectarResumenPeriodo excluyendo los días de vacaciones.
+  salida.presentismoIndividual = fila.presentismoIndividual ?? null;
   salida.anomalia = null;
   return salida;
 }

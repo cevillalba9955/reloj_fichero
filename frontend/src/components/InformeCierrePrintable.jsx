@@ -30,6 +30,10 @@ function num(v) {
 function hhmm(min) {
   return min ? horas(min) : '';
 }
+// Ratio 0..1 → 'X,X %'. Vacío si null/0 (mismo criterio de ocultar ceros).
+function pct(ratio) {
+  return ratio ? `${(ratio * 100).toLocaleString('es-AR', { maximumFractionDigits: 1 })} %` : '';
+}
 
 function marcasDia(d) {
   const marcas = [];
@@ -69,10 +73,7 @@ const ESTILOS = `
 
 function TablaResumen({ resumen }) {
   const { encabezado } = resumen;
-  const pct =
-    encabezado.presentismoGeneral != null
-      ? (encabezado.presentismoGeneral * 100).toLocaleString('es-AR', { maximumFractionDigits: 1 })
-      : null;
+  const pctGeneral = pct(encabezado.presentismoGeneral);
   return (
     <>
       <table className="informe-tabla informe-resumen">
@@ -81,6 +82,7 @@ function TablaResumen({ resumen }) {
             <th>Legajo</th>
             <th>Nombre</th>
             <th>Horas</th>
+            <th>Presentismo</th>
             <th>Completas</th>
             <th>Ausencias</th>
             <th>Ll. tarde</th>
@@ -96,12 +98,13 @@ function TablaResumen({ resumen }) {
               <td>{f.legajo}</td>
               <td>{f.nombre ?? '—'}</td>
               {f.anomalia ? (
-                <td colSpan={8} className="celda-anomalia" role="alert">
+                <td colSpan={9} className="celda-anomalia" role="alert">
                   Anomalía: {f.anomalia}
                 </td>
               ) : (
                 <>
                   <td>{hhmm(f.horasTrabajadas)}</td>
+                  <td>{pct(f.presentismoIndividual)}</td>
                   <td>{num(f.completas)}</td>
                   <td>{num(f.ausencias)}</td>
                   <td>{num(f.llegadasTarde)}</td>
@@ -118,17 +121,18 @@ function TablaResumen({ resumen }) {
           <tr>
             <td colSpan={2}>Total ({encabezado.empleados} empleados)</td>
             <td>{horas(encabezado.totalHoras)}</td>
+            <td>{pctGeneral}</td>
             <td />
             <td>{num(encabezado.totalAusencias)}</td>
             <td colSpan={5} />
           </tr>
         </tfoot>
       </table>
-      {pct != null && (
+      {encabezado.presentismoGeneral != null && (
         <p className="leyenda-presentismo">
-          Presentismo general: <strong>{pct} %</strong> — {horas(encabezado.totalHoras)} hs computadas /{' '}
-          {horas(encabezado.totalHorasEsperadas)} hs esperadas ({encabezado.empleados} empleados). Ausencias totales:{' '}
-          {encabezado.totalAusencias}.
+          Presentismo general: <strong>{pctGeneral}</strong> — {horas(encabezado.totalHoras)} hs computadas /{' '}
+          {horas(encabezado.totalHorasEsperadas)} hs esperadas (excluye días de vacaciones; {encabezado.empleados}{' '}
+          empleados). Ausencias totales: {encabezado.totalAusencias}.
         </p>
       )}
     </>

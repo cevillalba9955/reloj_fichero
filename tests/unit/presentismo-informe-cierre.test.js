@@ -43,6 +43,7 @@ function filaNormal(over = {}) {
     modalidad: 'Mensual',
     horasTrabajadas: horas,
     horasEsperadas: horas,
+    presentismoIndividual: 1,
     completas: 1,
     incompletas: 0,
     ausencias: 0,
@@ -107,6 +108,13 @@ test('resumen.encabezado: presentismoGeneral null si no hay horas esperadas', ()
   const { resumen } = construirInformeCierre({ ...base, filas: [filaAnomalia] });
   assert.equal(resumen.encabezado.totalHorasEsperadas, 0);
   assert.equal(resumen.encabezado.presentismoGeneral, null);
+});
+
+test('resumen.filas: presentismo individual por empleado; anomalía → null', () => {
+  const filas = [filaNormal({ legajo: 1, presentismoIndividual: 0.75 }), filaAnomalia];
+  const { resumen } = construirInformeCierre({ ...base, filas });
+  assert.equal(resumen.filas[0].presentismoIndividual, 0.75);
+  assert.equal(resumen.filas[1].presentismoIndividual, null);
 });
 
 test('cuadre resumen ↔ detalle: subtotalHoras de cada sección = horasTrabajadas de su fila (SC-002)', () => {

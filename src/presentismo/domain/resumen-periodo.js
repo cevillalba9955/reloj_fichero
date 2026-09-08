@@ -90,17 +90,17 @@ export function proyectarResumenPeriodo({ resumen, hoy }) {
   // genera una Asignación de Vacaciones (`MotivoVacaciones.id`, "No paga":
   // sin esta columna propia, quedarían mezclados dentro de `ausencias`).
   let vacaciones = 0;
-  // 018 — horas que se esperaban en el tramo (Laborable + Feriado aportan
-  // jornada esperada; No Laborable no). Mismo criterio que
-  // construirResumen (resumen-presentismo.js). Alimenta el % de presentismo
-  // general del informe de cierre.
+  // 018 — horas que se esperaban en el tramo. Laborable + Feriado aportan
+  // jornada esperada; No Laborable no. Los días de VACACIONES se excluyen: el
+  // empleado no debía trabajar, así que no penalizan su presentismo. Alimenta
+  // el % de presentismo individual y general del informe de cierre.
   let horasEsperadas = 0;
 
   for (const d of detalle) {
     horasTrabajadas += d.horas;
     const esLicencia = d.justificacion?.tipoPago === 'Paga';
     const esVacaciones = d.justificacion?.motivoId === MotivoVacaciones.id;
-    if (d.clasificacion === Clasificacion.LABORABLE || d.clasificacion === Clasificacion.FERIADO) {
+    if ((d.clasificacion === Clasificacion.LABORABLE || d.clasificacion === Clasificacion.FERIADO) && !esVacaciones) {
       horasEsperadas += jornadaEsperada;
     }
     if (d.clasificacion === Clasificacion.FERIADO) feriado += 1;
@@ -118,6 +118,9 @@ export function proyectarResumenPeriodo({ resumen, hoy }) {
     legajo: resumen.legajo,
     horasTrabajadas,
     horasEsperadas,
+    // presentismo individual = horas computadas / horas esperadas (0..1);
+    // null si no hubo horas esperadas (p. ej. todo el tramo de vacaciones).
+    presentismoIndividual: horasEsperadas > 0 ? horasTrabajadas / horasEsperadas : null,
     completas,
     incompletas,
     ausencias,

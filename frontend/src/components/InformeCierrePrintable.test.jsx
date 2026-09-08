@@ -17,8 +17,8 @@ function vista(over = {}) {
         rangoFechas: { desde: '2026-07-01', hasta: '2026-07-31' },
       },
       filas: [
-        { legajo: 1, nombre: 'Ana Pérez', modalidad: 'Mensual', horasTrabajadas: 930, horasEsperadas: 1200, completas: 8, incompletas: 1, ausencias: 3, llegadasTarde: 2, retirosAnticipados: 0, correcciones: 1, feriado: 1, licencia: 0, vacaciones: 0, anomalia: null },
-        { legajo: 9, nombre: 'Zoe Anómala', modalidad: null, horasTrabajadas: 0, horasEsperadas: 0, completas: 0, incompletas: 0, ausencias: 0, llegadasTarde: 0, retirosAnticipados: 0, correcciones: 0, feriado: 0, licencia: 0, vacaciones: 0, anomalia: 'empleado sin categoría en el padrón' },
+        { legajo: 1, nombre: 'Ana Pérez', modalidad: 'Mensual', horasTrabajadas: 930, horasEsperadas: 1200, presentismoIndividual: 930 / 1200, completas: 8, incompletas: 1, ausencias: 3, llegadasTarde: 2, retirosAnticipados: 0, correcciones: 1, feriado: 1, licencia: 0, vacaciones: 0, anomalia: null },
+        { legajo: 9, nombre: 'Zoe Anómala', modalidad: null, horasTrabajadas: 0, horasEsperadas: 0, presentismoIndividual: null, completas: 0, incompletas: 0, ausencias: 0, llegadasTarde: 0, retirosAnticipados: 0, correcciones: 0, feriado: 0, licencia: 0, vacaciones: 0, anomalia: 'empleado sin categoría en el padrón' },
       ],
     },
     detalle: {
@@ -75,6 +75,17 @@ test('la grilla de resumen no tiene columnas Modalidad, Incompletas ni Correcc. 
   expect(within(tablaResumen).queryByText('Correcc.')).not.toBeInTheDocument();
   expect(within(tablaResumen).queryByText('Horas computadas')).not.toBeInTheDocument();
   expect(within(tablaResumen).getByRole('columnheader', { name: 'Horas' })).toBeInTheDocument();
+  expect(within(tablaResumen).getByRole('columnheader', { name: 'Presentismo' })).toBeInTheDocument();
+});
+
+test('la grilla muestra el presentismo individual por empleado (% ) y lo omite en la fila de anomalía', () => {
+  render(<InformeCierrePrintable vista={vista()} onCerrar={() => {}} />);
+  const tablaResumen = document.querySelector('.informe-resumen');
+  // 930 / 1200 = 77,5 %
+  expect(within(tablaResumen).getAllByText(/77[.,]5\s*%/).length).toBeGreaterThanOrEqual(1);
+  // la fila de anomalía no muestra %
+  const filaAnomalia = within(tablaResumen).getByText(/Anomalía: empleado sin categoría/).closest('tr');
+  expect(filaAnomalia.textContent).not.toMatch(/%/);
 });
 
 test('totaliza ausencias en el pie de la grilla y muestra la leyenda de presentismo general', () => {
