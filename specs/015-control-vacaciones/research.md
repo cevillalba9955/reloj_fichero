@@ -30,16 +30,23 @@ Concretamente:
   esta feature necesita marcar **todos** los días corridos del rango, sean
   hábiles, no hábiles o feriados (spec FR-002). El único filtro que aplica acá
   es el de solapamiento (`justificacionVigenteDe`, ya existente) por FR-007.
-- Como el registro tiene exactamente la misma forma `{ periodo, legajo, fecha,
+- El registro tiene exactamente la misma forma `{ periodo, legajo, fecha,
   motivoId, etiquetaMotivo, tipoPago, autor, fechaHora, vigente, reversion,
-  origenCarga }` que una Justificación cargada por el flujo genérico, **no se
-  requiere ningún cambio** en `resumen-presentismo.js` (crédito de jornada
-  esperada) ni en `resumen-periodo.js` (conteo de columnas `Ausencias`/
-  `Licencia`, ver `resumen-periodo.js` líneas ~78-107): `tipoPago: 'No paga'`
-  ya hace que el día no acredite jornada y siga sumando a `Ausencias`, nunca a
-  `Licencia` (esa columna solo cuenta `tipoPago === 'Paga'`), que es
-  exactamente el comportamiento pedido ("para el dominio de asistencia es una
-  justificación NO PAGA").
+  origenCarga }` que una Justificación cargada por el flujo genérico, así que
+  **no se requiere ningún cambio** en `resumen-presentismo.js` (crédito de
+  jornada esperada): `tipoPago: 'No paga'` ya hace que el día no acredite
+  jornada, que es parte del comportamiento pedido ("para el dominio de
+  asistencia es una justificación NO PAGA").
+- En `resumen-periodo.js` (conteo de columnas del resumen de período, feature
+  011) SÍ se agrega un **contador propio `vacaciones`** (clarificación spec
+  2026-09-08): los días con `motivoId === 'vacaciones-anual'` se cuentan en esa
+  columna y quedan **EXCLUIDOS de `ausencias`** (la condición de `ausencias`
+  lleva `&& !esVacaciones`) y de `licencia` (esa columna solo cuenta
+  `tipoPago === 'Paga'`). Sin esta columna propia quedarían mezclados dentro de
+  `ausencias`; con ella el resumen distingue vacaciones de una ausencia
+  injustificada, igual que `licencia` distingue la Justificación `Paga`.
+  `contracts/web-api.md` ("Efecto sobre `GET /api/resumen-periodo`") documenta
+  el contador nuevo; ningún campo previo cambia de nombre ni de tipo.
 - FR-006 ("queda marcado en el calendario") se satisface por el mismo join que
   ya hace `calcular-presentismo-service.js`/`view-model.js` entre
   `calendario.dias` y `justificaciones` al construir la jornada de cada día;
@@ -52,11 +59,26 @@ desde la Asignación de Vacaciones. Revertir una Asignación de Vacaciones
 revierte, puertas adentro, cada Justificación diaria que generó (mismo
 `repo.revertirJustificacion` por día) y además repone el saldo (§4).
 
+**Fichadas sobre un día `Vacaciones`** (FR-017, clarificación spec
+2026-07-27 y 2026-09-08): la Justificación-espejo `tipoPago: 'No paga'` se
+aplica sobre el día **para cualquier clasificación** (`Laborable`,
+`No Laborable`, `Feriado`) — `aplicarAjustes` (`domain/jornada.js`) se
+generaliza para no filtrar por `Laborable` (T045). Consecuencia buscada: la
+sola llegada de fichadas NO hace que el día acredite jornada ni cuente como
+presente; el día conserva `Vacaciones` / `No paga`, se sigue contando en la
+columna propia `vacaciones` del resumen de período (nunca en `ausencias` ni
+`licencia`) y las fichadas quedan señaladas para revisión de un responsable,
+sin descartar marca ni fichadas en silencio. No hay estado intermedio "ni
+presente ni ausente": la clasificación `Vacaciones` es autoritativa mientras
+la asignación esté vigente.
+
 **Alternativas consideradas**:
 - *Mecanismo de calendario paralelo* (marcar `calendario.dias[].vacaciones`
-  directamente): requeriría duplicar toda la lógica de crédito de jornada y
-  de conteo del resumen de período ya escrita para Justificación. Se
-  descarta: mucha más superficie de cambio para el mismo resultado observable.
+  directamente): requeriría duplicar toda la lógica de crédito de jornada ya
+  escrita para Justificación. Se descarta: mucha más superficie de cambio para
+  el mismo resultado observable (el único cambio necesario en el resumen de
+  período es el contador `vacaciones`, que se apoya en el `motivoId` de la
+  Justificación-espejo).
 - *Reusar el catálogo genérico reclasificando `vacaciones` a `No paga`*
   (opción C descartada en la clarificación del spec): obligaría a cargar
   vacaciones día por día o por rango-solo-Laborable desde el flujo de

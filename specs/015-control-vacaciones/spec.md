@@ -27,10 +27,26 @@
 - Q: ¿Cómo deben reflejarse los días de una asignación de vacaciones en el
   calendario y el resumen de período que ya existen (features 004/011/012)? → A:
   Cada día del rango asignado queda marcado en el calendario del legajo como un día
-  tipo `Vacaciones`, clasificado `No paga` (no acredita jornada esperada, cuenta
-  como ausencia en el resumen de período), generado automáticamente por esta
-  feature sin pasar por el catálogo genérico de motivos de Justificación (feature
-  012) ni requerir carga manual día por día.
+  tipo `Vacaciones`, clasificado `No paga` (no acredita jornada esperada), generado
+  automáticamente por esta feature sin pasar por el catálogo genérico de motivos de
+  Justificación (feature 012) ni requerir carga manual día por día. En el resumen
+  de período se cuenta en un contador propio `vacaciones` (ver aclaración de la
+  Sesión 2026-09-08), no dentro de `ausencias`.
+
+### Session 2026-09-08
+
+- Q: Un día marcado como `Vacaciones` (asignación vigente) que además recibe
+  fichadas, ¿cómo se computa en el presentismo (feature 004) y el resumen de
+  período (feature 011)? → A: El día sigue clasificado `Vacaciones` / `No paga`;
+  la sola presencia de fichadas nunca lo hace contar como presente ni acredita
+  jornada esperada: únicamente dispara la marca de revisión para un responsable,
+  sin cambio de estado en silencio.
+- Q: Un día marcado como `Vacaciones` (Justificación-espejo `No paga`), ¿cómo se
+  cuenta en el resumen de período (feature 011)? → A: En un contador/columna
+  propio `vacaciones`, EXCLUIDO de `ausencias` y nunca dentro de `licencia`
+  (`licencia` solo cuenta Justificaciones `Paga`). El día no acredita jornada
+  esperada (feature 004) ni cuenta como presente; se reporta únicamente en su
+  columna dedicada `vacaciones`.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -39,8 +55,9 @@
 Como responsable de administración de personal, quiero asignarle a un empleado un
 período de vacaciones indicando la fecha de inicio y la cantidad de días corridos,
 para que ese período quede registrado, descontado de su saldo disponible y
-reflejado como ausencia no paga en su calendario y en el resumen del período,
-sin importar si los días son hábiles o no, ni si el período abarca más de un mes.
+reflejado como día `Vacaciones` (no paga) en su calendario y en el contador propio
+`vacaciones` del resumen del período, sin importar si los días son hábiles o no,
+ni si el período abarca más de un mes.
 
 **Why this priority**: es el valor central de la feature: sin poder asignar
 vacaciones, no hay nada que controlar ni mostrar en la página anual. Funciona de
@@ -75,8 +92,14 @@ calendario, y que la asignación queda registrada con autor y fecha/hora de carg
    registro parcial.
 6. **Given** un día futuro marcado como `Vacaciones` por una asignación vigente,
    **When** se calcula el resumen del período que contiene ese día, **Then** el
-   día no acredita jornada esperada y cuenta como ausencia, igual que una
-   Justificación `No paga` de la feature 012.
+   día no acredita jornada esperada y se cuenta en el contador propio `vacaciones`
+   del resumen, excluido de `ausencias` y de `licencia`.
+7. **Given** un día marcado como `Vacaciones` por una asignación vigente que
+   además tiene fichadas registradas de ese legajo, **When** se calcula el
+   presentismo y el resumen de ese período, **Then** el día NO cuenta como
+   presente ni acredita jornada: permanece clasificado `Vacaciones` / `No paga`,
+   se cuenta en la columna `vacaciones` (no en `ausencias`) y queda señalado para
+   revisión de un responsable.
 
 ---
 
@@ -198,7 +221,10 @@ vigente).
 - **Fichadas que llegan durante un día marcado como `Vacaciones`**: el sistema no
   descarta la marca `Vacaciones` en silencio; señala el día para revisión de un
   responsable, igual que el tratamiento existente para Justificaciones (feature
-  012) y Correcciones Manuales (feature 004).
+  012) y Correcciones Manuales (feature 004). Ese día NO cuenta como presente por
+  tener fichadas: sigue clasificado `Vacaciones` / `No paga` y se cuenta en la
+  columna `vacaciones` del resumen de período (no en `ausencias`) mientras la
+  asignación esté vigente, aun con la revisión pendiente.
 - **Escala de antigüedad incompleta o inválida en el archivo de configuración**: el
   sistema no ejecuta el incremento automático para los legajos afectados por el
   tramo inválido y reporta la anomalía de configuración, en vez de aplicar un valor
@@ -228,9 +254,10 @@ vigente).
   período (mes calendario) sin restricción ni corte por el cambio de período.
 - **FR-006**: Cada día comprendido en una asignación de vacaciones vigente DEBE
   quedar marcado en el calendario del legajo como un día tipo `Vacaciones`,
-  clasificado `No paga`: no acredita la jornada esperada de ese día y cuenta como
-  ausencia en el cálculo de horas/saldo del período (feature 004) y en el resumen
-  del período (feature 011), de forma independiente del catálogo de motivos de
+  clasificado `No paga`: no acredita la jornada esperada de ese día en el cálculo
+  de horas/saldo del período (feature 004) y, en el resumen del período (feature
+  011), se cuenta en un contador propio `vacaciones`, EXCLUIDO de `ausencias` y de
+  `licencia`; todo esto de forma independiente del catálogo de motivos de
   Justificación de la feature 012.
 - **FR-007**: El sistema DEBE rechazar una asignación de vacaciones si algún día
   del rango solicitado ya tiene una asignación de vacaciones vigente o una
@@ -273,7 +300,11 @@ vigente).
 - **FR-017**: Si llegan fichadas nuevas de un legajo para un día marcado como
   `Vacaciones` por una asignación vigente, el sistema DEBE señalar ese día para
   revisión de un responsable en lugar de descartar la marca o las fichadas en
-  silencio.
+  silencio. La sola presencia de fichadas NO DEBE hacer que ese día cuente como
+  presente ni acredite jornada esperada: el día conserva su clasificación
+  `Vacaciones` / `No paga` y se sigue contando en la columna `vacaciones` del
+  resumen de período (feature 011), nunca en `ausencias`, mientras la asignación
+  esté vigente, aun con la revisión pendiente de resolución.
 - **FR-018**: El sistema DEBE deshabilitar la entrada `vacaciones` del catálogo de
   motivos de Justificación (feature 012) para nuevas cargas, de modo que una
   ausencia por vacaciones solo pueda registrarse a través de esta feature; las
