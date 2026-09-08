@@ -29,6 +29,7 @@ function vista(over = {}) {
           dias: [
             { fecha: '2026-07-01', diaSemana: 'Miércoles', clasificacion: 'Laborable', estado: 'Completa', entrada: '07:00', salida: '15:00', horas: 480, llegadaTarde: false, corregida: true, pausas: [], justificacion: null, requiereJustificacionRevision: false },
             { fecha: '2026-07-02', diaSemana: 'Jueves', clasificacion: 'Laborable', estado: 'Incompleta', entrada: '07:00', salida: null, horas: 450, llegadaTarde: false, corregida: false, pausas: [], justificacion: { motivoId: 'enf', etiquetaMotivo: 'Enfermedad', tipoPago: 'Paga' }, requiereJustificacionRevision: false },
+            { fecha: '2026-07-03', diaSemana: 'Viernes', clasificacion: 'Laborable', estado: 'Sin fichadas', entrada: null, salida: null, horas: 0, llegadaTarde: false, corregida: false, pausas: [], justificacion: null, requiereJustificacionRevision: false },
           ],
         },
         { legajo: 9, nombre: 'Zoe Anómala', modalidad: null, anomalia: 'empleado sin categoría en el padrón', subtotalHoras: 0, dias: [] },
@@ -65,6 +66,12 @@ test('detalle: renderiza los días del empleado, sus marcas y el subtotal en H:M
   expect(screen.getByText(/Enfermedad \(Paga\)/)).toBeInTheDocument();
   // las horas del dominio están en minutos → se muestran como H:MM (930 → 15:30)
   expect(screen.getByText('Subtotal horas: 15:30')).toBeInTheDocument();
+});
+
+test('detalle: el estado "Sin fichadas" se muestra como "Ausente"', () => {
+  render(<InformeCierrePrintable vista={vista()} onCerrar={() => {}} />);
+  expect(screen.getByText('Ausente')).toBeInTheDocument();
+  expect(screen.queryByText('Sin fichadas')).not.toBeInTheDocument();
 });
 
 test('la grilla de resumen no tiene columnas Modalidad, Incompletas ni Correcc. y el header de horas es "Horas"', () => {

@@ -35,6 +35,12 @@ function pct(ratio) {
   return ratio ? `${(ratio * 100).toLocaleString('es-AR', { maximumFractionDigits: 1 })} %` : '';
 }
 
+// Etiqueta del estado en el detalle: un día Laborable vencido sin fichadas es
+// una ausencia → se muestra "Ausente" en vez del literal técnico "Sin fichadas".
+function estadoLabel(estado) {
+  return estado === 'Sin fichadas' ? 'Ausente' : estado;
+}
+
 function marcasDia(d) {
   const marcas = [];
   if (d.corregida) marcas.push('corregida');
@@ -175,7 +181,7 @@ function SeccionDetalle({ seccion }) {
                   <td>{d.salida ?? '—'}</td>
                   <td>{d.pausas?.length ? d.pausas.map((p) => `${p.desde}–${p.hasta}`).join(', ') : '—'}</td>
                   <td>{horas(d.horas)}</td>
-                  <td>{d.estado}</td>
+                  <td>{estadoLabel(d.estado)}</td>
                   <td>{marcasDia(d) || '—'}</td>
                 </tr>
               ))}
