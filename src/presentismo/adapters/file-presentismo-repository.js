@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync, renameSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import * as ops from './presentismo-repo-ops.js';
-import { rutaCarpetaPeriodo, ARCHIVO_CALENDARIO } from '../domain/periodo-storage.js';
+import { rutaCarpetaPeriodo, ARCHIVO_CALENDARIO, ARCHIVO_INFORME_CIERRE } from '../domain/periodo-storage.js';
 
 // Adaptador de PresentismoRepository sobre archivos JSON (013-reestructurar-data-periodos,
 // research §3, contracts/storage-layout.md). Una carpeta por período:
@@ -31,12 +31,37 @@ export function createFilePresentismoRepository({ repoDir }) {
     }
   }
 
-  function escribir(periodo, state) {
-    const ruta = rutaDe(periodo);
-    mkdirSync(rutaCarpetaPeriodo(repoDir, periodo), { recursive: true });
+  // Escritura atómica (temp + rename) de un JSON dentro de la carpeta del
+  // período; crea la carpeta de forma perezosa.
+  function escribirArchivo(periodo, nombreArchivo, contenido) {
+    const carpeta = rutaCarpetaPeriodo(repoDir, periodo);
+    mkdirSync(carpeta, { recursive: true });
+    const ruta = join(carpeta, nombreArchivo);
     const tmp = `${ruta}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+    writeFileSync(tmp, `${JSON.stringify(contenido, null, 2)}\n`, 'utf8');
     renameSync(tmp, ruta);
+  }
+
+  function escribir(periodo, state) {
+    escribirArchivo(periodo, ARCHIVO_CALENDARIO, state);
+  }
+
+  // 018-informe-cierre-periodo — `P<periodo>/informe-cierre.json`: un objeto
+  // con una entrada por tramo ('Mes' / 'Q1' / 'Q2'). Archivo aparte del estado
+  // del calendario para no engordar `calendario.json` con el detalle diario de
+  // ~500 empleados.
+  function rutaInforme(periodo) {
+    return join(rutaCarpetaPeriodo(repoDir, periodo), ARCHIVO_INFORME_CIERRE);
+  }
+
+  function leerInforme(periodo) {
+    const ruta = rutaInforme(periodo);
+    if (!existsSync(ruta)) return null;
+    try {
+      return JSON.parse(readFileSync(ruta, 'utf8'));
+    } catch {
+      throw new Error(`file-presentismo-repository: informe de cierre corrupto en "${ruta}"`);
+    }
   }
 
   return {
@@ -111,6 +136,15 @@ export function createFilePresentismoRepository({ repoDir }) {
       const encontrada = ops.revertJustificacion(state, legajo, fecha, opciones);
       escribir(periodo, state);
       return encontrada;
+    },
+    // 018-informe-cierre-periodo
+    async guardarInformeCierre(periodo, tramo, entrada) {
+      const actual = leerInforme(periodo) ?? {};
+      actual[tramo] = entrada;
+      escribirArchivo(periodo, ARCHIVO_INFORME_CIERRE, actual);
+    },
+    async cargarInformeCierre(periodo) {
+      return leerInforme(periodo);
     },
   };
 }

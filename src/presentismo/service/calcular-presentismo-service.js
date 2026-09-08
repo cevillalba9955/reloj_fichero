@@ -14,6 +14,7 @@ import { construirResumen } from '../domain/resumen-presentismo.js';
 import { correccionVigenteDe, crearCorreccion } from '../domain/correccion.js';
 import { calcularSituacionHoy, SituacionDia } from '../domain/situacion-dia.js';
 import { proyectarResumenPeriodo } from '../domain/resumen-periodo.js';
+import { construirInformeCierre, rangoDeTramo } from '../domain/informe-cierre.js';
 import { parseHoraMinuto } from '../domain/tiempo.js';
 import { TipoPausa, normalizarTipoPausa } from '../domain/pausa.js';
 import {
@@ -131,7 +132,71 @@ export function createCalcularPresentismoService({
     const nuevo = reabrirCalendario(actual, autor);
     await repo.guardarCalendario(nuevo);
     logger.evento('periodo_reabierto', { periodo, autor: autor ?? null });
+    // 018-informe-cierre-periodo (FR-013) — reabrir invalida la copia guardada
+    // del informe: se marca `obsoleto` en cada tramo hasta que se vuelva a
+    // cerrar o se re-emita a demanda. No se borra el archivo (deja el rastro
+    // de qué se había emitido).
+    const mapaInforme = await repo.cargarInformeCierre(periodo);
+    if (mapaInforme) {
+      const invalidadoPor = { autor: autor ?? null, fechaHora: new Date().toISOString() };
+      for (const [tramo, entrada] of Object.entries(mapaInforme)) {
+        if (entrada.obsoleto) continue;
+        await repo.guardarInformeCierre(periodo, tramo, { ...entrada, obsoleto: true, invalidadoPor });
+      }
+    }
     return nuevo;
+  }
+
+  // 018-informe-cierre-periodo — emite (o re-emite) el informe de cierre de un
+  // tramo y REEMPLAZA la copia guardada. `tramo` es la clave de almacenamiento
+  // ('Mes' | 'Q1' | 'Q2'). `legajos` es el universo del padrón del período
+  // (FR-005, lo resuelve el handler); `nombres` es un Map legajo→nombre.
+  // `modo` = 'automatico' (al cerrar) | 'manual' (re-emisión). NO escribe en
+  // Oracle (Principio VI).
+  async function emitirInformeCierre({
+    periodoMes,
+    tramo,
+    legajos,
+    nombres = new Map(),
+    autor = null,
+    emision = 'manual',
+    granularidad = 'MENSUAL',
+  }) {
+    const rangoFechas = rangoDeTramo(periodoMes, tramo);
+    const periodoId = tramo === 'Mes' ? periodoMes : `${periodoMes}-${tramo}`;
+    // `rangoFechas.hasta` como corte `hoy`: el informe cubre TODO el tramo, sin
+    // recortar días "futuros" de un período que se cierra el mismo día o antes
+    // de terminar (research.md §2).
+    const filasBase = await calcularResumenPeriodo(periodoMes, legajos, rangoFechas.hasta, { tramo });
+    const filas = filasBase.map((f) => ({ ...f, nombre: nombres.get(f.legajo) ?? null }));
+    const emitidoEn = new Date().toISOString();
+    const informe = construirInformeCierre({
+      filas,
+      periodoId,
+      periodoMes,
+      tramo,
+      emision,
+      granularidad,
+      autor,
+      emitidoEn,
+      rangoFechas,
+    });
+    const entrada = { ...informe, obsoleto: false, invalidadoPor: null };
+    await repo.guardarInformeCierre(periodoMes, tramo, entrada);
+    logger.evento('informe_cierre_emitido', {
+      periodo: periodoMes,
+      tramo,
+      autor: autor ?? null,
+      emision,
+      empleados: informe.resumen.encabezado.empleados,
+      totalHoras: informe.resumen.encabezado.totalHoras,
+    });
+    return entrada;
+  }
+
+  async function obtenerInformeCierre(periodoMes, tramo) {
+    const mapa = await repo.cargarInformeCierre(periodoMes);
+    return mapa?.[tramo] ?? null;
   }
 
   // research.md §4 — punto único que las demás operaciones de escritura
@@ -324,7 +389,10 @@ export function createCalcularPresentismoService({
         .flatMap((r) => r.jornadas ?? [])
         .filter((j) => tramo == null || fechaEnTramo(j.fecha, tramo));
       const proyeccion = proyectarResumenPeriodo({ resumen: { legajo, params, jornadas }, hoy });
-      filas.push({ ...proyeccion, anomalia: null });
+      // 018 — `modalidad` (tipo) para el encabezado del informe de cierre; los
+      // clientes de `/api/resumen-periodo` que ignoran campos extra no se ven
+      // afectados.
+      filas.push({ ...proyeccion, modalidad: params?.tipo ?? null, anomalia: null });
     }
     return filas;
   }
@@ -866,6 +934,8 @@ export function createCalcularPresentismoService({
     reclasificarDia: reclasificarDiaMes,
     cerrarPeriodo: cerrarPeriodoMes,
     reabrirPeriodo: reabrirPeriodoMes,
+    emitirInformeCierre,
+    obtenerInformeCierre,
     calcularEmpleado,
     calcularHoy,
     calcularResumenPeriodo,

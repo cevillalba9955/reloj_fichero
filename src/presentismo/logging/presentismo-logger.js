@@ -27,6 +27,9 @@ const TIPOS = new Set([
   'vacaciones_asignacion_alta',
   'vacaciones_asignacion_reversion',
   'vacaciones_incremento_anual',
+  // 018-informe-cierre-periodo
+  'informe_cierre_emitido',
+  'informe_cierre_emision_fallida',
 ]);
 
 // Campos que jamás deben aparecer en un evento (defensa en profundidad).

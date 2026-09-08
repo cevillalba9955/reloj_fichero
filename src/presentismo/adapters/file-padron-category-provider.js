@@ -47,7 +47,12 @@ function construirMapa(empleados) {
   return mapa;
 }
 
-export function createFilePadronCategoryProvider({ repoDir, now = () => new Date() }) {
+// `periodo` (018-informe-cierre-periodo): si se pasa, el provider queda
+// PINCHADO a ese período (`P<periodo>/padron.json`) en vez de resolver el mes
+// en curso en cada llamada. Lo usa la emisión del informe de cierre para
+// resolver la categoría de cada empleado contra el padrón DE ESE período
+// (FR-005), no contra el padrón vigente.
+export function createFilePadronCategoryProvider({ repoDir, now = () => new Date(), periodo = null }) {
   const cachePorPeriodo = new Map(); // periodo -> Map<legajo, {codigoCategoria, nombre}>
 
   function asegurarCache(periodo) {
@@ -81,8 +86,9 @@ export function createFilePadronCategoryProvider({ repoDir, now = () => new Date
 
   // Resuelve el mes en curso en CADA llamada (FR-004): nunca cachea el
   // período a nivel de proceso, solo el contenido ya leído de cada período.
+  // Si el provider quedó pinchado a un período (018), usa ese.
   function cacheDelMesActual() {
-    return asegurarCache(mesActualPeriodo(now()));
+    return asegurarCache(periodo ?? mesActualPeriodo(now()));
   }
 
   return {
@@ -97,6 +103,27 @@ export function createFilePadronCategoryProvider({ repoDir, now = () => new Date
         .sort((a, b) => a.legajo - b.legajo);
     },
   };
+}
+
+// 018-informe-cierre-periodo — lee el snapshot del padrón de UN período
+// arbitrario (`P<periodo>/padron.json`), no el del mes en curso. La emisión del
+// informe de cierre necesita el universo de empleados DE ESE período (FR-005),
+// que el provider normal no expone porque siempre resuelve `mesActualPeriodo`.
+// Devuelve `[{ legajo, nombre, codigoCategoria, fechaIngreso }]` ordenado por
+// legajo; `[]` si el archivo no existe o no tiene el formato esperado
+// (best-effort: un período sin padrón produce un informe sin filas, no un error).
+export function leerSnapshotPadron({ filePath }) {
+  let datos;
+  try {
+    datos = JSON.parse(readFileSync(filePath, 'utf8'));
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(datos?.empleados)) return [];
+  const mapa = construirMapa(datos.empleados);
+  return [...mapa.entries()]
+    .map(([legajo, { codigoCategoria, nombre, fechaIngreso }]) => ({ legajo, codigoCategoria, nombre, fechaIngreso }))
+    .sort((a, b) => a.legajo - b.legajo);
 }
 
 // Escribe un snapshot del padrón a disco (crea el directorio si falta).

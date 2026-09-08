@@ -50,5 +50,14 @@ export function createInMemoryPresentismoRepository() {
     async revertirJustificacion(periodo, legajo, fecha, opciones) {
       return ops.revertJustificacion(estadoDe(periodo), legajo, fecha, opciones);
     },
+    // 018-informe-cierre-periodo — mapa por tramo en el estado del período.
+    async guardarInformeCierre(periodo, tramo, entrada) {
+      const estado = estadoDe(periodo);
+      if (!estado.informeCierre) estado.informeCierre = {};
+      estado.informeCierre[tramo] = entrada;
+    },
+    async cargarInformeCierre(periodo) {
+      return porPeriodo.get(periodo)?.informeCierre ?? null;
+    },
   };
 }

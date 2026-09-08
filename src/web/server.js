@@ -7,6 +7,7 @@ import { createRouter } from './api/router.js';
 import { registrarRutas } from './api/calendario-handlers.js';
 import { registrarRutas as registrarRutasFichadasHoy } from './api/fichadas-hoy-handlers.js';
 import { registrarRutas as registrarRutasResumenPeriodo } from './api/resumen-periodo-handlers.js';
+import { registrarRutas as registrarRutasInformeCierre } from './api/informe-cierre-handlers.js';
 import { registrarRutas as registrarRutasJustificaciones } from './api/justificaciones-handlers.js';
 import { registrarRutas as registrarRutasConfiguracion } from './api/configuracion-handlers.js';
 import { registrarRutas as registrarRutasVacaciones } from './api/vacaciones-handlers.js';
@@ -61,6 +62,7 @@ export function crearApp({ env = process.env } = {}) {
   registrarRutas(router, ctx);
   registrarRutasFichadasHoy(router, ctx);
   registrarRutasResumenPeriodo(router, ctx);
+  registrarRutasInformeCierre(router, ctx);
   registrarRutasJustificaciones(router, ctx);
   registrarRutasConfiguracion(router, ctx);
   registrarRutasVacaciones(router, ctx);

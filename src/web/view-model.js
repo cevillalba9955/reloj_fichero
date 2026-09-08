@@ -169,11 +169,14 @@ export function construirVistaFichadasHoy({ fecha, periodo, diaClasificacion, fi
 // que sus acumulados todavía no reflejan los días futuros del período
 // (FR-008 de resumen-periodo.js) — la UI lo usa para avisarlo, no cambia el
 // cálculo.
-export function construirVistaResumenPeriodo({ periodo, periodos, filas = [], enCurso = false }) {
+export function construirVistaResumenPeriodo({ periodo, periodos, filas = [], enCurso = false, cerrado = false }) {
   return {
     periodo,
     periodos,
     enCurso,
+    // 018-informe-cierre-periodo — la página habilita "Emitir informe de
+    // cierre" sólo si el período está cerrado.
+    cerrado: Boolean(cerrado),
     filas: filas.map((f) =>
       f.anomalia
         ? {
@@ -240,6 +243,52 @@ export function construirDetalleEmpleado({ periodo, legajo, nombre = null, detal
       justificacion: d.justificacion ?? null,
       requiereJustificacionRevision: Boolean(d.requiereJustificacionRevision),
     })),
+  };
+}
+
+const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+// 018-informe-cierre-periodo — VistaInformeCierre (data-model.md §6): lo que
+// devuelven POST y GET /api/calendarios/:periodo/informe-cierre. `entrada` es
+// la copia guardada de un tramo ({ sello, resumen, detalle, pendientes,
+// obsoleto }). El resumen se pasa tal cual (horas numéricas, la UI las
+// formatea); el detalle se formatea a 'HH:MM' y se le agrega `diaSemana`
+// (mismo criterio que construirDetalleEmpleado).
+export function construirVistaInformeCierre({ entrada }) {
+  return {
+    periodoId: entrada.sello.periodoId,
+    sello: entrada.sello,
+    obsoleto: Boolean(entrada.obsoleto),
+    resumen: entrada.resumen,
+    detalle: {
+      encabezado: entrada.detalle.encabezado,
+      secciones: entrada.detalle.secciones.map((s) => ({
+        legajo: s.legajo,
+        nombre: s.nombre ?? null,
+        modalidad: s.modalidad ?? null,
+        anomalia: s.anomalia ?? null,
+        subtotalHoras: s.subtotalHoras ?? 0,
+        dias: (s.dias ?? []).map((d) => ({
+          fecha: d.fecha,
+          diaSemana: DIAS_SEMANA[diaSemanaDe(d.fecha)],
+          clasificacion: d.clasificacion,
+          estado: d.estado,
+          entrada: d.entrada != null ? formatHoraMinuto(d.entrada) : null,
+          salida: d.salida != null ? formatHoraMinuto(d.salida) : null,
+          horas: d.horas,
+          llegadaTarde: Boolean(d.llegadaTarde),
+          corregida: Boolean(d.corregida),
+          pausas: (d.pausas ?? []).map((p) => ({
+            desde: formatHoraMinuto(p.desde),
+            hasta: formatHoraMinuto(p.hasta),
+            tipo: p.tipo,
+          })),
+          justificacion: d.justificacion ?? null,
+          requiereJustificacionRevision: Boolean(d.requiereJustificacionRevision),
+        })),
+      })),
+    },
+    pendientes: entrada.pendientes,
   };
 }
 

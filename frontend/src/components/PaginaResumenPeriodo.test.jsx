@@ -50,6 +50,18 @@ function detalle(over = {}) {
   };
 }
 
+// 018 — stub del cliente de informe de cierre: por defecto "sin informe
+// emitido" (404 INFORME_NO_EMITIDO), que es el estado en el que arrancan los
+// tests de esta página que no ejercitan la acción.
+function informeMock(over = {}) {
+  const noEmitido = Object.assign(new Error('no emitido'), { codigo: 'INFORME_NO_EMITIDO', status: 404 });
+  return {
+    obtener: vi.fn().mockRejectedValue(noEmitido),
+    emitir: vi.fn().mockResolvedValue({ sello: {}, resumen: { filas: [] }, detalle: { secciones: [] }, pendientes: { hayPendientes: false } }),
+    ...over,
+  };
+}
+
 function clienteMock(over = {}) {
   return {
     obtenerResumen: vi.fn().mockResolvedValue(vista()),
@@ -60,7 +72,7 @@ function clienteMock(over = {}) {
 
 test('carga el resumen al montar y muestra la tabla', async () => {
   const cliente = clienteMock();
-  render(<PaginaResumenPeriodo cliente={cliente} />);
+  render(<PaginaResumenPeriodo cliente={cliente} clienteInforme={informeMock()} />);
   expect(await screen.findByRole('table')).toBeInTheDocument();
   expect(cliente.obtenerResumen).toHaveBeenCalledWith(null);
   expect(screen.getByText(/Resumen del período Julio 2026/)).toBeInTheDocument();
@@ -71,7 +83,7 @@ test('un fallo de carga muestra el error y Reintentar vuelve a pedir', async () 
   const cliente = clienteMock({
     obtenerResumen: vi.fn().mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce(vista()),
   });
-  render(<PaginaResumenPeriodo cliente={cliente} />);
+  render(<PaginaResumenPeriodo cliente={cliente} clienteInforme={informeMock()} />);
   expect(await screen.findByText(/Ocurrió un error: boom/)).toBeInTheDocument();
 
   fireEvent.click(screen.getByText('Reintentar'));
@@ -84,7 +96,7 @@ test('cambiar el período en el selector recarga la tabla con ese período (US3)
   const cliente = clienteMock({
     obtenerResumen: vi.fn((periodo) => Promise.resolve(periodo === '202606' ? vistaJunio : vista())),
   });
-  render(<PaginaResumenPeriodo cliente={cliente} />);
+  render(<PaginaResumenPeriodo cliente={cliente} clienteInforme={informeMock()} />);
   await screen.findByRole('table');
 
   await seleccionarOpcion('Período', 'Junio 2026');
@@ -94,7 +106,7 @@ test('cambiar el período en el selector recarga la tabla con ese período (US3)
 
 test('clic en una fila abre el diálogo de detalle (US2)', async () => {
   const cliente = clienteMock();
-  render(<PaginaResumenPeriodo cliente={cliente} />);
+  render(<PaginaResumenPeriodo cliente={cliente} clienteInforme={informeMock()} />);
   await screen.findByRole('table');
 
   fireEvent.click(screen.getAllByRole('row')[1]);
@@ -108,21 +120,21 @@ test('clic en una fila abre el diálogo de detalle (US2)', async () => {
 // sus días futuros en los acumulados.
 test('con enCurso, muestra el aviso de período en curso', async () => {
   const cliente = clienteMock({ obtenerResumen: vi.fn().mockResolvedValue(vista({ enCurso: true })) });
-  render(<PaginaResumenPeriodo cliente={cliente} />);
+  render(<PaginaResumenPeriodo cliente={cliente} clienteInforme={informeMock()} />);
   await screen.findByRole('table');
   expect(screen.getByText(/Período en curso/)).toBeInTheDocument();
 });
 
 test('sin enCurso, no muestra el aviso de período en curso', async () => {
   const cliente = clienteMock({ obtenerResumen: vi.fn().mockResolvedValue(vista({ enCurso: false })) });
-  render(<PaginaResumenPeriodo cliente={cliente} />);
+  render(<PaginaResumenPeriodo cliente={cliente} clienteInforme={informeMock()} />);
   await screen.findByRole('table');
   expect(screen.queryByText(/Período en curso/)).not.toBeInTheDocument();
 });
 
 test('cerrar el diálogo de detalle vuelve al resumen sin efecto', async () => {
   const cliente = clienteMock();
-  render(<PaginaResumenPeriodo cliente={cliente} />);
+  render(<PaginaResumenPeriodo cliente={cliente} clienteInforme={informeMock()} />);
   await screen.findByRole('table');
   fireEvent.click(screen.getAllByRole('row')[1]);
   await screen.findByRole('dialog');
@@ -130,4 +142,21 @@ test('cerrar el diálogo de detalle vuelve al resumen sin efecto', async () => {
   fireEvent.click(screen.getByText('Cerrar'));
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(cliente.obtenerResumen).toHaveBeenCalledTimes(1);
+});
+
+// 018-informe-cierre-periodo (T023) — la acción de emisión aparece en la
+// página y se habilita sólo cuando el período está cerrado.
+test('018 — período abierto: la acción "Emitir informe de cierre" está deshabilitada', async () => {
+  const cliente = clienteMock({ obtenerResumen: vi.fn().mockResolvedValue(vista({ cerrado: false })) });
+  render(<PaginaResumenPeriodo cliente={cliente} clienteInforme={informeMock()} />);
+  await screen.findByRole('table');
+  expect(screen.getByRole('button', { name: /Emitir informe de cierre/ })).toBeDisabled();
+  expect(screen.getByText(/una vez que el período está cerrado/)).toBeInTheDocument();
+});
+
+test('018 — período cerrado: la acción "Emitir informe de cierre" se habilita', async () => {
+  const cliente = clienteMock({ obtenerResumen: vi.fn().mockResolvedValue(vista({ cerrado: true })) });
+  render(<PaginaResumenPeriodo cliente={cliente} clienteInforme={informeMock()} />);
+  await screen.findByRole('table');
+  expect(screen.getByRole('button', { name: /Emitir informe de cierre/ })).toBeEnabled();
 });

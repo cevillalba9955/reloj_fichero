@@ -135,6 +135,10 @@ export function crearContextoWeb(env = process.env) {
     logger,
     repoDir,
     categoryProvider,
+    // 018-informe-cierre-periodo — la emisión del informe arma un servicio
+    // pinchado al período (categoría desde el padrón de ese período, FR-005) y
+    // necesita el mismo provider de fichadas por período.
+    fichadasProvider,
     activeEmployeesProvider,
     consultarReloj,
     sincronizarPadronOracle,
