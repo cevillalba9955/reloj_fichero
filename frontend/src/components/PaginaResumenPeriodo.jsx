@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { crearClienteResumenPeriodo } from '../api/resumen-periodo-client.js';
+import { crearClienteInformeCierre } from '../api/informe-cierre-client.js';
 import TablaResumenPeriodo from './TablaResumenPeriodo.jsx';
 import SelectorPeriodo, { etiquetaPeriodo } from './SelectorPeriodo.jsx';
 import DialogoDetalleEmpleado from './DialogoDetalleEmpleado.jsx';
+import AccionInformeCierre from './AccionInformeCierre.jsx';
 
 // feature 011 — Página "Resumen del Período": carga la vista del período al
 // montar (US1), permite cambiar de período (US3) y abrir el detalle de un
@@ -11,8 +13,9 @@ import DialogoDetalleEmpleado from './DialogoDetalleEmpleado.jsx';
 // escribe datos.
 
 const clientePorDefecto = crearClienteResumenPeriodo();
+const clienteInformePorDefecto = crearClienteInformeCierre();
 
-export default function PaginaResumenPeriodo({ cliente = clientePorDefecto }) {
+export default function PaginaResumenPeriodo({ cliente = clientePorDefecto, clienteInforme = clienteInformePorDefecto }) {
   const [estado, setEstado] = useState({ tipo: 'cargando' });
   const [periodoSeleccionado, setPeriodoSeleccionado] = useState(null);
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState(null); // fila en detalle
@@ -67,6 +70,12 @@ export default function PaginaResumenPeriodo({ cliente = clientePorDefecto }) {
               onCambiar={setPeriodoSeleccionado}
             />
           </header>
+          <AccionInformeCierre
+            key={estado.vista.periodo}
+            periodo={estado.vista.periodo}
+            cerrado={Boolean(estado.vista.cerrado)}
+            cliente={clienteInforme}
+          />
           <TablaResumenPeriodo
             filas={estado.vista.filas}
             onSeleccionar={(fila) => setEmpleadoSeleccionado(fila)}

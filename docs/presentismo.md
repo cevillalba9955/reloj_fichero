@@ -107,3 +107,42 @@ Tests: `node --test tests/contract/web-api-calendario.test.js
 tests/integration/reclasificar-desde-api.test.js
 tests/unit/file-presentismo-repository-listar.test.js` (backend) y
 `cd frontend && npm run test` (componentes).
+
+## Informe al cierre del período (feature 018)
+
+Al **cerrar** un período de liquidación (`POST /api/calendarios/:periodo/cerrar`)
+el sistema emite y guarda dos informes por tramo:
+
+- **Resumen de horas computadas**: una fila por empleado del padrón del período
+  (legajo, nombre, modalidad, total de horas computadas y contadores), más el
+  total general y la lista de pendientes.
+- **Detalle de asistencia**: por empleado, la asistencia día por día del tramo,
+  con marcas de corrección/justificación y el subtotal de horas.
+
+En modo `MENSUAL` (`PRESENTISMO_RESUMEN_PERIODO`) se emite el tramo `Mes`; en
+`QUINCENAL`, `Q1` y `Q2`. La copia se guarda en
+`<PRESENTISMO_REPO_DIR>/P<periodo>/informe-cierre.json` (un objeto por tramo);
+**no** se escribe nada en Oracle (Principio VI: el registro corporativo de
+liquidación es trabajo aparte).
+
+- **Re-emisión a demanda**: `POST /api/calendarios/:periodo/informe-cierre`
+  (`?tramo=Q1|Q2` en modo quincenal) — rol **editor** o superior; el período
+  debe estar cerrado (si no, `409 PERIODO_ABIERTO`). Reemplaza la copia
+  guardada del tramo.
+- **Lectura**: `GET /api/calendarios/:periodo/informe-cierre`
+  (`?tramo=Q1|Q2`) — devuelve la copia guardada, con `obsoleto: true` si el
+  período se reabrió después de emitir (`404 INFORME_NO_EMITIDO` si nunca se
+  emitió).
+- **Reabrir** el período (`POST .../reabrir`) marca la copia como
+  desactualizada; volver a cerrar (o re-emitir) la regenera.
+
+En la página **Resumen del Período** la acción *"Emitir informe de cierre"*
+aparece habilitada sólo cuando el período está cerrado y el rol alcanza; abre
+una vista imprimible (imprimir / guardar como PDF desde el navegador).
+
+Tests: `node --test tests/unit/presentismo-informe-cierre.test.js
+tests/unit/file-presentismo-repository-informe.test.js
+tests/contract/web-api-informe-cierre.test.js
+tests/integration/informe-cierre.integration.test.js` (backend) y
+`cd frontend && npx vitest run src/components/AccionInformeCierre.test.jsx
+src/components/InformeCierrePrintable.test.jsx` (componentes).

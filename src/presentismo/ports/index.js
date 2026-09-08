@@ -50,6 +50,8 @@
  * @property {(periodo:string, legajo?:number) => Promise<object[]>} listarJustificaciones
  * @property {(j:object) => Promise<void>} guardarJustificacion
  * @property {(periodo:string, legajo:number, fecha:string, opts?:object) => Promise<boolean>} revertirJustificacion
+ * @property {(periodo:string, tramo:string, entrada:object) => Promise<void>} guardarInformeCierre  018 — crea/reemplaza la entrada del tramo en P<periodo>/informe-cierre.json
+ * @property {(periodo:string) => Promise<object|null>} cargarInformeCierre  018 — mapa por tramo, o null si no se emitió
  */
 
 const METODOS = {
@@ -68,6 +70,8 @@ const METODOS = {
     'listarJustificaciones',
     'guardarJustificacion',
     'revertirJustificacion',
+    'guardarInformeCierre',
+    'cargarInformeCierre',
   ],
   VacacionesRepository: [
     'cargarLegajo',

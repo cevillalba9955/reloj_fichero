@@ -10,6 +10,10 @@ import { parsePeriodo } from './calendario-mes.js';
 export const ARCHIVO_CALENDARIO = 'calendario.json';
 export const ARCHIVO_FICHADAS = 'fichadas.json';
 export const ARCHIVO_PADRON = 'padron.json';
+// 018-informe-cierre-periodo — copia emitida de los informes de cierre del
+// período (un objeto por tramo: 'Mes' / 'Q1' / 'Q2'). Estado operativo, no va
+// a Oracle (Principio VI). Se escribe al cerrar el período y en cada re-emisión.
+export const ARCHIVO_INFORME_CIERRE = 'informe-cierre.json';
 
 // `<repoDir>/P<periodo>` — valida el período con el mismo criterio que el
 // dominio de calendario (parsePeriodo: 'YYYYMM' de 6 dígitos, mes 1..12).

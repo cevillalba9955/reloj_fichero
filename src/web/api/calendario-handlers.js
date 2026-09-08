@@ -11,6 +11,7 @@ import {
 import { Clasificacion, periodoAnterior, periodoSiguiente } from '../../presentismo/domain/calendario-mes.js';
 import { rutaCarpetaPeriodo, ARCHIVO_PADRON } from '../../presentismo/domain/periodo-storage.js';
 import { guardarSnapshotPadron } from '../../presentismo/adapters/file-padron-category-provider.js';
+import { legajosYNombresDelPeriodo, servicioDelPeriodo } from './informe-cierre-handlers.js';
 
 // feature 007 — Handlers de la API de calendario. Delegan en el servicio de
 // presentismo (feature 004) y arman las proyecciones de presentación. Ninguna
@@ -145,6 +146,33 @@ export function registrarRutas(router, ctx) {
   registrarCerrarReabrir(router, ctx);
 }
 
+// 018-informe-cierre-periodo — al cerrar un período se emiten y guardan los
+// informes de cierre de todos los tramos del modo de la instalación
+// (MENSUAL → 'Mes'; QUINCENAL → 'Q1' y 'Q2'). Best-effort: un fallo se
+// registra en el log y NO altera la respuesta del cierre ni lo revierte
+// (research.md §5); la UI ofrece re-emitir a demanda.
+async function emitirInformesDelCierre(ctx, periodoMes, autor) {
+  const modo = ctx.modoResumenPeriodo ?? 'MENSUAL';
+  const tramos = modo === 'QUINCENAL' ? ['Q1', 'Q2'] : ['Mes'];
+  try {
+    const { legajos, nombres } = legajosYNombresDelPeriodo(ctx, periodoMes);
+    const servicio = servicioDelPeriodo(ctx, periodoMes);
+    for (const tramo of tramos) {
+      await servicio.emitirInformeCierre({
+        periodoMes,
+        tramo,
+        legajos,
+        nombres,
+        autor,
+        emision: 'automatico',
+        granularidad: modo,
+      });
+    }
+  } catch (err) {
+    ctx.logger?.evento?.('informe_cierre_emision_fallida', { periodo: periodoMes, motivo: err.message });
+  }
+}
+
 // 013-reestructurar-data-periodos (US3, contracts/web-api.md) — cierra/reabre
 // el calendario del período. Idempotente: cerrar uno ya cerrado (o reabrir uno
 // ya abierto) también devuelve 200 y actualiza el autor/fecha del intento.
@@ -160,6 +188,7 @@ function registrarCerrarReabrir(router, ctx) {
       }
       throw err;
     }
+    await emitirInformesDelCierre(ctx, params.periodo, autor);
     return { status: 200, body: await vistaDe(ctx, params.periodo) };
   }));
 
