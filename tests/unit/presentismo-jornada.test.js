@@ -260,15 +260,32 @@ test('justificación No paga sobre día Sin fichadas no acredita nada', () => {
   assert.equal(ajustada.estado, EstadoJornada.SIN_FICHADAS);
 });
 
-test('fichadas que llegan después de justificar señalan requiereJustificacionRevision sin tocar el resultado', () => {
+test('fichadas que llegan después de justificar (Paga) señalan requiereJustificacionRevision sin tocar el resultado', () => {
   const auto = calc(Clasificacion.LABORABLE, [425, 958]); // Completa, 9:00
   const ajustada = aplicarAjustes(auto, {
-    justificacion: { tipoPago: 'Paga', motivoId: 'vacaciones' },
+    justificacion: { tipoPago: 'Paga', motivoId: 'examen' },
     params: PARAMS,
   });
   assert.equal(ajustada.requiereJustificacionRevision, true);
   assert.equal(ajustada.estado, EstadoJornada.COMPLETA, 'el cálculo auto no se descarta');
   assert.equal(ajustada.totalDiario, 540, 'las horas calculadas de las fichadas reales prevalecen');
+});
+
+// spec 015, clarificación 2026-09-08 (bug de producción, legajo 9, 7-8/09):
+// un día Laborable con la Justificación-espejo de Vacaciones (`No paga`) que
+// ADEMÁS tiene fichadas válidas NO debe acreditar esas horas ni contar como
+// jornada trabajada: pasa a `Sin fichadas`, 0 horas, y solo se señala para
+// revisión (a diferencia de una `Paga`, cuyas horas reales sí prevalecen).
+test('fichadas que llegan después de justificar (No paga / Vacaciones) NO acreditan horas ni jornada', () => {
+  const auto = calc(Clasificacion.LABORABLE, [425, 958]); // Completa, 9:00
+  const ajustada = aplicarAjustes(auto, {
+    justificacion: { tipoPago: 'No paga', motivoId: 'vacaciones-anual' },
+    params: PARAMS,
+  });
+  assert.equal(ajustada.requiereJustificacionRevision, true, 'se señala para revisión');
+  assert.equal(ajustada.estado, EstadoJornada.SIN_FICHADAS, 'no cuenta como jornada completa/incompleta');
+  assert.equal(ajustada.totalDiario, 0, 'la presencia de fichadas nunca acredita horas en una No paga');
+  assert.deepEqual(ajustada.justificacion, { tipoPago: 'No paga', motivoId: 'vacaciones-anual' });
 });
 
 // spec 015 (FR-006): a diferencia de la Justificación genérica de 012 (que

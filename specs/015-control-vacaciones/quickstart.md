@@ -34,7 +34,9 @@ ya usado por 004/011/012/013 (sin Oracle real ni reloj real).
 4. `GET /api/resumen-periodo/{legajo}` para el período de esos días.
    **Esperado**: los 10 días (incluidos el/los fines de semana del rango)
    aparecen con `justificacion: { motivoId: "vacaciones-anual", tipoPago:
-   "No paga" }` y suman a `ausencias`, nunca a `licencia`.
+   "No paga" }`, se cuentan en el contador propio `vacaciones` del resumen y
+   quedan excluidos de `ausencias` y de `licencia` (clarificación spec
+   2026-09-08).
 5. Repetir el `POST` sobre un rango que se solape con el ya asignado.
    **Esperado**: **409** `VACACIONES_SUPERPUESTA`, listando las fechas en
    conflicto; nada queda registrado a medias.

@@ -164,15 +164,20 @@ function estadoConCorreccion(auto, entradaEfectiva, salidaEfectiva) {
 // clasificación por spec 015 FR-006): Justificación vigente de este día
 // ({tipoPago, ...}), aplicable solo cuando NO hay corrección (mutuamente
 // excluyentes por construcción: FR-002 exige Sin fichadas/futuro para
-// justificar, la corrección exige que ya haya jornada calculada). Si
-// llegaron fichadas después de justificar, no se toca el resultado y se
-// señala `requiereJustificacionRevision` (FR-010/FR-017, edge case "fichadas
-// que llegan después de justificar"). Si no, el día pasa a `Sin fichadas`
-// (cuenta como ausencia en el resumen del período, spec 011): una
-// Justificación `Paga` acredita la jornada esperada igual que un `Feriado`
-// (FR-013); una `No paga` no acredita nada, SIEMPRE 0 horas (FR-014) —
-// incluso sobre un `Feriado` que de otro modo se auto-acredita (spec 015
-// FR-006: una Asignación de Vacaciones no distingue hábil/no hábil/feriado).
+// justificar, la corrección exige que ya haya jornada calculada).
+// Si llegaron fichadas después de justificar, el día se señala para revisión
+// (`requiereJustificacionRevision`, FR-010/FR-017, edge case "fichadas que
+// llegan después de justificar") y, según el tipo de pago: `Paga` conserva
+// las horas reales calculadas de esas fichadas; `No paga` (incluida la
+// Justificación-espejo de Vacaciones) pasa igualmente a `Sin fichadas` con
+// 0 horas — la presencia de fichadas nunca la hace contar como presente
+// (spec 015 clarificación 2026-09-08; FR-014).
+// Si NO llegaron fichadas, el día pasa a `Sin fichadas` (cuenta como
+// ausencia en el resumen del período, spec 011): una Justificación `Paga`
+// acredita la jornada esperada igual que un `Feriado` (FR-013); una `No
+// paga` no acredita nada, SIEMPRE 0 horas (FR-014) — incluso sobre un
+// `Feriado` que de otro modo se auto-acredita (spec 015 FR-006: una
+// Asignación de Vacaciones no distingue hábil/no hábil/feriado).
 export function aplicarAjustes(auto, { correccion = null, pausas = [], params = null, justificacion = null } = {}) {
   const corrigeHorario =
     correccion && (correccion.entradaCorregida != null || correccion.salidaCorregida != null);
@@ -250,11 +255,23 @@ export function aplicarAjustes(auto, { correccion = null, pausas = [], params = 
       auto.clasificacion === Clasificacion.LABORABLE
         ? auto.estado !== EstadoJornada.SIN_FICHADAS
         : (auto.fichadasNoUsadas ?? []).length > 0;
+    const paga = justificacion.tipoPago === 'Paga';
     if (llegaronFichadas) {
+      // `No paga` (incluye la Justificación-espejo de una Asignación de
+      // Vacaciones, spec 015 FR-006/FR-017 y clarificación 2026-09-08): la
+      // sola presencia de fichadas NUNCA acredita jornada ni hace que el día
+      // cuente como presente — SIEMPRE 0 horas (feature 012 FR-014) y estado
+      // `Sin fichadas` — pero el día se señala para revisión de un
+      // responsable en vez de descartar la marca o las fichadas en silencio.
+      // `Paga`: el cálculo real de las fichadas prevalece (feature 012, edge
+      // case "fichadas que llegan tras justificar"); solo se señala.
       return {
         ...auto,
-        descuentoPausas: descuento,
-        totalDiario: redondearHorasAbajo(Math.max(0, auto.totalDiario - descuento)),
+        estado: paga ? auto.estado : EstadoJornada.SIN_FICHADAS,
+        totalDiario: paga
+          ? redondearHorasAbajo(Math.max(0, auto.totalDiario - descuento))
+          : 0,
+        descuentoPausas: paga ? descuento : 0,
         correccionVigente: false,
         pausas,
         requiereRevision: false,
@@ -262,7 +279,6 @@ export function aplicarAjustes(auto, { correccion = null, pausas = [], params = 
         requiereJustificacionRevision: true,
       };
     }
-    const paga = justificacion.tipoPago === 'Paga';
     const creditoPaga = paga && params ? params.jornadaEsperada : 0;
     return {
       ...auto,
