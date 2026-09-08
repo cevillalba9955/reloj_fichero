@@ -5,12 +5,17 @@ import { etiquetaPeriodo } from './SelectorPeriodo.jsx';
 // 018-informe-cierre-periodo — Vista imprimible del informe de cierre: el
 // documento apto para imprimir y archivar (FR-011). Muestra el sello de
 // emisión, el Informe de Resumen (una fila por empleado + total), el Informe
-// de Detalle (día por día, empleado por empleado) y la lista de pendientes.
-// Componente de presentación puro: recibe la `vista` ya resuelta (Principio I).
+// de Detalle (día por día, empleado por empleado, sin días No Laborables) y la
+// lista de pendientes. Componente de presentación puro: recibe la `vista` ya
+// resuelta (Principio I). "Descargar PDF" abre el diálogo de impresión del
+// navegador con el informe aislado (sin la app alrededor); el usuario elige
+// "Guardar como PDF" como destino.
 
-function horas(n) {
-  const v = Number(n) || 0;
-  return v.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+// Las horas del dominio están en MINUTOS (mismo criterio que TablaResumenPeriodo
+// / TablaFichadasHoy): se muestran como 'H:MM'.
+function horas(min) {
+  const m = Number.isFinite(min) && min >= 0 ? Math.round(min) : 0;
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
 }
 
 function marcasDia(d) {
@@ -23,6 +28,38 @@ function marcasDia(d) {
   return marcas.join(' · ');
 }
 
+const ESTILOS = `
+  .informe-cierre-imprimible { font-size: 13px; color: #000; }
+  .informe-cierre-imprimible h3 { margin: 0 0 4px; }
+  .informe-cierre-imprimible h4 { margin: 18px 0 6px; border-bottom: 1px solid #999; padding-bottom: 2px; }
+  .informe-cierre-imprimible .informe-sello p { margin: 2px 0; }
+  .informe-cierre-imprimible .informe-obsoleto { color: #a8071a; font-weight: 600; }
+  .informe-tabla { border-collapse: collapse; width: 100%; margin: 4px 0 8px; }
+  .informe-tabla th, .informe-tabla td { border: 1px solid #bbb; padding: 3px 6px; text-align: left; }
+  .informe-tabla th { background: #f0f0f0; }
+  .informe-tabla tfoot td { font-weight: 600; background: #fafafa; }
+  .informe-resumen td:not(:nth-child(2)) { text-align: right; }
+  .informe-resumen td:first-child { text-align: left; }
+  .informe-detalle td:nth-child(n+4):nth-child(-n+7) { text-align: right; }
+  .fila-anomalia td, .celda-anomalia { color: #a8071a; }
+  .seccion-empleado h4 { margin-top: 14px; }
+  .subtotal-empleado { margin: 2px 0 10px; font-weight: 600; }
+  .pendientes-lista h5 { margin: 8px 0 2px; }
+  .pendientes-vacio { font-style: italic; }
+  @media print {
+    body > *:not(.dialogo-backdrop) { display: none !important; }
+    .dialogo-backdrop { position: static !important; overflow: visible !important; }
+    .dialogo-backdrop .ant-modal-mask { display: none !important; }
+    .dialogo-backdrop .ant-modal,
+    .dialogo-backdrop .ant-modal-content { width: 100% !important; max-width: 100% !important; top: 0 !important; margin: 0 !important; box-shadow: none !important; }
+    .dialogo-backdrop .ant-modal-body { max-height: none !important; overflow: visible !important; }
+    .informe-cierre-imprimible .no-imprimir,
+    .dialogo-backdrop .ant-modal-close { display: none !important; }
+    .seccion-empleado { break-inside: avoid; }
+    .informe-tabla thead { display: table-header-group; }
+  }
+`;
+
 function TablaResumen({ resumen }) {
   return (
     <table className="informe-tabla informe-resumen">
@@ -30,7 +67,6 @@ function TablaResumen({ resumen }) {
         <tr>
           <th>Legajo</th>
           <th>Nombre</th>
-          <th>Modalidad</th>
           <th>Horas computadas</th>
           <th>Completas</th>
           <th>Incompletas</th>
@@ -48,7 +84,6 @@ function TablaResumen({ resumen }) {
           <tr key={f.legajo} className={f.anomalia ? 'fila-anomalia' : undefined}>
             <td>{f.legajo}</td>
             <td>{f.nombre ?? '—'}</td>
-            <td>{f.modalidad ?? '—'}</td>
             {f.anomalia ? (
               <td colSpan={10} className="celda-anomalia" role="alert">
                 Anomalía: {f.anomalia}
@@ -72,9 +107,7 @@ function TablaResumen({ resumen }) {
       </tbody>
       <tfoot>
         <tr>
-          <td colSpan={3}>
-            Total ({resumen.encabezado.empleados} empleados)
-          </td>
+          <td colSpan={2}>Total ({resumen.encabezado.empleados} empleados)</td>
           <td>{horas(resumen.encabezado.totalHoras)}</td>
           <td colSpan={9} />
         </tr>
@@ -88,7 +121,6 @@ function SeccionDetalle({ seccion }) {
     <section className="seccion-empleado">
       <h4>
         {seccion.legajo} — {seccion.nombre ?? 'sin nombre'}
-        {seccion.modalidad ? ` (${seccion.modalidad})` : ''}
       </h4>
       {seccion.anomalia ? (
         <p className="celda-anomalia" role="alert">
@@ -118,11 +150,7 @@ function SeccionDetalle({ seccion }) {
                   <td>{d.clasificacion}</td>
                   <td>{d.entrada ?? '—'}</td>
                   <td>{d.salida ?? '—'}</td>
-                  <td>
-                    {d.pausas?.length
-                      ? d.pausas.map((p) => `${p.desde}–${p.hasta}`).join(', ')
-                      : '—'}
-                  </td>
+                  <td>{d.pausas?.length ? d.pausas.map((p) => `${p.desde}–${p.hasta}`).join(', ') : '—'}</td>
                   <td>{horas(d.horas)}</td>
                   <td>{d.estado}</td>
                   <td>{marcasDia(d) || '—'}</td>
@@ -188,17 +216,8 @@ export default function InformeCierrePrintable({ vista, onCerrar }) {
   const fechaEmision = new Date(sello.emitidoEn).toLocaleString('es-AR');
 
   return (
-    <Dialogo etiqueta={`Informe de cierre — ${etiquetaPeriodo(sello.periodoId)}`} onCerrar={onCerrar}>
-      <style>{`
-        @media print {
-          body > *:not(.dialogo-backdrop) { display: none !important; }
-          .dialogo-backdrop { position: static !important; }
-          .dialogo-backdrop .ant-modal-mask { display: none !important; }
-          .dialogo-backdrop .ant-modal { max-width: 100% !important; top: 0 !important; }
-          .informe-cierre-imprimible .no-imprimir { display: none !important; }
-          .seccion-empleado { break-inside: avoid; }
-        }
-      `}</style>
+    <Dialogo etiqueta={`Informe de cierre — ${etiquetaPeriodo(sello.periodoId)}`} onCerrar={onCerrar} ancho="min(1100px, 94vw)">
+      <style>{ESTILOS}</style>
       <div className="informe-cierre-imprimible">
         <header className="informe-sello">
           <h3>Informe de cierre — {etiquetaPeriodo(sello.periodoId)}</h3>
@@ -236,9 +255,12 @@ export default function InformeCierrePrintable({ vista, onCerrar }) {
 
         <div className="acciones no-imprimir">
           <Button type="primary" onClick={() => window.print()}>
-            Imprimir
+            Descargar PDF
           </Button>
           <Button onClick={onCerrar}>Cerrar</Button>
+          <span className="hint-pdf" style={{ color: '#888', fontSize: 12 }}>
+            Se abre el diálogo de impresión: elegí «Guardar como PDF» en el destino.
+          </span>
         </div>
       </div>
     </Dialogo>
