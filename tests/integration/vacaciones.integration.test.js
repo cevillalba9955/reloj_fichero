@@ -235,6 +235,49 @@ test('fichadas sobre un día No Laborable marcado Vacaciones señalan revisión,
   }
 });
 
+// spec 015, clarificación 2026-09-08 (bug de producción, legajo 9, 7-8/09):
+// fichadas sobre un día LABORABLE marcado Vacaciones NO deben sumar horas ni
+// contar como jornada trabajada en el resumen; solo se señalan para revisión.
+test('fichadas sobre un día Laborable marcado Vacaciones no suman horas ni presentismo (bug 7-8/09)', async () => {
+  const e = await entorno();
+  try {
+    await seedSaldo(e.repoDir, 1, 20);
+    const fechaInicio = fechaDelMes(1);
+    assert.equal((await post(e.base, '/api/vacaciones/asignaciones', {
+      legajo: 1, fechaInicio, cantidadDias: 7, autor: 'rrhh',
+    })).status, 200);
+
+    const fechas = expandirDiasCorridos(fechaInicio, 7);
+    const habil = fechas.find((f) => {
+      const [y, m, d] = f.split('-').map(Number);
+      const diaSemana = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+      return diaSemana >= 1 && diaSemana <= 5; // lunes a viernes (Laborable)
+    });
+    assert.ok(habil, 'un rango de 7 días corridos siempre incluye al menos un día hábil');
+
+    e.agregarFichadas([
+      { legajo: 1, fecha: habil, hora: '08:00:00' },
+      { legajo: 1, fecha: habil, hora: '17:00:00' },
+    ]);
+
+    const dias = (await (await fetch(`${e.base}/api/resumen-periodo/1?periodo=${e.periodo}`)).json()).dias;
+    const dia = dias.find((d) => d.fecha === habil);
+    assert.equal(dia.justificacion?.motivoId, 'vacaciones-anual', 'sigue marcado como Vacaciones');
+    assert.equal(dia.requiereJustificacionRevision, true, 'se señala para revisión');
+    assert.equal(dia.horas, 0, 'las fichadas NO acreditan horas en un día de Vacaciones');
+    assert.notEqual(dia.estado, 'Completa', 'no cuenta como jornada completa');
+
+    const fila = (await (await fetch(`${e.base}/api/resumen-periodo?periodo=${e.periodo}`)).json()).filas.find(
+      (f) => f.legajo === 1,
+    );
+    assert.equal(fila.horasTrabajadas, 0, 'ningún día de vacaciones aporta horas trabajadas');
+    assert.equal(fila.completas, 0, 'el día de vacaciones con fichadas no cuenta como completa');
+    assert.ok(fila.vacaciones >= 1, 'el día se cuenta en la columna propia vacaciones');
+  } finally {
+    e.close();
+  }
+});
+
 test('DELETE /api/justificaciones sobre un día de una asignación TODAVÍA vigente rechaza con 409 (guardrail de origen)', async () => {
   const e = await entorno();
   try {
