@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Button } from 'antd';
 import Dialogo from './Dialogo.jsx';
 import { etiquetaPeriodo } from './SelectorPeriodo.jsx';
@@ -7,9 +8,12 @@ import { etiquetaPeriodo } from './SelectorPeriodo.jsx';
 // emisión, el Informe de Resumen (una fila por empleado + total), el Informe
 // de Detalle (día por día, empleado por empleado, sin días No Laborables) y la
 // lista de pendientes. Componente de presentación puro: recibe la `vista` ya
-// resuelta (Principio I). "Descargar PDF" abre el diálogo de impresión del
-// navegador con el informe aislado (sin la app alrededor); el usuario elige
-// "Guardar como PDF" como destino.
+// resuelta (Principio I).
+//
+// "Descargar PDF" NO imprime el modal (antd lo monta en un portal anidado y
+// con scroll interno → salían hojas en blanco). Abre una ventana nueva con
+// SOLO el informe + estos estilos y dispara el diálogo de impresión ahí; el
+// usuario elige "Guardar como PDF" como destino.
 
 // Las horas del dominio están en MINUTOS (mismo criterio que TablaResumenPeriodo
 // / TablaFichadasHoy): se muestran como 'H:MM'.
@@ -29,11 +33,11 @@ function marcasDia(d) {
 }
 
 const ESTILOS = `
-  .informe-cierre-imprimible { font-size: 13px; color: #000; }
-  .informe-cierre-imprimible h3 { margin: 0 0 4px; }
-  .informe-cierre-imprimible h4 { margin: 18px 0 6px; border-bottom: 1px solid #999; padding-bottom: 2px; }
-  .informe-cierre-imprimible .informe-sello p { margin: 2px 0; }
-  .informe-cierre-imprimible .informe-obsoleto { color: #a8071a; font-weight: 600; }
+  .informe-cierre-contenido { font-size: 13px; color: #000; }
+  .informe-cierre-contenido h3 { margin: 0 0 4px; }
+  .informe-cierre-contenido h4 { margin: 18px 0 6px; border-bottom: 1px solid #999; padding-bottom: 2px; }
+  .informe-cierre-contenido .informe-sello p { margin: 2px 0; }
+  .informe-cierre-contenido .informe-obsoleto { color: #a8071a; font-weight: 600; }
   .informe-tabla { border-collapse: collapse; width: 100%; margin: 4px 0 8px; }
   .informe-tabla th, .informe-tabla td { border: 1px solid #bbb; padding: 3px 6px; text-align: left; }
   .informe-tabla th { background: #f0f0f0; }
@@ -42,19 +46,12 @@ const ESTILOS = `
   .informe-resumen td:first-child { text-align: left; }
   .informe-detalle td:nth-child(n+4):nth-child(-n+7) { text-align: right; }
   .fila-anomalia td, .celda-anomalia { color: #a8071a; }
-  .seccion-empleado h4 { margin-top: 14px; }
   .subtotal-empleado { margin: 2px 0 10px; font-weight: 600; }
   .pendientes-lista h5 { margin: 8px 0 2px; }
   .pendientes-vacio { font-style: italic; }
   @media print {
-    body > *:not(.dialogo-backdrop) { display: none !important; }
-    .dialogo-backdrop { position: static !important; overflow: visible !important; }
-    .dialogo-backdrop .ant-modal-mask { display: none !important; }
-    .dialogo-backdrop .ant-modal,
-    .dialogo-backdrop .ant-modal-content { width: 100% !important; max-width: 100% !important; top: 0 !important; margin: 0 !important; box-shadow: none !important; }
-    .dialogo-backdrop .ant-modal-body { max-height: none !important; overflow: visible !important; }
-    .informe-cierre-imprimible .no-imprimir,
-    .dialogo-backdrop .ant-modal-close { display: none !important; }
+    @page { margin: 14mm; }
+    body { margin: 0; }
     .seccion-empleado { break-inside: avoid; }
     .informe-tabla thead { display: table-header-group; }
   }
@@ -211,55 +208,109 @@ function Pendientes({ pendientes }) {
   );
 }
 
+// Imprime SOLO el informe (sin la app ni el modal) usando un iframe oculto.
+// Evita el problema de "hojas en blanco" al imprimir el modal de antd (portal
+// anidado + scroll interno) y funciona aunque el navegador bloquee popups.
+// `window.print()` del iframe imprime únicamente su documento.
+function imprimirEnIframe(titulo, htmlContenido) {
+  const anterior = document.getElementById('informe-cierre-print-frame');
+  if (anterior) anterior.remove();
+
+  const iframe = document.createElement('iframe');
+  iframe.id = 'informe-cierre-print-frame';
+  iframe.setAttribute('aria-hidden', 'true');
+  Object.assign(iframe.style, {
+    position: 'fixed',
+    right: '0',
+    bottom: '0',
+    width: '0',
+    height: '0',
+    border: '0',
+  });
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(
+    `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${titulo}</title>` +
+      `<style>body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;margin:0}${ESTILOS}</style>` +
+      `</head><body>${htmlContenido}</body></html>`,
+  );
+  doc.close();
+
+  const cw = iframe.contentWindow;
+  const limpiar = () => {
+    if (iframe.isConnected) iframe.remove();
+  };
+  cw.onafterprint = limpiar;
+  try {
+    cw.focus();
+    cw.print();
+  } catch {
+    // entornos sin soporte de impresión (tests): no-op
+  }
+  // Fallback por si onafterprint no dispara (algunos navegadores al cancelar).
+  setTimeout(limpiar, 60000);
+}
+
 export default function InformeCierrePrintable({ vista, onCerrar }) {
   const { sello, resumen, detalle, pendientes, obsoleto } = vista;
   const fechaEmision = new Date(sello.emitidoEn).toLocaleString('es-AR');
+  const contenidoRef = useRef(null);
+
+  function descargarPdf() {
+    const html = contenidoRef.current?.outerHTML;
+    if (!html) return;
+    imprimirEnIframe(`Informe de cierre ${sello.periodoId}`, html);
+  }
 
   return (
     <Dialogo etiqueta={`Informe de cierre — ${etiquetaPeriodo(sello.periodoId)}`} onCerrar={onCerrar} ancho="min(1100px, 94vw)">
       <style>{ESTILOS}</style>
       <div className="informe-cierre-imprimible">
-        <header className="informe-sello">
-          <h3>Informe de cierre — {etiquetaPeriodo(sello.periodoId)}</h3>
-          <p>
-            Período <strong>{sello.periodoId}</strong> (tramo {sello.tramo}) ·{' '}
-            {resumen.encabezado.rangoFechas.desde} a {resumen.encabezado.rangoFechas.hasta}
-          </p>
-          <p>
-            Emitido el {fechaEmision}
-            {sello.autor ? ` por ${sello.autor}` : ''} ({sello.modo})
-          </p>
-          {obsoleto && (
-            <p className="informe-obsoleto" role="alert">
-              El período fue reabierto después de esta emisión: el informe está desactualizado, volvé a emitirlo.
+        <div className="informe-cierre-contenido" ref={contenidoRef}>
+          <header className="informe-sello">
+            <h3>Informe de cierre — {etiquetaPeriodo(sello.periodoId)}</h3>
+            <p>
+              Período <strong>{sello.periodoId}</strong> (tramo {sello.tramo}) ·{' '}
+              {resumen.encabezado.rangoFechas.desde} a {resumen.encabezado.rangoFechas.hasta}
             </p>
-          )}
-        </header>
+            <p>
+              Emitido el {fechaEmision}
+              {sello.autor ? ` por ${sello.autor}` : ''} ({sello.modo})
+            </p>
+            {obsoleto && (
+              <p className="informe-obsoleto" role="alert">
+                El período fue reabierto después de esta emisión: el informe está desactualizado, volvé a emitirlo.
+              </p>
+            )}
+          </header>
 
-        <section>
-          <h4>Resumen de horas computadas</h4>
-          <TablaResumen resumen={resumen} />
-        </section>
+          <section>
+            <h4>Resumen de horas computadas</h4>
+            <TablaResumen resumen={resumen} />
+          </section>
 
-        <section>
-          <h4>Detalle de asistencia</h4>
-          {detalle.secciones.map((s) => (
-            <SeccionDetalle key={s.legajo} seccion={s} />
-          ))}
-        </section>
+          <section>
+            <h4>Detalle de asistencia</h4>
+            {detalle.secciones.map((s) => (
+              <SeccionDetalle key={s.legajo} seccion={s} />
+            ))}
+          </section>
 
-        <section>
-          <h4>Pendientes de revisión</h4>
-          <Pendientes pendientes={pendientes} />
-        </section>
+          <section>
+            <h4>Pendientes de revisión</h4>
+            <Pendientes pendientes={pendientes} />
+          </section>
+        </div>
 
-        <div className="acciones no-imprimir">
-          <Button type="primary" onClick={() => window.print()}>
+        <div className="acciones">
+          <Button type="primary" onClick={descargarPdf}>
             Descargar PDF
           </Button>
           <Button onClick={onCerrar}>Cerrar</Button>
           <span className="hint-pdf" style={{ color: '#888', fontSize: 12 }}>
-            Se abre el diálogo de impresión: elegí «Guardar como PDF» en el destino.
+            Se abre el diálogo de impresión con el informe: elegí «Guardar como PDF» en el destino.
           </span>
         </div>
       </div>
