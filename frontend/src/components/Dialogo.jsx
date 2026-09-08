@@ -7,7 +7,7 @@ import { Modal } from 'antd';
 // (`onCerrar`, sin efecto alguno) — comportamiento por defecto de antd Modal
 // (`keyboard`/`maskClosable`), mantenido explícito por claridad.
 
-export default function Dialogo({ etiqueta, onCerrar, children }) {
+export default function Dialogo({ etiqueta, onCerrar, ancho, children }) {
   return (
     <Modal
       className="dialogo"
@@ -19,6 +19,10 @@ export default function Dialogo({ etiqueta, onCerrar, children }) {
       keyboard
       mask={{ closable: true }}
       destroyOnHidden
+      // feature 018 — `ancho` opcional (número px o string CSS) para diálogos
+      // con contenido tabular ancho, como el informe de cierre. Sin `ancho`,
+      // el Modal usa el ancho por defecto de antd.
+      width={ancho}
     >
       {children}
     </Modal>

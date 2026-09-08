@@ -1,4 +1,4 @@
-import { parsePeriodo, periodoAnterior, periodoSiguiente, mesActualPeriodo, hoyLocal } from '../presentismo/domain/calendario-mes.js';
+import { parsePeriodo, periodoAnterior, periodoSiguiente, mesActualPeriodo, hoyLocal, Clasificacion } from '../presentismo/domain/calendario-mes.js';
 import { recortar, Tramo } from '../presentismo/domain/periodo-liquidacion.js';
 import { formatHoraMinuto } from '../presentismo/domain/tiempo.js';
 
@@ -268,24 +268,29 @@ export function construirVistaInformeCierre({ entrada }) {
         modalidad: s.modalidad ?? null,
         anomalia: s.anomalia ?? null,
         subtotalHoras: s.subtotalHoras ?? 0,
-        dias: (s.dias ?? []).map((d) => ({
-          fecha: d.fecha,
-          diaSemana: DIAS_SEMANA[diaSemanaDe(d.fecha)],
-          clasificacion: d.clasificacion,
-          estado: d.estado,
-          entrada: d.entrada != null ? formatHoraMinuto(d.entrada) : null,
-          salida: d.salida != null ? formatHoraMinuto(d.salida) : null,
-          horas: d.horas,
-          llegadaTarde: Boolean(d.llegadaTarde),
-          corregida: Boolean(d.corregida),
-          pausas: (d.pausas ?? []).map((p) => ({
-            desde: formatHoraMinuto(p.desde),
-            hasta: formatHoraMinuto(p.hasta),
-            tipo: p.tipo,
+        // feature 018 — el detalle omite los días No Laborables (sábados,
+        // domingos): no aportan horas ni información de asistencia y sólo
+        // alargan el informe. El subtotal no cambia (esos días valen 0).
+        dias: (s.dias ?? [])
+          .filter((d) => d.clasificacion !== Clasificacion.NO_LABORABLE)
+          .map((d) => ({
+            fecha: d.fecha,
+            diaSemana: DIAS_SEMANA[diaSemanaDe(d.fecha)],
+            clasificacion: d.clasificacion,
+            estado: d.estado,
+            entrada: d.entrada != null ? formatHoraMinuto(d.entrada) : null,
+            salida: d.salida != null ? formatHoraMinuto(d.salida) : null,
+            horas: d.horas,
+            llegadaTarde: Boolean(d.llegadaTarde),
+            corregida: Boolean(d.corregida),
+            pausas: (d.pausas ?? []).map((p) => ({
+              desde: formatHoraMinuto(p.desde),
+              hasta: formatHoraMinuto(p.hasta),
+              tipo: p.tipo,
+            })),
+            justificacion: d.justificacion ?? null,
+            requiereJustificacionRevision: Boolean(d.requiereJustificacionRevision),
           })),
-          justificacion: d.justificacion ?? null,
-          requiereJustificacionRevision: Boolean(d.requiereJustificacionRevision),
-        })),
       })),
     },
     pendientes: entrada.pendientes,
