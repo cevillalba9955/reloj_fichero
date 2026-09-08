@@ -48,10 +48,14 @@ function filaResumenDe(fila) {
   const salida = { legajo: fila.legajo, nombre: fila.nombre ?? null, modalidad: fila.modalidad ?? null };
   if (fila.anomalia) {
     for (const c of CONTADORES) salida[c] = 0;
+    salida.presentismoIndividual = null;
     salida.anomalia = fila.anomalia;
     return salida;
   }
   for (const c of CONTADORES) salida[c] = fila[c] ?? 0;
+  // 018 — presentismo individual (ratio 0..1, o null); ya calculado por
+  // proyectarResumenPeriodo excluyendo los días de vacaciones.
+  salida.presentismoIndividual = fila.presentismoIndividual ?? null;
   salida.anomalia = null;
   return salida;
 }
@@ -125,6 +129,14 @@ export function construirInformeCierre({ filas, periodoId, periodoMes, tramo, em
 
   const filasResumen = filas.map(filaResumenDe);
   const totalHoras = redondear(filasResumen.reduce((s, f) => s + f.horasTrabajadas, 0));
+  // Totales del pie de la grilla y % de presentismo general (018): las filas
+  // con anomalía no aportan (no tienen cálculo).
+  const totalAusencias = filas.reduce((s, f) => s + (f.anomalia ? 0 : f.ausencias || 0), 0);
+  const totalHorasEsperadas = redondear(filas.reduce((s, f) => s + (f.anomalia ? 0 : f.horasEsperadas || 0), 0));
+  // presentismo general = horas computadas / horas esperadas del período
+  // (= Σ jornada esperada por empleado). Ratio 0..1 sin redondear (la UI lo
+  // formatea como %); null si no hay horas esperadas.
+  const presentismoGeneral = totalHorasEsperadas > 0 ? totalHoras / totalHorasEsperadas : null;
 
   const resumen = {
     encabezado: {
@@ -134,6 +146,9 @@ export function construirInformeCierre({ filas, periodoId, periodoMes, tramo, em
       rangoFechas,
       empleados: filasResumen.length,
       totalHoras,
+      totalAusencias,
+      totalHorasEsperadas,
+      presentismoGeneral,
     },
     filas: filasResumen,
   };

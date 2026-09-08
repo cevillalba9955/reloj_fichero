@@ -290,3 +290,43 @@ test('requiereJustificacionRevision se expone en el detalle del día', () => {
   });
   assert.equal(r.detalle[0].requiereJustificacionRevision, true);
 });
+
+// 018 — horas esperadas y presentismo individual, con los días de vacaciones
+// EXCLUIDOS del cálculo (el empleado no debía trabajar).
+test('horasEsperadas cuenta Laborable + Feriado; los días de vacaciones se excluyen', () => {
+  const vac = (fecha) =>
+    jornada(fecha, {
+      estado: 'Sin fichadas',
+      entrada: null,
+      salida: null,
+      totalDiario: 0,
+      justificacion: { motivoId: MotivoVacaciones.id, etiquetaMotivo: 'Vacaciones', tipoPago: 'No paga' },
+    });
+  const ausente = (fecha) => jornada(fecha, { estado: 'Sin fichadas', entrada: null, salida: null, totalDiario: 0 });
+
+  const r = proyectarResumenPeriodo({
+    resumen: resumen([jornada('2026-07-06'), vac('2026-07-10'), ausente('2026-07-13')]),
+    hoy: HOY,
+  });
+  assert.equal(r.horasTrabajadas, 540);
+  // 07-06 (trabajado) + 07-13 (ausente) aportan; 07-10 (vacaciones) NO.
+  assert.equal(r.horasEsperadas, 1080);
+  assert.equal(r.presentismoIndividual, 540 / 1080); // 0.5
+});
+
+test('presentismoIndividual es null si no hubo horas esperadas (tramo todo de vacaciones)', () => {
+  const r = proyectarResumenPeriodo({
+    resumen: resumen([
+      jornada('2026-07-06', {
+        estado: 'Sin fichadas',
+        entrada: null,
+        salida: null,
+        totalDiario: 0,
+        justificacion: { motivoId: MotivoVacaciones.id, etiquetaMotivo: 'Vacaciones', tipoPago: 'No paga' },
+      }),
+    ]),
+    hoy: HOY,
+  });
+  assert.equal(r.horasEsperadas, 0);
+  assert.equal(r.presentismoIndividual, null);
+});
