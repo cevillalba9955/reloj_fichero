@@ -1,4 +1,4 @@
-import { render, screen, within, fireEvent } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import InformeCierrePrintable from './InformeCierrePrintable.jsx';
 
 // 018-informe-cierre-periodo (T029 / T034) — vista imprimible: resumen por
@@ -125,24 +125,10 @@ test('la grilla de resumen oculta los ceros y muestra sólo los valores > 0', ()
   expect(within(tablaResumen).queryByText('0')).not.toBeInTheDocument();
 });
 
-test('ofrece la acción "Descargar PDF"', () => {
+test('el modal de "Ver informe" sólo tiene el botón Cerrar (la descarga a PDF vive en la página)', () => {
   render(<InformeCierrePrintable vista={vista()} onCerrar={() => {}} />);
-  expect(screen.getByRole('button', { name: 'Descargar PDF' })).toBeInTheDocument();
-});
-
-test('"Descargar PDF" imprime SOLO el informe en un iframe aislado (no el modal ni los botones)', () => {
-  render(<InformeCierrePrintable vista={vista()} onCerrar={() => {}} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Descargar PDF' }));
-
-  const iframe = document.getElementById('informe-cierre-print-frame');
-  expect(iframe).toBeInTheDocument();
-  const doc = iframe.contentWindow.document;
-  expect(doc.body.textContent).toContain('Resumen de horas computadas');
-  expect(doc.body.textContent).toContain('Detalle de asistencia');
-  expect(doc.title).toMatch(/Informe de cierre 202607/);
-  // los controles del modal NO deben ir al PDF
-  expect(doc.body.textContent).not.toContain('Descargar PDF');
-  expect(doc.body.textContent).not.toContain('Guardar como PDF');
+  expect(screen.getByRole('button', { name: 'Cerrar' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Descargar PDF' })).not.toBeInTheDocument();
 });
 
 test('pendientes: lista jornadas incompletas, anomalías y ajustes', () => {

@@ -1,28 +1,32 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AccionInformeCierre from './AccionInformeCierre.jsx';
-import { renderConRol } from '../test-utils/rol.jsx';
 
-// 018-informe-cierre-periodo (T014) — la acción de emisión: deshabilitada si
-// el período no está cerrado o el rol no alcanza; al emitir llama al cliente y
-// abre la vista imprimible; avisa cuando la copia guardada quedó obsoleta.
+// 018-informe-cierre-periodo — el informe se genera solo al cerrar el período
+// (no hay botón "Emitir"); en la página Resumen se puede "Ver informe" y
+// "Descargar PDF", y esas acciones sólo aparecen si el período está cerrado y
+// existe una copia guardada.
 
 function vistaInforme(over = {}) {
   return {
     periodoId: '202607',
-    sello: { periodoId: '202607', tramo: 'Mes', modo: 'manual', emitidoEn: '2026-08-01T10:00:00.000Z', autor: 'ana' },
+    sello: { periodoId: '202607', tramo: 'Mes', modo: 'automatico', emitidoEn: '2026-08-01T10:00:00.000Z', autor: 'ana' },
     obsoleto: false,
     resumen: {
-      encabezado: { periodoId: '202607', tramo: 'Mes', empleados: 1, totalHoras: 8, rangoFechas: { desde: '2026-07-01', hasta: '2026-07-31' } },
+      encabezado: {
+        periodoId: '202607', tramo: 'Mes', empleados: 1, totalHoras: 480, totalAusencias: 0,
+        totalHorasEsperadas: 480, presentismoGeneral: 1,
+        rangoFechas: { desde: '2026-07-01', hasta: '2026-07-31' },
+      },
       filas: [
-        { legajo: 1, nombre: 'Ana', modalidad: 'Mensual', horasTrabajadas: 8, completas: 1, incompletas: 0, ausencias: 0, llegadasTarde: 0, retirosAnticipados: 0, correcciones: 0, feriado: 0, licencia: 0, vacaciones: 0, anomalia: null },
+        { legajo: 1, nombre: 'Ana', modalidad: 'Mensual', horasTrabajadas: 480, presentismoIndividual: 1, completas: 1, incompletas: 0, ausencias: 0, llegadasTarde: 0, retirosAnticipados: 0, correcciones: 0, feriado: 0, licencia: 0, vacaciones: 0, anomalia: null },
       ],
     },
     detalle: {
       encabezado: { periodoId: '202607', tramo: 'Mes', empleados: 1 },
       secciones: [
-        { legajo: 1, nombre: 'Ana', modalidad: 'Mensual', anomalia: null, subtotalHoras: 8, dias: [
-          { fecha: '2026-07-01', diaSemana: 'Miércoles', clasificacion: 'Laborable', estado: 'Completa', entrada: '07:00', salida: '15:00', horas: 8, llegadaTarde: false, corregida: false, pausas: [], justificacion: null, requiereJustificacionRevision: false },
+        { legajo: 1, nombre: 'Ana', modalidad: 'Mensual', anomalia: null, subtotalHoras: 480, dias: [
+          { fecha: '2026-07-01', diaSemana: 'Miércoles', clasificacion: 'Laborable', estado: 'Completa', entrada: '07:00', salida: '15:00', horas: 480, llegadaTarde: false, corregida: false, pausas: [], justificacion: null, requiereJustificacionRevision: false },
         ] },
       ],
     },
@@ -33,31 +37,55 @@ function vistaInforme(over = {}) {
 
 const noEmitido = () => Object.assign(new Error('no emitido'), { codigo: 'INFORME_NO_EMITIDO', status: 404 });
 
-test('período abierto → el botón de emitir está deshabilitado', async () => {
-  const cliente = { obtener: vi.fn().mockRejectedValue(noEmitido()), emitir: vi.fn() };
+test('período abierto → sólo una nota, sin botones', async () => {
+  const cliente = { obtener: vi.fn().mockRejectedValue(noEmitido()) };
   render(<AccionInformeCierre periodo="202607" cerrado={false} cliente={cliente} />);
-  expect(screen.getByRole('button', { name: /Emitir informe de cierre/ })).toBeDisabled();
+  expect(screen.getByText(/se genera automáticamente al cerrar el período/)).toBeInTheDocument();
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
 });
 
-test('rol lector → el botón de emitir está deshabilitado aunque el período esté cerrado', async () => {
-  const cliente = { obtener: vi.fn().mockRejectedValue(noEmitido()), emitir: vi.fn() };
-  renderConRol('lector', <AccionInformeCierre periodo="202607" cerrado cliente={cliente} />);
-  expect(screen.getByRole('button', { name: /Emitir informe de cierre/ })).toBeDisabled();
+test('período cerrado sin informe guardado → nota, sin botones', async () => {
+  const cliente = { obtener: vi.fn().mockRejectedValue(noEmitido()) };
+  render(<AccionInformeCierre periodo="202607" cerrado cliente={cliente} />);
+  await waitFor(() => expect(cliente.obtener).toHaveBeenCalled());
+  expect(screen.getByText(/todavía no está disponible/)).toBeInTheDocument();
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
 });
 
-test('período cerrado + rol editor → emitir llama al cliente y abre la vista imprimible', async () => {
+test('período cerrado con informe guardado → botones "Ver informe" y "Descargar PDF"', async () => {
+  const cliente = { obtener: vi.fn().mockResolvedValue(vistaInforme()) };
+  render(<AccionInformeCierre periodo="202607" cerrado cliente={cliente} />);
+  expect(await screen.findByRole('button', { name: 'Ver informe' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Descargar PDF' })).toBeInTheDocument();
+});
+
+test('"Ver informe" abre la vista imprimible en un diálogo', async () => {
   const user = userEvent.setup();
-  const cliente = { obtener: vi.fn().mockRejectedValue(noEmitido()), emitir: vi.fn().mockResolvedValue(vistaInforme()) };
-  renderConRol('editor', <AccionInformeCierre periodo="202607" cerrado cliente={cliente} />);
-
-  await user.click(screen.getByRole('button', { name: /Emitir informe de cierre/ }));
-  await waitFor(() => expect(cliente.emitir).toHaveBeenCalledWith('202607'));
-  expect(await screen.findByRole('dialog')).toBeInTheDocument();
-  expect(screen.getByText(/Resumen de horas computadas/)).toBeInTheDocument();
+  const cliente = { obtener: vi.fn().mockResolvedValue(vistaInforme()) };
+  render(<AccionInformeCierre periodo="202607" cerrado cliente={cliente} />);
+  await user.click(await screen.findByRole('button', { name: 'Ver informe' }));
+  const dialogo = await screen.findByRole('dialog');
+  expect(within(dialogo).getByText(/Resumen de horas computadas/)).toBeInTheDocument();
+  expect(within(dialogo).getByRole('button', { name: 'Cerrar' })).toBeInTheDocument();
 });
 
-test('si la copia guardada viene obsoleta, muestra el aviso de "volvé a emitirlo"', async () => {
-  const cliente = { obtener: vi.fn().mockResolvedValue(vistaInforme({ obsoleto: true })), emitir: vi.fn() };
-  renderConRol('editor', <AccionInformeCierre periodo="202607" cerrado cliente={cliente} />);
-  expect(await screen.findByText(/quedó desactualizado, volvé a emitirlo/)).toBeInTheDocument();
+test('"Descargar PDF" imprime SOLO el informe en un iframe aislado (no el modal ni los botones)', async () => {
+  const cliente = { obtener: vi.fn().mockResolvedValue(vistaInforme()) };
+  render(<AccionInformeCierre periodo="202607" cerrado cliente={cliente} />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: 'Descargar PDF' }));
+
+  const iframe = document.getElementById('informe-cierre-print-frame');
+  expect(iframe).toBeInTheDocument();
+  const doc = iframe.contentWindow.document;
+  expect(doc.body.textContent).toContain('Resumen de horas computadas');
+  expect(doc.body.textContent).toContain('Detalle de asistencia');
+  expect(doc.title).toMatch(/Informe de cierre 202607/);
+  expect(doc.body.textContent).not.toContain('Descargar PDF');
+});
+
+test('si la copia guardada viene obsoleta, muestra el aviso', async () => {
+  const cliente = { obtener: vi.fn().mockResolvedValue(vistaInforme({ obsoleto: true })) };
+  render(<AccionInformeCierre periodo="202607" cerrado cliente={cliente} />);
+  expect(await screen.findByText(/quedó desactualizado/)).toBeInTheDocument();
 });

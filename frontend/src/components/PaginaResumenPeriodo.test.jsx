@@ -144,19 +144,33 @@ test('cerrar el diálogo de detalle vuelve al resumen sin efecto', async () => {
   expect(cliente.obtenerResumen).toHaveBeenCalledTimes(1);
 });
 
-// 018-informe-cierre-periodo (T023) — la acción de emisión aparece en la
-// página y se habilita sólo cuando el período está cerrado.
-test('018 — período abierto: la acción "Emitir informe de cierre" está deshabilitada', async () => {
+// 018-informe-cierre-periodo — el informe se genera solo al cerrar el período:
+// no hay botón "Emitir". Con el período abierto no se muestra ninguna acción;
+// con el período cerrado y una copia guardada, aparecen "Ver informe" y
+// "Descargar PDF".
+test('018 — período abierto: no muestra acciones del informe de cierre, sólo la nota', async () => {
   const cliente = clienteMock({ obtenerResumen: vi.fn().mockResolvedValue(vista({ cerrado: false })) });
   render(<PaginaResumenPeriodo cliente={cliente} clienteInforme={informeMock()} />);
   await screen.findByRole('table');
-  expect(screen.getByRole('button', { name: /Emitir informe de cierre/ })).toBeDisabled();
-  expect(screen.getByText(/una vez que el período está cerrado/)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Emitir informe/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Descargar PDF/ })).not.toBeInTheDocument();
+  expect(screen.getByText(/se genera automáticamente al cerrar el período/)).toBeInTheDocument();
 });
 
-test('018 — período cerrado: la acción "Emitir informe de cierre" se habilita', async () => {
+test('018 — período cerrado con informe guardado: muestra "Ver informe" y "Descargar PDF"', async () => {
+  const informe = {
+    obtener: vi.fn().mockResolvedValue({
+      periodoId: '202607',
+      sello: { periodoId: '202607', tramo: 'Mes', modo: 'automatico', emitidoEn: '2026-08-01T10:00:00.000Z', autor: 'ana' },
+      obsoleto: false,
+      resumen: { encabezado: { periodoId: '202607', tramo: 'Mes', empleados: 0, totalHoras: 0, totalAusencias: 0, totalHorasEsperadas: 0, presentismoGeneral: null, rangoFechas: { desde: '2026-07-01', hasta: '2026-07-31' } }, filas: [] },
+      detalle: { encabezado: { periodoId: '202607', tramo: 'Mes', empleados: 0 }, secciones: [] },
+      pendientes: { hayPendientes: false, jornadasIncompletas: [], anomalias: [], ajustes: [] },
+    }),
+  };
   const cliente = clienteMock({ obtenerResumen: vi.fn().mockResolvedValue(vista({ cerrado: true })) });
-  render(<PaginaResumenPeriodo cliente={cliente} clienteInforme={informeMock()} />);
+  render(<PaginaResumenPeriodo cliente={cliente} clienteInforme={informe} />);
   await screen.findByRole('table');
-  expect(screen.getByRole('button', { name: /Emitir informe de cierre/ })).toBeEnabled();
+  expect(await screen.findByRole('button', { name: 'Descargar PDF' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Ver informe' })).toBeInTheDocument();
 });
