@@ -125,6 +125,7 @@ coincide con la fila del mismo empleado en `GET /api/resumen-periodo?periodo=<pe
 | `horas` | number | horas computadas del día |
 | `llegadaTarde` | boolean | |
 | `corregida` | boolean | marca visible "proviene de corrección" |
+| `motivoCorreccion` | string \| null | motivo de la corrección vigente (FR-027); se imprime junto a la marca "corregida" en Observaciones |
 | `justificacion` | `{ motivoId, etiquetaMotivo, tipoPago } \| null` | marca visible "proviene de justificación" |
 | `requiereJustificacionRevision` | boolean | |
 

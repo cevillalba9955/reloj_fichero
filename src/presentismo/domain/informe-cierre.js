@@ -71,6 +71,7 @@ function renglonDe(d) {
     horas: d.horas ?? 0,
     llegadaTarde: Boolean(d.llegadaTarde),
     corregida: Boolean(d.corregida),
+    motivoCorreccion: d.motivoCorreccion ?? null,
     justificacion: d.justificacion ?? null,
     requiereJustificacionRevision: Boolean(d.requiereJustificacionRevision),
   };

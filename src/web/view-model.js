@@ -283,6 +283,9 @@ export function construirVistaInformeCierre({ entrada }) {
             horas: d.horas,
             llegadaTarde: Boolean(d.llegadaTarde),
             corregida: Boolean(d.corregida),
+            // Motivo de la corrección vigente, para mostrarlo junto a la marca
+            // "corregida" en la columna Observaciones del detalle.
+            motivoCorreccion: d.motivoCorreccion ?? null,
             pausas: (d.pausas ?? []).map((p) => ({
               desde: formatHoraMinuto(p.desde),
               hasta: formatHoraMinuto(p.hasta),
