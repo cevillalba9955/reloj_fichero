@@ -42,6 +42,7 @@ function filaNormal(over = {}) {
     nombre: 'Ada Lovelace',
     modalidad: 'Mensual',
     horasTrabajadas: horas,
+    horasComputadas: over.horasComputadas ?? horas,
     horasEsperadas: horas,
     presentismoIndividual: 1,
     completas: 1,
@@ -93,15 +94,32 @@ test('resumen.encabezado: totalHoras = Σ filas, empleados = filas.length', () =
 
 test('resumen.encabezado: total de ausencias, horas esperadas y presentismo general', () => {
   const filas = [
-    filaNormal({ legajo: 1, horasTrabajadas: 300, horasEsperadas: 400, ausencias: 2 }),
-    filaNormal({ legajo: 2, horasTrabajadas: 100, horasEsperadas: 100, ausencias: 5 }),
+    filaNormal({ legajo: 1, horasTrabajadas: 300, horasComputadas: 300, horasEsperadas: 400, ausencias: 2 }),
+    filaNormal({ legajo: 2, horasTrabajadas: 100, horasComputadas: 100, horasEsperadas: 100, ausencias: 5 }),
     filaAnomalia, // no aporta a los totales
   ];
   const { resumen } = construirInformeCierre({ ...base, filas });
   assert.equal(resumen.encabezado.totalAusencias, 7);
   assert.equal(resumen.encabezado.totalHorasEsperadas, 500);
+  assert.equal(resumen.encabezado.totalHorasComputadas, 400);
   // 400 computadas / 500 esperadas = 0.8
   assert.equal(resumen.encabezado.presentismoGeneral, 0.8);
+});
+
+// 018 (feedback) — el presentismo general usa las horas efectivamente
+// trabajadas (numerador), NO `totalHoras` (que incluye el crédito de feriados y
+// licencias pagas y alimenta la columna "Horas"). El denominador sí contempla
+// los días de licencia. Ej. legajo 35: 45 hs / 90 hs = 50 %.
+test('presentismoGeneral usa horas trabajadas sobre esperadas, no la columna "Horas"', () => {
+  const filas = [
+    // trabajó 450 + 450 de crédito (licencia/feriado); esperaba 900.
+    filaNormal({ legajo: 1, horasTrabajadas: 900, horasComputadas: 450, horasEsperadas: 900 }),
+  ];
+  const { resumen } = construirInformeCierre({ ...base, filas });
+  assert.equal(resumen.encabezado.totalHoras, 900); // columna "Horas" sin cambios
+  assert.equal(resumen.encabezado.totalHorasComputadas, 450);
+  assert.equal(resumen.encabezado.totalHorasEsperadas, 900);
+  assert.equal(resumen.encabezado.presentismoGeneral, 0.5); // 450 / 900, no 900 / 900
 });
 
 test('resumen.encabezado: presentismoGeneral null si no hay horas esperadas', () => {

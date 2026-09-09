@@ -90,18 +90,29 @@ export function proyectarResumenPeriodo({ resumen, hoy }) {
   // genera una Asignación de Vacaciones (`MotivoVacaciones.id`, "No paga":
   // sin esta columna propia, quedarían mezclados dentro de `ausencias`).
   let vacaciones = 0;
-  // 018 — horas que se esperaban en el tramo. Laborable + Feriado aportan
-  // jornada esperada; No Laborable no. Los días de VACACIONES se excluyen: el
-  // empleado no debía trabajar, así que no penalizan su presentismo. Alimenta
-  // el % de presentismo individual y general del informe de cierre.
+  // 018 — DENOMINADOR del presentismo: la jornada esperada de cada día
+  // LABORABLE del tramo. Los FERIADOS NO cuentan (no son trabajo exigible) y
+  // las VACACIONES tampoco (el empleado no debía presentarse). Los días de
+  // LICENCIA paga (ART, enfermedad, etc.) SÍ cuentan: eran días laborables en
+  // los que se esperaba trabajo. Ver el feedback: "el denominador sigue
+  // contemplando el total esperado; el feriado no se cuenta".
   let horasEsperadas = 0;
+  // 018 — NUMERADOR del presentismo: SOLO las horas efectivamente trabajadas en
+  // días laborables. El crédito fijo de un día de licencia paga o de un feriado
+  // NO entra acá (sí en `horasTrabajadas`, que alimenta la columna "Horas" y la
+  // liquidación). "solo contabilizar horas trabajadas".
+  let horasComputadas = 0;
 
   for (const d of detalle) {
     horasTrabajadas += d.horas;
     const esLicencia = d.justificacion?.tipoPago === 'Paga';
     const esVacaciones = d.justificacion?.motivoId === MotivoVacaciones.id;
-    if ((d.clasificacion === Clasificacion.LABORABLE || d.clasificacion === Clasificacion.FERIADO) && !esVacaciones) {
+    const trabajado = d.estado === EstadoJornada.COMPLETA || d.estado === EstadoJornada.INCOMPLETA;
+    if (d.clasificacion === Clasificacion.LABORABLE && !esVacaciones) {
       horasEsperadas += jornadaEsperada;
+      // El día de licencia sin fichadas queda en 0 (su crédito no es trabajo);
+      // si hubo fichadas reales pese a la justificación, esas horas sí cuentan.
+      if (trabajado) horasComputadas += d.horas;
     }
     if (d.clasificacion === Clasificacion.FERIADO) feriado += 1;
     if (esLicencia) licencia += 1;
@@ -117,10 +128,13 @@ export function proyectarResumenPeriodo({ resumen, hoy }) {
   return {
     legajo: resumen.legajo,
     horasTrabajadas,
+    horasComputadas,
     horasEsperadas,
-    // presentismo individual = horas computadas / horas esperadas (0..1);
-    // null si no hubo horas esperadas (p. ej. todo el tramo de vacaciones).
-    presentismoIndividual: horasEsperadas > 0 ? horasTrabajadas / horasEsperadas : null,
+    // presentismo individual = horas trabajadas / horas esperadas (días
+    // laborables del tramo, feriados aparte). 0..1; null sólo si no hubo horas
+    // esperadas (todo el tramo No Laborable o de vacaciones). Un tramo entero
+    // de licencia paga da 0, no null: se esperaba trabajo y no lo hubo.
+    presentismoIndividual: horasEsperadas > 0 ? horasComputadas / horasEsperadas : null,
     completas,
     incompletas,
     ausencias,

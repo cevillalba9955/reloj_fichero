@@ -133,10 +133,19 @@ export function construirInformeCierre({ filas, periodoId, periodoMes, tramo, em
   // con anomalía no aportan (no tienen cálculo).
   const totalAusencias = filas.reduce((s, f) => s + (f.anomalia ? 0 : f.ausencias || 0), 0);
   const totalHorasEsperadas = redondear(filas.reduce((s, f) => s + (f.anomalia ? 0 : f.horasEsperadas || 0), 0));
-  // presentismo general = horas computadas / horas esperadas del período
-  // (= Σ jornada esperada por empleado). Ratio 0..1 sin redondear (la UI lo
-  // formatea como %); null si no hay horas esperadas.
-  const presentismoGeneral = totalHorasEsperadas > 0 ? totalHoras / totalHorasEsperadas : null;
+  // Numerador del presentismo general: SOLO horas efectivamente trabajadas en
+  // días laborables (sin el crédito de feriados ni de licencias pagas).
+  // Distinto de `totalHoras`, que sí incluye esos créditos y alimenta la
+  // columna "Horas". El denominador (`totalHorasEsperadas`) sigue contemplando
+  // los días de licencia. `horasComputadas` cae a `horasTrabajadas` si la fila
+  // viene de una versión previa sin el campo.
+  const totalHorasComputadas = redondear(
+    filas.reduce((s, f) => s + (f.anomalia ? 0 : f.horasComputadas ?? f.horasTrabajadas ?? 0), 0),
+  );
+  // presentismo general = horas computadas / horas esperadas del período. Ratio
+  // 0..1 sin redondear (la UI lo formatea como %); null si no hay horas
+  // esperadas.
+  const presentismoGeneral = totalHorasEsperadas > 0 ? totalHorasComputadas / totalHorasEsperadas : null;
 
   const resumen = {
     encabezado: {
@@ -146,6 +155,7 @@ export function construirInformeCierre({ filas, periodoId, periodoMes, tramo, em
       rangoFechas,
       empleados: filasResumen.length,
       totalHoras,
+      totalHorasComputadas,
       totalAusencias,
       totalHorasEsperadas,
       presentismoGeneral,

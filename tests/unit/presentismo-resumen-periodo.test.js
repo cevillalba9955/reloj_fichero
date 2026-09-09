@@ -291,9 +291,10 @@ test('requiereJustificacionRevision se expone en el detalle del día', () => {
   assert.equal(r.detalle[0].requiereJustificacionRevision, true);
 });
 
-// 018 — horas esperadas y presentismo individual, con los días de vacaciones
-// EXCLUIDOS del cálculo (el empleado no debía trabajar).
-test('horasEsperadas cuenta Laborable + Feriado; los días de vacaciones se excluyen', () => {
+// 018 — presentismo individual: numerador = horas trabajadas en días
+// laborables; denominador = jornada esperada de esos días. Vacaciones fuera de
+// los dos; un día ausente pesa en el denominador y no en el numerador.
+test('horasEsperadas cuenta días Laborables; los días de vacaciones se excluyen', () => {
   const vac = (fecha) =>
     jornada(fecha, {
       estado: 'Sin fichadas',
@@ -309,9 +310,78 @@ test('horasEsperadas cuenta Laborable + Feriado; los días de vacaciones se excl
     hoy: HOY,
   });
   assert.equal(r.horasTrabajadas, 540);
+  assert.equal(r.horasComputadas, 540);
   // 07-06 (trabajado) + 07-13 (ausente) aportan; 07-10 (vacaciones) NO.
   assert.equal(r.horasEsperadas, 1080);
   assert.equal(r.presentismoIndividual, 540 / 1080); // 0.5
+});
+
+// 018 (feedback) — los FERIADOS quedan fuera del presentismo: ni su crédito fijo
+// suma al numerador ni su jornada suma al denominador. `horasTrabajadas` sí lo
+// conserva (columna "Horas" / liquidación).
+test('los feriados no cuentan ni en horas esperadas ni en computadas', () => {
+  const r = proyectarResumenPeriodo({
+    resumen: resumen([
+      jornada('2026-07-09', {
+        clasificacion: 'Feriado',
+        estado: 'Feriado cumplido',
+        entrada: null,
+        salida: null,
+        totalDiario: 540,
+      }),
+      jornada('2026-07-10'),
+    ]),
+    hoy: HOY,
+  });
+  assert.equal(r.feriado, 1);
+  assert.equal(r.horasTrabajadas, 1080); // el crédito del feriado sigue en "Horas"
+  assert.equal(r.horasEsperadas, 540); // sólo el día laborable
+  assert.equal(r.horasComputadas, 540);
+  assert.equal(r.presentismoIndividual, 1);
+});
+
+// 018 (feedback) — los días de LICENCIA PAGA (ART, enfermedad, etc.) SÍ pesan en
+// el denominador (eran días laborables esperados) pero NO en el numerador (no se
+// trabajó). `horasTrabajadas` los sigue sumando (columna "Horas" / liquidación).
+// Ej. legajo 35: 45 hs trabajadas / 90 hs esperadas = 50 %.
+test('los días de licencia paga cuentan como horas esperadas pero no como trabajadas', () => {
+  const licencia = (fecha) =>
+    jornada(fecha, {
+      estado: 'Sin fichadas',
+      entrada: null,
+      salida: null,
+      totalDiario: 540, // crédito fijo de la Justificación Paga
+      justificacion: { motivoId: 'art', etiquetaMotivo: 'ART', tipoPago: 'Paga' },
+    });
+
+  const r = proyectarResumenPeriodo({
+    resumen: resumen([jornada('2026-07-06'), licencia('2026-07-07'), licencia('2026-07-08')]),
+    hoy: HOY,
+  });
+  // 3 días × 540: el trabajado + los dos créditos de licencia.
+  assert.equal(r.horasTrabajadas, 1620);
+  assert.equal(r.licencia, 2);
+  assert.equal(r.horasComputadas, 540); // sólo el 07-06 trabajado
+  assert.equal(r.horasEsperadas, 1620); // los 3 días laborables esperaban jornada
+  assert.equal(r.presentismoIndividual, 540 / 1620); // 1/3, no 1620/1620 ni 540/540
+});
+
+test('un tramo entero de licencia paga da presentismo 0 (había horas esperadas sin trabajar)', () => {
+  const r = proyectarResumenPeriodo({
+    resumen: resumen([
+      jornada('2026-07-06', {
+        estado: 'Sin fichadas',
+        entrada: null,
+        salida: null,
+        totalDiario: 540,
+        justificacion: { motivoId: 'art', etiquetaMotivo: 'ART', tipoPago: 'Paga' },
+      }),
+    ]),
+    hoy: HOY,
+  });
+  assert.equal(r.horasEsperadas, 540);
+  assert.equal(r.horasComputadas, 0);
+  assert.equal(r.presentismoIndividual, 0);
 });
 
 test('presentismoIndividual es null si no hubo horas esperadas (tramo todo de vacaciones)', () => {
