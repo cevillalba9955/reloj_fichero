@@ -62,8 +62,10 @@ test('resumen: una fila por empleado, total general y fila de anomalía señalad
 test('detalle: renderiza los días del empleado, sus marcas y el subtotal en H:MM', () => {
   render(<InformeCierrePrintable vista={vista()} onCerrar={() => {}} />);
   expect(screen.getByText('2026-07-01')).toBeInTheDocument();
-  // la marca "corregida" imprime el motivo de la corrección vigente
-  expect(screen.getByText(/corregida: olvido de fichada de salida/)).toBeInTheDocument();
+  // un día corregido imprime el motivo de la corrección vigente (y no la
+  // palabra "corregida", que sólo aparece si no hay motivo)
+  expect(screen.getByText(/olvido de fichada de salida/)).toBeInTheDocument();
+  expect(screen.queryByText(/corregida/)).not.toBeInTheDocument();
   expect(screen.getByText(/Enfermedad \(Paga\)/)).toBeInTheDocument();
   // las horas del dominio están en minutos → se muestran como H:MM (930 → 15:30)
   expect(screen.getByText('Subtotal horas: 15:30')).toBeInTheDocument();
