@@ -148,12 +148,14 @@ export function registrarRutas(router, ctx) {
 
 // 018-informe-cierre-periodo — al cerrar un período se emiten y guardan los
 // informes de cierre de todos los tramos del modo de la instalación
-// (MENSUAL → 'Mes'; QUINCENAL → 'Q1' y 'Q2'). Best-effort: un fallo se
-// registra en el log y NO altera la respuesta del cierre ni lo revierte
-// (research.md §5); la UI ofrece re-emitir a demanda.
+// (MENSUAL → 'Mes'; QUINCENAL → 'Q1', 'Q2' y además 'Mes', el informe mensual
+// unificado de la feature 021-informe-asistencia-mensual, que la página
+// Calendario ofrece para ver y descargar). Best-effort: un fallo se registra
+// en el log y NO altera la respuesta del cierre ni lo revierte (research.md
+// §5); la UI ofrece re-emitir a demanda.
 async function emitirInformesDelCierre(ctx, periodoMes, autor) {
   const modo = ctx.modoResumenPeriodo ?? 'MENSUAL';
-  const tramos = modo === 'QUINCENAL' ? ['Q1', 'Q2'] : ['Mes'];
+  const tramos = modo === 'QUINCENAL' ? ['Q1', 'Q2', 'Mes'] : ['Mes'];
   try {
     const { legajos, nombres } = legajosYNombresDelPeriodo(ctx, periodoMes);
     const servicio = servicioDelPeriodo(ctx, periodoMes);

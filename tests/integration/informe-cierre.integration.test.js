@@ -129,12 +129,14 @@ test('las cifras del informe son coherentes con /api/resumen-periodo (SC-008)', 
   }
 });
 
-test('modo QUINCENAL: cerrar crea las entradas Q1 y Q2; GET ?tramo=Q1 abarca sólo la primera quincena', async () => {
+test('modo QUINCENAL: cerrar crea las entradas Q1, Q2 y Mes; GET ?tramo=Q1 abarca sólo la primera quincena', async () => {
   const e = await entorno({ envExtra: { PRESENTISMO_RESUMEN_PERIODO: 'QUINCENAL' } });
   try {
     await post(e, `/api/calendarios/${P}/cerrar`, { autor: 'ana' });
     const guardado = informeGuardado(e);
-    assert.deepEqual(Object.keys(guardado).sort(), ['Q1', 'Q2']);
+    // 021-informe-asistencia-mensual — el cierre en QUINCENAL emite además el
+    // informe mensual unificado (tramo `Mes`) junto a las dos quincenas.
+    assert.deepEqual(Object.keys(guardado).sort(), ['Mes', 'Q1', 'Q2']);
 
     const q1 = (await getJson(e, `/api/calendarios/${P}/informe-cierre?tramo=Q1`)).body;
     assert.equal(q1.periodoId, `${P}-Q1`);

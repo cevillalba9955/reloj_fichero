@@ -13,7 +13,7 @@ import InformeCierreContenido, { descargarInformePdf } from './InformeCierreCont
 
 const clientePorDefecto = crearClienteInformeCierre();
 
-export default function AccionInformeCierre({ periodo, cerrado = false, cliente = clientePorDefecto }) {
+export default function AccionInformeCierre({ periodo, cerrado = false, mensual = false, cliente = clientePorDefecto }) {
   const [guardado, setGuardado] = useState(null); // VistaInformeCierre | null
   const [error, setError] = useState(null);
   const [abierto, setAbierto] = useState(false);
@@ -22,14 +22,17 @@ export default function AccionInformeCierre({ periodo, cerrado = false, cliente 
   const traerGuardado = useCallback(async () => {
     if (!periodo) return;
     try {
-      setGuardado(await cliente.obtener(periodo));
+      // 021-informe-asistencia-mensual — `mensual` pide el tramo `Mes`
+      // unificado (uso desde la página Calendario); sin la prop, el tramo del
+      // período seleccionado (uso desde "Resumen del Período", feature 018).
+      setGuardado(await (mensual ? cliente.obtenerMensual(periodo) : cliente.obtener(periodo)));
       setError(null);
     } catch (err) {
       // 404 INFORME_NO_EMITIDO es esperable: todavía no se generó.
       if (err.codigo !== 'INFORME_NO_EMITIDO') setError(err.message);
       setGuardado(null);
     }
-  }, [cliente, periodo]);
+  }, [cliente, periodo, mensual]);
 
   useEffect(() => {
     traerGuardado();
