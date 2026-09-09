@@ -126,4 +126,6 @@ curl -s "$BASE/calendarios/$PER/informe-cierre?tramo=Q1" | \
 | US3 — lector no emite, sí ve | §2.6; contract test 25 |
 | FR-011 — emitir no bloquea correcciones sobre Q1 | §2.7, §3 paso 6; contract test 30 |
 | SC-002 / SC-003 — cuadres de horas | §2.3; contract test 26 |
+| SC-004 / SC-005 — padrón completo y pendientes de los días 1–15 | contract test 26b |
 | SC-006 — visibilidad de la acción según ventana | §3 pasos 2, 3, 7; contract test 29; `PaginaResumenPeriodo.test.jsx` |
+| SC-008 — re-emitir tras una corrección refleja el cambio | §2.7, §3 paso 6; contract test 30b |

@@ -153,6 +153,14 @@ Se agregan a la suite existente de las features 018/021.
     para `c ∈ {horasTrabajadas, completas, incompletas, ausencias, llegadasTarde, retirosAnticipados}`;
     y `Σ informeQ1.resumen.filas[].horasTrabajadas === informeQ1.resumen.encabezado.totalHoras`;
     y por cada sección de `detalle`, `subtotalHoras ===` su fila de resumen.
+26b. **Padrón y pendientes del informe anticipado** (SC-004 / SC-005): con un
+    fixture que en los días 1–15 tiene una jornada incompleta, un día con
+    corrección/justificación y un empleado sin categoría de presentismo →
+    `informeQ1.resumen.filas.length === (padrón del período).length` (sin
+    omisiones ni duplicados); `informeQ1.pendientes.hayPendientes === true`; el
+    día incompleto figura en `pendientes.jornadasIncompletas` (legajo+fecha), el
+    día ajustado en `pendientes.ajustes` y el legajo sin categoría en
+    `pendientes.anomalias`.
 27. **Reemplazo al cerrar**: tras la emisión anticipada de Q1, `POST …/cerrar`;
     `GET ?tramo=Q1` → `200` con `sello.anticipado === false` y
     `sello.modo === 'automatico'`; además `?tramo=Q2` y `?tramo=Mes` → `200`.
@@ -165,6 +173,11 @@ Se agregan a la suite existente de las features 018/021.
     anticipada de Q1, una corrección sobre un día 1–15 → `200` (no
     `PERIODO_CERRADO`); un `GET ?tramo=Q1` sigue devolviendo la copia previa
     (no se auto-invalida) hasta una nueva emisión.
+30b. **Re-emitir refleja el cambio** (SC-008): continuando el caso 30, un
+    segundo `POST ?tramo=Q1` anticipado → `200`, y en la copia nueva la
+    `resumen.fila.horasTrabajadas` del legajo corregido (y el día
+    correspondiente del `detalle`) reflejan el valor corregido — difieren de la
+    copia previa a la corrección en el delta esperado.
 
 ### Unit test del dominio (`tests/unit/` o junto a `periodo-liquidacion`)
 

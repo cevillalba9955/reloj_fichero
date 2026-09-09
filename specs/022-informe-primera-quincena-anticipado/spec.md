@@ -230,9 +230,13 @@ anticipada.
   el sistema MUST tratar la copia guardada del informe anticipado de Q1 como
   potencialmente desactualizada tras cualquier cambio sobre esos días, y la
   siguiente emisión a demanda (o la emisión de cierre) MUST reflejar los valores
-  actualizados. La emisión anticipada del informe de Q1 MUST NOT impedir ni
-  bloquear correcciones, pausas, justificaciones ni reclasificaciones sobre los
-  días 1–15 mientras el mes siga abierto.
+  actualizados. Esto NO implica detección activa de desactualización: el sistema
+  no compara la copia guardada contra cambios posteriores ni la marca
+  automáticamente como obsoleta; se satisface indicando de forma permanente que
+  es una emisión anticipada sobre un mes abierto (FR-008) y ofreciendo siempre
+  la re-emisión a demanda (FR-010). La emisión anticipada del informe de Q1 MUST
+  NOT impedir ni bloquear correcciones, pausas, justificaciones ni
+  reclasificaciones sobre los días 1–15 mientras el mes siga abierto.
 - **FR-012**: Al cerrar el período del mes, la emisión del informe de cierre de
   Q1 (feature 018/021) MUST reemplazar la copia guardada del informe de Q1 del
   mes; a partir del cierre, el informe de Q1 MUST dejar de identificarse como
