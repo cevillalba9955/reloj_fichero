@@ -49,30 +49,34 @@ export function servicioDelPeriodo(ctx, periodoMes) {
 }
 
 // Tramos a emitir según el modo de la instalación y el query `?tramo=`.
-// MENSUAL → ['Mes'] (un `tramo` explícito es error). QUINCENAL → el tramo
-// pedido, o ambas quincenas si se omite.
+// MENSUAL → ['Mes'] (`?tramo=Mes` u omitido son equivalentes; cualquier otro
+// valor explícito es error). QUINCENAL → el tramo pedido (`Q1`, `Q2` o `Mes`,
+// el informe mensual unificado de la feature 021), o ambas quincenas si se
+// omite (`Mes` NO se emite por omisión: sale sólo si se pide explícito o al
+// cerrar el período).
 function tramosParaEmitir(modo, tramoQuery) {
   if (modo !== 'QUINCENAL') {
-    if (tramoQuery != null) {
-      throw new ApiError(400, 'PERIODO_INVALIDO', 'La instalación es mensual: no corresponde indicar un tramo');
+    if (tramoQuery != null && tramoQuery !== 'Mes') {
+      throw new ApiError(400, 'PERIODO_INVALIDO', 'La instalación es mensual: el único tramo es "Mes"');
     }
     return ['Mes'];
   }
   if (tramoQuery == null) return ['Q1', 'Q2'];
-  if (tramoQuery === 'Q1' || tramoQuery === 'Q2') return [tramoQuery];
-  throw new ApiError(400, 'PERIODO_INVALIDO', `Tramo inválido "${tramoQuery}" (se espera Q1 o Q2)`);
+  if (tramoQuery === 'Q1' || tramoQuery === 'Q2' || tramoQuery === 'Mes') return [tramoQuery];
+  throw new ApiError(400, 'PERIODO_INVALIDO', `Tramo inválido "${tramoQuery}" (se espera Q1, Q2 o Mes)`);
 }
 
-// Tramo único a leer.
+// Tramo único a leer. `Mes` (021-informe-asistencia-mensual) es válido en
+// cualquier modo; en MENSUAL equivale a omitir el query.
 function tramoParaLeer(modo, tramoQuery) {
   if (modo !== 'QUINCENAL') {
-    if (tramoQuery != null) {
-      throw new ApiError(400, 'PERIODO_INVALIDO', 'La instalación es mensual: no corresponde indicar un tramo');
+    if (tramoQuery != null && tramoQuery !== 'Mes') {
+      throw new ApiError(400, 'PERIODO_INVALIDO', 'La instalación es mensual: el único tramo es "Mes"');
     }
     return 'Mes';
   }
-  if (tramoQuery === 'Q1' || tramoQuery === 'Q2') return tramoQuery;
-  throw new ApiError(400, 'PERIODO_INVALIDO', 'En modo quincenal el informe se pide por tramo (?tramo=Q1 o ?tramo=Q2)');
+  if (tramoQuery === 'Q1' || tramoQuery === 'Q2' || tramoQuery === 'Mes') return tramoQuery;
+  throw new ApiError(400, 'PERIODO_INVALIDO', 'En modo quincenal el informe se pide por tramo (?tramo=Q1, Q2 o Mes)');
 }
 
 async function exigirCalendarioCerrado(ctx, periodoMes, { debeEstarCerrado }) {

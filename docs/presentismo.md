@@ -120,29 +120,37 @@ el sistema emite y guarda dos informes por tramo:
   con marcas de corrección/justificación y el subtotal de horas.
 
 En modo `MENSUAL` (`PRESENTISMO_RESUMEN_PERIODO`) se emite el tramo `Mes`; en
-`QUINCENAL`, `Q1` y `Q2`. La copia se guarda en
+`QUINCENAL`, `Q1`, `Q2` y además `Mes` — el **informe de asistencia mensual
+unificado** (feature 021), que consolida las dos quincenas en el mes calendario
+completo. La copia se guarda en
 `<PRESENTISMO_REPO_DIR>/P<periodo>/informe-cierre.json` (un objeto por tramo);
 **no** se escribe nada en Oracle (Principio VI: el registro corporativo de
 liquidación es trabajo aparte).
 
 - **Re-emisión a demanda**: `POST /api/calendarios/:periodo/informe-cierre`
-  (`?tramo=Q1|Q2` en modo quincenal) — rol **editor** o superior; el período
-  debe estar cerrado (si no, `409 PERIODO_ABIERTO`). Reemplaza la copia
-  guardada del tramo.
+  (`?tramo=Q1|Q2|Mes` en modo quincenal; `?tramo=Mes` u omitido en mensual) —
+  rol **editor** o superior; el período debe estar cerrado (si no,
+  `409 PERIODO_ABIERTO`). Reemplaza la copia guardada del tramo.
 - **Lectura**: `GET /api/calendarios/:periodo/informe-cierre`
-  (`?tramo=Q1|Q2`) — devuelve la copia guardada, con `obsoleto: true` si el
+  (`?tramo=Q1|Q2|Mes`) — devuelve la copia guardada, con `obsoleto: true` si el
   período se reabrió después de emitir (`404 INFORME_NO_EMITIDO` si nunca se
   emitió).
-- **Reabrir** el período (`POST .../reabrir`) marca la copia como
-  desactualizada; volver a cerrar (o re-emitir) la regenera.
+- **Reabrir** el período (`POST .../reabrir`) marca **todas** las copias del
+  período (incluida `Mes`) como desactualizadas; volver a cerrar (o re-emitir)
+  las regenera.
 
 En la página **Resumen del Período** la acción *"Emitir informe de cierre"*
 aparece habilitada sólo cuando el período está cerrado y el rol alcanza; abre
-una vista imprimible (imprimir / guardar como PDF desde el navegador).
+una vista imprimible (imprimir / guardar como PDF desde el navegador). En la
+página **Calendario**, con el período del mes cerrado, aparece además la acción
+*"Ver informe"* / *"Descargar PDF"* del informe mensual (tramo `Mes`): mismo
+formato que los informes de cierre, referido al mes calendario completo
+(feature 021).
 
 Tests: `node --test tests/unit/presentismo-informe-cierre.test.js
 tests/unit/file-presentismo-repository-informe.test.js
 tests/contract/web-api-informe-cierre.test.js
 tests/integration/informe-cierre.integration.test.js` (backend) y
 `cd frontend && npx vitest run src/components/AccionInformeCierre.test.jsx
-src/components/InformeCierrePrintable.test.jsx` (componentes).
+src/components/InformeCierrePrintable.test.jsx
+src/components/PaginaCalendario.test.jsx` (componentes).

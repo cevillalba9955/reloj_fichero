@@ -89,3 +89,40 @@ test('si la copia guardada viene obsoleta, muestra el aviso', async () => {
   render(<AccionInformeCierre periodo="202607" cerrado cliente={cliente} />);
   expect(await screen.findByText(/quedó desactualizado/)).toBeInTheDocument();
 });
+
+// 021-informe-asistencia-mensual — con la prop `mensual` (uso desde la página
+// Calendario) la acción pide el tramo `Mes` unificado vía `obtenerMensual`,
+// no `obtener`.
+test('mensual: usa cliente.obtenerMensual y muestra "Ver informe" / "Descargar PDF"', async () => {
+  const cliente = {
+    obtener: vi.fn(),
+    obtenerMensual: vi.fn().mockResolvedValue(vistaInforme()),
+  };
+  render(<AccionInformeCierre periodo="202607" cerrado mensual cliente={cliente} />);
+
+  expect(await screen.findByRole('button', { name: 'Ver informe' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Descargar PDF' })).toBeInTheDocument();
+  expect(cliente.obtenerMensual).toHaveBeenCalledWith('202607');
+  expect(cliente.obtener).not.toHaveBeenCalled();
+});
+
+test('mensual: período cerrado sin informe guardado → nota, sin botones', async () => {
+  const cliente = { obtenerMensual: vi.fn().mockRejectedValue(noEmitido()) };
+  render(<AccionInformeCierre periodo="202607" cerrado mensual cliente={cliente} />);
+  await waitFor(() => expect(cliente.obtenerMensual).toHaveBeenCalled());
+  expect(screen.getByText(/todavía no está disponible/)).toBeInTheDocument();
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+});
+
+test('mensual: período abierto → sólo la nota, sin botones', async () => {
+  const cliente = { obtenerMensual: vi.fn().mockRejectedValue(noEmitido()) };
+  render(<AccionInformeCierre periodo="202607" cerrado={false} mensual cliente={cliente} />);
+  expect(screen.getByText(/se genera automáticamente al cerrar el período/)).toBeInTheDocument();
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+});
+
+test('mensual: copia guardada obsoleta → muestra el aviso', async () => {
+  const cliente = { obtenerMensual: vi.fn().mockResolvedValue(vistaInforme({ obsoleto: true })) };
+  render(<AccionInformeCierre periodo="202607" cerrado mensual cliente={cliente} />);
+  expect(await screen.findByText(/quedó desactualizado/)).toBeInTheDocument();
+});

@@ -31,6 +31,14 @@ export function crearClienteInformeCierre({ fetchImpl, base = '/api' } = {}) {
     return `/calendarios/${mes}/informe-cierre${tramo ? `?tramo=${tramo}` : ''}`;
   }
 
+  // 021-informe-asistencia-mensual — ruta del informe mensual unificado
+  // (tramo `Mes`), válido en cualquier modo de instalación. `periodo` puede
+  // venir con sufijo `-Q1/-Q2`: se descarta y siempre se pide `?tramo=Mes`.
+  function rutaMensual(periodo) {
+    const { mes } = partesPeriodo(periodo);
+    return `/calendarios/${mes}/informe-cierre?tramo=Mes`;
+  }
+
   return {
     // POST → emite / re-emite. Devuelve VistaInformeCierre.
     emitir(periodo) {
@@ -39,6 +47,14 @@ export function crearClienteInformeCierre({ fetchImpl, base = '/api' } = {}) {
     // GET → copia guardada (o error `INFORME_NO_EMITIDO` si nunca se emitió).
     obtener(periodo) {
       return pedir(ruta(periodo));
+    },
+    // 021 — informe mensual unificado (tramo `Mes`). Lo usa la página
+    // Calendario (AccionInformeCierre con la prop `mensual`).
+    emitirMensual(periodo) {
+      return pedir(rutaMensual(periodo), { method: 'POST' });
+    },
+    obtenerMensual(periodo) {
+      return pedir(rutaMensual(periodo));
     },
   };
 }

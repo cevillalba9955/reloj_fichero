@@ -5,15 +5,26 @@ import EstadoVacio from './EstadoVacio.jsx';
 import EncabezadoPeriodo from './EncabezadoPeriodo.jsx';
 import NavegacionMes from './NavegacionMes.jsx';
 import DialogoConfirmarReclasificar from './DialogoConfirmarReclasificar.jsx';
+import AccionInformeCierre from './AccionInformeCierre.jsx';
+import { crearClienteInformeCierre } from '../api/informe-cierre-client.js';
 import { leerSesion, guardarSesion } from '../utils/sesion-storage.js';
 import { useRol } from '../contexto/RolContext.jsx';
+
+// 021-informe-asistencia-mensual — cliente del informe mensual unificado
+// (tramo `Mes`). Inyectable para tests; en producción habla con `/api`.
+const clienteInformePorDefecto = crearClienteInformeCierre();
 
 // Recuerda el período mostrado entre pestañas (sessionStorage): al volver al
 // Calendario por el menú de la izquierda, retoma el mes que se estaba viendo
 // en vez de saltar siempre al último generado.
 const CLAVE_PERIODO_SESION = 'presentismo.calendario.periodo';
 
-export default function PaginaCalendario({ cliente, inicializarDesdeApp, onIrAFichadas }) {
+export default function PaginaCalendario({
+  cliente,
+  clienteInforme = clienteInformePorDefecto,
+  inicializarDesdeApp,
+  onIrAFichadas,
+}) {
   const { puede } = useRol();
   const [estado, setEstado] = useState({ tipo: 'cargando' });
   const [ultimo, setUltimo] = useState(null);
@@ -197,6 +208,20 @@ export default function PaginaCalendario({ cliente, inicializarDesdeApp, onIrAFi
                 </button>
               )}
             </div>}
+
+           {/* 021-informe-asistencia-mensual — con el período cerrado, ver y
+               descargar el informe de asistencia del mes calendario completo
+               (unifica las quincenas en modo QUINCENAL). Sólo se monta acá:
+               nunca en los estados vacío/abierto (FR-014). */}
+           {estado.vista.cerrado && (
+             <AccionInformeCierre
+               key={periodoMostrado}
+               periodo={periodoMostrado}
+               cerrado
+               mensual
+               cliente={clienteInforme}
+             />
+           )}
 
            {periodoYaPaso && !estado.vista.cerrado && <div className="encabezado-cierre-periodo">
               <span className="indicador-periodo-cerrado" role="status">

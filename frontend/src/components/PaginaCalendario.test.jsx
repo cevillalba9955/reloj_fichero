@@ -43,6 +43,20 @@ function clienteMock(over = {}) {
   };
 }
 
+// 021-informe-asistencia-mensual — stub del cliente del informe mensual
+// (tramo `Mes`). Por defecto "no emitido", para que la acción no ensucie los
+// tests que sólo miran el indicador de período cerrado.
+const informeNoEmitido = () =>
+  Object.assign(new Error('no emitido'), { codigo: 'INFORME_NO_EMITIDO', status: 404 });
+
+function informeMock(over = {}) {
+  return {
+    obtenerMensual: vi.fn().mockRejectedValue(informeNoEmitido()),
+    emitirMensual: vi.fn(),
+    ...over,
+  };
+}
+
 // Estado vacío global: sin calendarios generados
 test('muestra el estado vacío global cuando no hay calendarios', async () => {
   const cliente = clienteMock({
@@ -110,7 +124,7 @@ test('reclasificar: cancelar no llama a la API; confirmar sí y refresca la gril
 test('con el período cerrado, no se ofrece el ícono de reclasificar', async () => {
   const vistaCerrada = vista({ cerrado: true, cierre: { autor: 'ui', fechaHora: '2026-07-20T00:00:00.000Z' } });
   const cliente = clienteMock({ obtenerCalendario: vi.fn().mockResolvedValue(vistaCerrada) });
-  renderConRol('editor', <PaginaCalendario cliente={cliente} />);
+  renderConRol('editor', <PaginaCalendario cliente={cliente} clienteInforme={informeMock()} />);
   await screen.findByRole('grid');
 
   expect(screen.queryByLabelText(/Reclasificar 2026-07-01/)).not.toBeInTheDocument();
@@ -120,7 +134,7 @@ test('con el período cerrado, no se ofrece el ícono de reclasificar', async ()
 test('un período abierto muestra "Cerrar período"; al hacer clic llama a cliente.cerrarPeriodo y refresca la vista', async () => {
   const vistaCerrada = vista({ cerrado: true, cierre: { autor: 'ui', fechaHora: '2026-07-20T00:00:00.000Z' } });
   const cliente = clienteMock({ cerrarPeriodo: vi.fn().mockResolvedValue(vistaCerrada) });
-  renderConRol('editor', <PaginaCalendario cliente={cliente} />);
+  renderConRol('editor', <PaginaCalendario cliente={cliente} clienteInforme={informeMock()} />);
   await screen.findByRole('grid');
 
   expect(screen.queryByText('Período cerrado')).not.toBeInTheDocument();
@@ -138,7 +152,7 @@ test('un período cerrado muestra el indicador y "Reabrir período"; al hacer cl
     obtenerCalendario: vi.fn().mockResolvedValue(vistaCerrada),
     reabrirPeriodo: vi.fn().mockResolvedValue(vistaReabierta),
   });
-  renderConRol('editor', <PaginaCalendario cliente={cliente} />);
+  renderConRol('editor', <PaginaCalendario cliente={cliente} clienteInforme={informeMock()} />);
   await screen.findByRole('grid');
 
   expect(screen.getByText('Período cerrado')).toBeInTheDocument();
@@ -178,7 +192,7 @@ test('un período cerrado sigue mostrando "Reabrir período" aunque todavía sea
     listarCalendarios: vi.fn().mockResolvedValue({ periodos: ['202607'], ultimo: '202607', mesActual: '202607' }),
     obtenerCalendario: vi.fn().mockResolvedValue(vistaCerrada),
   });
-  renderConRol('editor', <PaginaCalendario cliente={cliente} />);
+  renderConRol('editor', <PaginaCalendario cliente={cliente} clienteInforme={informeMock()} />);
   await screen.findByRole('grid');
 
   expect(screen.queryByText('Cerrar período')).not.toBeInTheDocument();
@@ -194,4 +208,94 @@ test('rol lector: no se ofrecen "Cerrar período" ni el ícono de reclasificar',
 
   expect(screen.queryByText('Cerrar período')).not.toBeInTheDocument();
   expect(screen.queryByLabelText(/Reclasificar 2026-07-01/)).not.toBeInTheDocument();
+});
+
+// ===========================================================================
+// 021-informe-asistencia-mensual — acción "informe mensual" en el Calendario
+// ===========================================================================
+
+function vistaInformeMensual(over = {}) {
+  return {
+    periodoId: '202607',
+    sello: { periodoId: '202607', tramo: 'Mes', modo: 'automatico', emitidoEn: '2026-08-01T10:00:00.000Z', autor: 'ana' },
+    obsoleto: false,
+    resumen: {
+      encabezado: {
+        periodoId: '202607', tramo: 'Mes', modo: 'QUINCENAL', empleados: 1, totalHoras: 480,
+        totalHorasComputadas: 480, totalAusencias: 0, totalHorasEsperadas: 480, presentismoGeneral: 1,
+        rangoFechas: { desde: '2026-07-01', hasta: '2026-07-31' },
+      },
+      filas: [
+        { legajo: 1, nombre: 'Ana', modalidad: 'Quincenal', horasTrabajadas: 480, presentismoIndividual: 1, completas: 1, incompletas: 0, ausencias: 0, llegadasTarde: 0, retirosAnticipados: 0, correcciones: 0, feriado: 0, licencia: 0, vacaciones: 0, anomalia: null },
+      ],
+    },
+    detalle: {
+      encabezado: { periodoId: '202607', tramo: 'Mes', empleados: 1 },
+      secciones: [
+        { legajo: 1, nombre: 'Ana', modalidad: 'Quincenal', anomalia: null, subtotalHoras: 480, dias: [
+          { fecha: '2026-07-01', diaSemana: 'Miércoles', clasificacion: 'Laborable', estado: 'Completa', entrada: '07:00', salida: '15:00', horas: 480, llegadaTarde: false, corregida: false, pausas: [], justificacion: null, requiereJustificacionRevision: false },
+        ] },
+      ],
+    },
+    pendientes: { hayPendientes: false, jornadasIncompletas: [], anomalias: [], ajustes: [] },
+    ...over,
+  };
+}
+
+// US1 — con el período cerrado, la acción del informe mensual aparece en la
+// página y "Ver informe" abre la vista imprimible.
+test('US1: con el período cerrado, ofrece ver y descargar el informe mensual', async () => {
+  const vistaCerrada = vista({ cerrado: true, cierre: { autor: 'ui', fechaHora: '2026-07-20T00:00:00.000Z' } });
+  const cliente = clienteMock({ obtenerCalendario: vi.fn().mockResolvedValue(vistaCerrada) });
+  const clienteInforme = informeMock({ obtenerMensual: vi.fn().mockResolvedValue(vistaInformeMensual()) });
+  renderConRol('editor', <PaginaCalendario cliente={cliente} clienteInforme={clienteInforme} />);
+  await screen.findByRole('grid');
+
+  expect(await screen.findByRole('button', { name: 'Ver informe' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Descargar PDF' })).toBeInTheDocument();
+  // pide el tramo mensual del período mostrado (YYYYMM, sin sufijo de quincena)
+  expect(clienteInforme.obtenerMensual).toHaveBeenCalledWith('202607');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Ver informe' }));
+  expect(await screen.findByRole('dialog')).toBeInTheDocument();
+});
+
+// US3 — la acción NO aparece si el período no está cerrado…
+test('US3: sin cerrar el período, no se ofrece el informe mensual', async () => {
+  const cliente = clienteMock(); // vista() por defecto: abierto
+  const clienteInforme = informeMock({ obtenerMensual: vi.fn().mockResolvedValue(vistaInformeMensual()) });
+  renderConRol('editor', <PaginaCalendario cliente={cliente} clienteInforme={clienteInforme} />);
+  await screen.findByRole('grid');
+
+  expect(screen.queryByRole('button', { name: 'Ver informe' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Descargar PDF' })).not.toBeInTheDocument();
+  expect(clienteInforme.obtenerMensual).not.toHaveBeenCalled();
+});
+
+// …ni en el estado "mes sin calendario generado".
+test('US3: en el estado vacío-mes no se ofrece el informe mensual', async () => {
+  const noGenerado = Object.assign(new Error('sin calendario'), { status: 404 });
+  const cliente = clienteMock({
+    listarCalendarios: vi.fn().mockResolvedValue({ periodos: ['202605'], ultimo: '202605', mesActual: '202608' }),
+    obtenerCalendario: vi.fn().mockRejectedValue(noGenerado),
+  });
+  const clienteInforme = informeMock({ obtenerMensual: vi.fn() });
+  renderConRol('editor', <PaginaCalendario cliente={cliente} clienteInforme={clienteInforme} />);
+  await screen.findByText(/aún no fue generado/i);
+
+  expect(screen.queryByRole('button', { name: 'Ver informe' })).not.toBeInTheDocument();
+  expect(clienteInforme.obtenerMensual).not.toHaveBeenCalled();
+});
+
+// US3 — copia guardada obsoleta tras reabrir: se muestra el aviso.
+test('US3: si el informe mensual guardado quedó obsoleto, se muestra el aviso', async () => {
+  const vistaCerrada = vista({ cerrado: true, cierre: { autor: 'ui', fechaHora: '2026-07-20T00:00:00.000Z' } });
+  const cliente = clienteMock({ obtenerCalendario: vi.fn().mockResolvedValue(vistaCerrada) });
+  const clienteInforme = informeMock({
+    obtenerMensual: vi.fn().mockResolvedValue(vistaInformeMensual({ obsoleto: true })),
+  });
+  renderConRol('editor', <PaginaCalendario cliente={cliente} clienteInforme={clienteInforme} />);
+  await screen.findByRole('grid');
+
+  expect(await screen.findByText(/quedó desactualizado/)).toBeInTheDocument();
 });
