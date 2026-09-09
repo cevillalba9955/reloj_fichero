@@ -189,6 +189,21 @@ test('el detalle muestra la hora corregida cuando hay corrección vigente', () =
   assert.equal(d.corregida, true);
 });
 
+test('el detalle expone el motivo de la corrección vigente (y null si no hay)', () => {
+  const r = proyectarResumenPeriodo({
+    resumen: resumen([
+      jornada('2026-07-02', {
+        correccionVigente: true,
+        correccion: { entradaCorregida: 430, salidaCorregida: null, motivo: 'olvido de fichada' },
+      }),
+      jornada('2026-07-03', {}),
+    ]),
+    hoy: HOY,
+  });
+  assert.equal(r.detalle[0].motivoCorreccion, 'olvido de fichada');
+  assert.equal(r.detalle[1].motivoCorreccion, null, 'sin corrección vigente → null');
+});
+
 test('regresión: corrección de salida sobre jornada con solo entrada real pasa a Completa en el resumen', () => {
   // Caso real reportado (2026-07-15, legajos 72/74/79): solo hay fichada de
   // entrada; una corrección vigente carga entrada+salida (como el resto de

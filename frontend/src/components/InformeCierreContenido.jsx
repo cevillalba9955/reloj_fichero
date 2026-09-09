@@ -35,7 +35,7 @@ function estadoLabel(estado) {
 
 function marcasDia(d) {
   const marcas = [];
-  if (d.corregida) marcas.push('corregida');
+  if (d.corregida) marcas.push(d.motivoCorreccion ? `corregida: ${d.motivoCorreccion}` : 'corregida');
   if (d.llegadaTarde) marcas.push('llegada tarde');
   if (d.pausas?.some((p) => p.tipo === 'retiro_anticipado')) marcas.push('retiro anticipado');
   if (d.justificacion) marcas.push(`${d.justificacion.etiquetaMotivo} (${d.justificacion.tipoPago})`);

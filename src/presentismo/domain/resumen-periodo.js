@@ -53,6 +53,10 @@ function detalleDeJornada(jornada, params) {
     horas: jornada.totalDiario ?? 0,
     llegadaTarde: esLlegadaTarde(jornada, params),
     corregida: Boolean(jornada.correccionVigente),
+    // Motivo de la corrección vigente (FR-027: siempre presente cuando hay
+    // corrección). Se expone en el detalle para que el informe de cierre lo
+    // muestre junto a la marca "corregida".
+    motivoCorreccion: jornada.correccionVigente ? jornada.correccion?.motivo ?? null : null,
     pausas: pausasVigentes.map((p) => ({ desde: p.desde, hasta: p.hasta, tipo: p.tipo ?? TipoPausa.INTERMEDIA })),
     justificacion: justificacionDe(jornada),
     requiereJustificacionRevision: Boolean(jornada.requiereJustificacionRevision),

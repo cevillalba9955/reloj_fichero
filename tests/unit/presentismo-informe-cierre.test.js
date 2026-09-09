@@ -144,6 +144,22 @@ test('cuadre resumen ↔ detalle: subtotalHoras de cada sección = horasTrabajad
   assert.equal(detalle.secciones[0].subtotalHoras, resumen.filas[0].horasTrabajadas);
 });
 
+test('el detalle propaga el motivo de la corrección vigente de cada día', () => {
+  const filas = [
+    filaNormal({
+      legajo: 3,
+      detalle: [
+        dia({ fecha: '2026-07-01', corregida: true, motivoCorreccion: 'olvido de fichada de salida' }),
+        dia({ fecha: '2026-07-02' }),
+      ],
+    }),
+  ];
+  const { detalle } = construirInformeCierre({ ...base, filas });
+  const dias = detalle.secciones[0].dias;
+  assert.equal(dias[0].motivoCorreccion, 'olvido de fichada de salida');
+  assert.equal(dias[1].motivoCorreccion, null);
+});
+
 test('fila de anomalía: contadores en 0 en el resumen y sección de detalle sin días', () => {
   const { resumen, detalle } = construirInformeCierre({ ...base, filas: [filaAnomalia] });
   const filaR = resumen.filas[0];

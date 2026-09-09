@@ -27,7 +27,7 @@ function vista(over = {}) {
         {
           legajo: 1, nombre: 'Ana Pérez', modalidad: 'Mensual', anomalia: null, subtotalHoras: 930,
           dias: [
-            { fecha: '2026-07-01', diaSemana: 'Miércoles', clasificacion: 'Laborable', estado: 'Completa', entrada: '07:00', salida: '15:00', horas: 480, llegadaTarde: false, corregida: true, pausas: [], justificacion: null, requiereJustificacionRevision: false },
+            { fecha: '2026-07-01', diaSemana: 'Miércoles', clasificacion: 'Laborable', estado: 'Completa', entrada: '07:00', salida: '15:00', horas: 480, llegadaTarde: false, corregida: true, motivoCorreccion: 'olvido de fichada de salida', pausas: [], justificacion: null, requiereJustificacionRevision: false },
             { fecha: '2026-07-02', diaSemana: 'Jueves', clasificacion: 'Laborable', estado: 'Incompleta', entrada: '07:00', salida: null, horas: 450, llegadaTarde: false, corregida: false, pausas: [], justificacion: { motivoId: 'enf', etiquetaMotivo: 'Enfermedad', tipoPago: 'Paga' }, requiereJustificacionRevision: false },
             { fecha: '2026-07-03', diaSemana: 'Viernes', clasificacion: 'Laborable', estado: 'Sin fichadas', entrada: null, salida: null, horas: 0, llegadaTarde: false, corregida: false, pausas: [], justificacion: null, requiereJustificacionRevision: false },
           ],
@@ -62,7 +62,8 @@ test('resumen: una fila por empleado, total general y fila de anomalía señalad
 test('detalle: renderiza los días del empleado, sus marcas y el subtotal en H:MM', () => {
   render(<InformeCierrePrintable vista={vista()} onCerrar={() => {}} />);
   expect(screen.getByText('2026-07-01')).toBeInTheDocument();
-  expect(screen.getByText(/corregida/)).toBeInTheDocument();
+  // la marca "corregida" imprime el motivo de la corrección vigente
+  expect(screen.getByText(/corregida: olvido de fichada de salida/)).toBeInTheDocument();
   expect(screen.getByText(/Enfermedad \(Paga\)/)).toBeInTheDocument();
   // las horas del dominio están en minutos → se muestran como H:MM (930 → 15:30)
   expect(screen.getByText('Subtotal horas: 15:30')).toBeInTheDocument();
