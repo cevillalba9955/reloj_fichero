@@ -180,9 +180,10 @@ function TablaResumen({ resumen }) {
       </table>
       {encabezado.presentismoGeneral != null && (
         <p className="leyenda-presentismo">
-          Presentismo general: <strong>{pctGeneral}</strong> — {horas(encabezado.totalHoras)} hs computadas /{' '}
-          {horas(encabezado.totalHorasEsperadas)} hs esperadas (excluye días de vacaciones; {encabezado.empleados}{' '}
-          empleados). Ausencias totales: {encabezado.totalAusencias}.
+          Presentismo general: <strong>{pctGeneral}</strong> —{' '}
+          {horas(encabezado.totalHorasComputadas ?? encabezado.totalHoras)} hs trabajadas /{' '}
+          {horas(encabezado.totalHorasEsperadas)} hs esperadas (días laborables; excluye feriados y{' '}
+          vacaciones; {encabezado.empleados} empleados). Ausencias totales: {encabezado.totalAusencias}.
         </p>
       )}
     </>
