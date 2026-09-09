@@ -172,6 +172,39 @@ test('calcularIncrementosPendientes: legajo nunca incrementado, sin backfill de 
   assert.deepEqual(pendientes, [], 'no retrocede al ciclo ya pasado antes de que se conociera la fecha de ingreso');
 });
 
+// Regresión: el operador edita config/vacaciones.json de {mes:11} a {mes:12}.
+// El legajo ya tiene aplicado el ciclo 2025 (2025-11-01). El ciclo recalculado
+// 2025-12-01 NO debe volver a aplicarse: es un año ya saldado, no un ciclo
+// pendiente. El próximo incremento real es 2026-12-01 (todavía no llegó).
+test('calcularIncrementosPendientes: cambiar la fecha de incremento no re-aplica el ciclo de un año ya incrementado', () => {
+  const pendientes = calcularIncrementosPendientes({
+    fechaIngreso: '2010-06-01',
+    ultimoIncrementoAplicado: '2025-11-01',
+    escalaAntiguedad: ESCALA_LCT,
+    incrementoAnualConfig: { mes: 12, dia: 1 },
+    hoy: '2026-09-09',
+  });
+  assert.deepEqual(pendientes, []);
+});
+
+// La misma edición de config, pero con ciclos genuinamente atrasados (último
+// aplicado en 2023): se backfillean 2024 y 2025 bajo la nueva fecha, y se
+// descarta solo el reproceso de 2023 (año ya saldado). El ciclo 2026 aún no
+// llegó a 'hoy'.
+test('calcularIncrementosPendientes: tras cambiar la fecha, backfillea los años posteriores al último aplicado pero no el ya saldado', () => {
+  const pendientes = calcularIncrementosPendientes({
+    fechaIngreso: '2010-06-01',
+    ultimoIncrementoAplicado: '2023-11-01',
+    escalaAntiguedad: ESCALA_LCT,
+    incrementoAnualConfig: { mes: 12, dia: 1 },
+    hoy: '2026-09-09',
+  });
+  assert.deepEqual(pendientes, [
+    { fecha: '2024-12-01', dias: 28, antiguedadAnios: 14 },
+    { fecha: '2025-12-01', dias: 28, antiguedadAnios: 15 },
+  ]);
+});
+
 test('construirMovimientoSaldo arma el registro con la forma de data-model.md §4.1', () => {
   const m = construirMovimientoSaldo({
     tipo: 'incremento',

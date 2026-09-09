@@ -112,9 +112,11 @@ function cicloMasRecienteAlcanzado(incrementoAnualConfig, hoy) {
 // antigüedad calculable antes). Si ya había un incremento previo aplicado,
 // SÍ se backfillean todos los ciclos consecutivos no aplicados desde
 // entonces (research.md §4: "si pasó más de un ciclo sin que nadie
-// consultara el sistema"). La antigüedad de cada incremento se calcula A LA
-// FECHA DE ESE CICLO, nunca a `hoy` (edge case "cambio de antigüedad dentro
-// del propio año").
+// consultara el sistema"), pero NUNCA un ciclo del mismo año calendario (ni
+// anterior) que el último ya aplicado: eso solo ocurre si se editó la fecha
+// de incremento en config y significaría re-aplicar un año ya saldado. La
+// antigüedad de cada incremento se calcula A LA FECHA DE ESE CICLO, nunca a
+// `hoy` (edge case "cambio de antigüedad dentro del propio año").
 export function calcularIncrementosPendientes({
   fechaIngreso,
   ultimoIncrementoAplicado,
@@ -123,8 +125,19 @@ export function calcularIncrementosPendientes({
   hoy,
 }) {
   let piso;
+  // Año calendario del último ciclo YA aplicado a este legajo. Ningún ciclo
+  // de ese mismo año (ni de uno anterior) vuelve a generarse: si el operador
+  // edita la fecha de incremento en config/vacaciones.json (ej. {mes:11} →
+  // {mes:12}), el ciclo recalculado del año ya cerrado cae después de `piso`
+  // y, sin este tope, se aplicaría de nuevo — duplicando el incremento de un
+  // año que ya estaba saldado y rompiendo saldos correctos. El backfill
+  // legítimo (research.md §4: "si pasó más de un ciclo sin que nadie
+  // consultara el sistema") siempre avanza a años ESTRICTAMENTE posteriores
+  // al último aplicado, así que este tope nunca descarta un ciclo real.
+  let anioYaAplicado = -Infinity;
   if (ultimoIncrementoAplicado != null) {
     piso = ultimoIncrementoAplicado;
+    anioYaAplicado = Number(ultimoIncrementoAplicado.split('-')[0]);
   } else {
     const masReciente = cicloMasRecienteAlcanzado(incrementoAnualConfig, hoy);
     const [anio] = masReciente.split('-').map(Number);
@@ -134,7 +147,8 @@ export function calcularIncrementosPendientes({
   const ciclos = [];
   let candidato = cicloEstrictamenteDespues(incrementoAnualConfig, piso);
   while (candidato <= hoy) {
-    if (candidato >= fechaIngreso) {
+    const [anioCandidato] = candidato.split('-').map(Number);
+    if (candidato >= fechaIngreso && anioCandidato > anioYaAplicado) {
       const antiguedadAnios = calcularAntiguedadAnios(fechaIngreso, candidato);
       ciclos.push({ fecha: candidato, dias: diasPorAntiguedad(escalaAntiguedad, antiguedadAnios), antiguedadAnios });
     }
