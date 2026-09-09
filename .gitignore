@@ -16,6 +16,8 @@ config/categorias.json
 config/motivos-ausencia.json
 config/vacaciones.json
 config/roles.json
+# Respaldos que genera la página de configuración al guardar (config/*.bak-*)
+config/*.bak-*
 # Estado operativo local del presentismo (calendarios, correcciones, pausas) y
 # snapshot del padrón (Principio VI): datos por período, no van al repositorio.
 /data/
