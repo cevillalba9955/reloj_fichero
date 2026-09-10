@@ -125,8 +125,11 @@ function construirPendientes(filas) {
 // `emision` es 'automatico' | 'manual' (va al sello). `granularidad` es
 // 'MENSUAL' | 'QUINCENAL' (modo de la instalación, va al encabezado del
 // resumen). Son cosas distintas: no confundir con una sola clave `modo`.
-export function construirInformeCierre({ filas, periodoId, periodoMes, tramo, emision, granularidad, autor, emitidoEn, rangoFechas }) {
-  const sello = { periodoId, periodoMes, tramo, modo: emision, emitidoEn, autor: autor ?? null };
+// `anticipado` (022-informe-primera-quincena-anticipado): true si el informe se
+// emitió sobre un período todavía abierto (informe de la primera quincena
+// emitido antes del cierre del mes); false en toda emisión de cierre (default).
+export function construirInformeCierre({ filas, periodoId, periodoMes, tramo, emision, granularidad, autor, emitidoEn, rangoFechas, anticipado = false }) {
+  const sello = { periodoId, periodoMes, tramo, modo: emision, emitidoEn, autor: autor ?? null, anticipado: Boolean(anticipado) };
 
   const filasResumen = filas.map(filaResumenDe);
   const totalHoras = redondear(filasResumen.reduce((s, f) => s + f.horasTrabajadas, 0));

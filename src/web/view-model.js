@@ -169,7 +169,17 @@ export function construirVistaFichadasHoy({ fecha, periodo, diaClasificacion, fi
 // que sus acumulados todavía no reflejan los días futuros del período
 // (FR-008 de resumen-periodo.js) — la UI lo usa para avisarlo, no cambia el
 // cálculo.
-export function construirVistaResumenPeriodo({ periodo, periodos, filas = [], enCurso = false, cerrado = false }) {
+export function construirVistaResumenPeriodo({
+  periodo,
+  periodos,
+  filas = [],
+  enCurso = false,
+  cerrado = false,
+  // 022-informe-primera-quincena-anticipado — true si la página debe ofrecer
+  // "Emitir informe de la primera quincena" (modo QUINCENAL, tramo Q1, período
+  // abierto y primera quincena terminada). Lo calcula el handler.
+  emisionAnticipadaQ1Disponible = false,
+}) {
   return {
     periodo,
     periodos,
@@ -177,6 +187,7 @@ export function construirVistaResumenPeriodo({ periodo, periodos, filas = [], en
     // 018-informe-cierre-periodo — la página habilita "Emitir informe de
     // cierre" sólo si el período está cerrado.
     cerrado: Boolean(cerrado),
+    emisionAnticipadaQ1Disponible: Boolean(emisionAnticipadaQ1Disponible),
     filas: filas.map((f) =>
       f.anomalia
         ? {

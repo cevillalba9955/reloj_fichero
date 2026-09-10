@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { recortar, tramosParaTipo, fechaEnTramo, Tramo } from '../../src/presentismo/domain/periodo-liquidacion.js';
+import {
+  recortar,
+  tramosParaTipo,
+  fechaEnTramo,
+  primeraQuincenaTerminada,
+  Tramo,
+} from '../../src/presentismo/domain/periodo-liquidacion.js';
 import { generarCalendario } from '../../src/presentismo/domain/calendario-mes.js';
 
 const LV = new Set([1, 2, 3, 4, 5]);
@@ -31,6 +37,16 @@ test('fechaEnTramo: quincena de una fecha ISO (feature 011, modo QUINCENAL)', ()
   assert.equal(fechaEnTramo('2026-07-31', Tramo.Q2), true);
   assert.equal(fechaEnTramo('2026-07-01', Tramo.MES), true);
   assert.equal(fechaEnTramo('2026-07-31', Tramo.MES), true);
+});
+
+// 022-informe-primera-quincena-anticipado (T002) — ¿ya terminó la primera
+// quincena (días 1–15) del período `periodoMes` a la fecha `hoy`?
+test('primeraQuincenaTerminada: mes de hoy posterior / mismo mes día 15 vs 16 / mes futuro', () => {
+  assert.equal(primeraQuincenaTerminada('202609', '2026-09-15'), false); // día 15, aún en curso
+  assert.equal(primeraQuincenaTerminada('202609', '2026-09-16'), true); // día 16, ya terminó
+  assert.equal(primeraQuincenaTerminada('202609', '2026-10-01'), true); // mes siguiente
+  assert.equal(primeraQuincenaTerminada('202610', '2026-09-30'), false); // período en un mes futuro
+  assert.equal(primeraQuincenaTerminada('202601', '2026-12-31'), true); // año siguiente
 });
 
 test('Q1 + Q2 = Mes sin días de más ni de menos (SC-012)', () => {

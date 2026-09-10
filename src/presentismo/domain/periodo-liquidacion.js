@@ -26,3 +26,15 @@ export function recortar(calendario, tramo) {
 export function fechaEnTramo(fecha, tramo) {
   return diaEnTramo(Number(fecha.slice(8, 10)), tramo);
 }
+
+// 022-informe-primera-quincena-anticipado — ¿ya transcurrieron todos los días
+// 1–15 del período mensual `periodoMes` ('YYYYMM') a la fecha `hoy`
+// ('YYYY-MM-DD', de `hoyLocal()`)? Precondición para ofrecer y emitir el
+// informe anticipado de la primera quincena sobre un mes todavía abierto
+// (FR-002). Comparación léxica de 'YYYYMM' (formato de ancho fijo).
+export function primeraQuincenaTerminada(periodoMes, hoy) {
+  const mesHoy = hoy.slice(0, 4) + hoy.slice(5, 7);
+  if (mesHoy > periodoMes) return true;
+  if (mesHoy < periodoMes) return false;
+  return Number(hoy.slice(8, 10)) > 15;
+}

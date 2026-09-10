@@ -78,9 +78,23 @@ test('sello: identifica período, tramo, modo de emisión, momento y autor', () 
     modo: 'manual',
     emitidoEn: '2026-08-01T09:00:00.000Z',
     autor: 'ana',
+    anticipado: false,
   });
   // la granularidad de la instalación va en el encabezado del resumen, no en el sello
   assert.equal(resumen.encabezado.modo, 'MENSUAL');
+});
+
+// 022-informe-primera-quincena-anticipado (T003) — el sello lleva `anticipado`
+test('sello.anticipado: true cuando se pasa el flag; false (default) si se omite', () => {
+  const conFlag = construirInformeCierre({ ...base, tramo: 'Q1', filas: [filaNormal()], anticipado: true });
+  assert.equal(conFlag.sello.anticipado, true);
+  // ningún otro campo del sello cambia respecto de omitir el flag
+  const sinFlag = construirInformeCierre({ ...base, tramo: 'Q1', filas: [filaNormal()] });
+  assert.equal(sinFlag.sello.anticipado, false);
+  assert.deepEqual(
+    { ...conFlag.sello, anticipado: undefined },
+    { ...sinFlag.sello, anticipado: undefined },
+  );
 });
 
 test('resumen.encabezado: totalHoras = Σ filas, empleados = filas.length', () => {

@@ -8,9 +8,14 @@ import InformeCierreContenido, { ESTILOS_INFORME } from './InformeCierreContenid
 // a PDF vive en la página "Resumen del Período" (AccionInformeCierre), no acá.
 
 export default function InformeCierrePrintable({ vista, onCerrar }) {
+  // 022-informe-primera-quincena-anticipado — distingue en el título del modal
+  // la emisión anticipada de la primera quincena (mes todavía no cerrado).
+  const etiqueta =
+    `Informe de cierre — ${etiquetaPeriodo(vista.sello.periodoId)}` +
+    (vista.sello.anticipado ? ' · emisión anticipada' : '');
   return (
     <Dialogo
-      etiqueta={`Informe de cierre — ${etiquetaPeriodo(vista.sello.periodoId)}`}
+      etiqueta={etiqueta}
       onCerrar={onCerrar}
       ancho="min(1100px, 94vw)"
     >

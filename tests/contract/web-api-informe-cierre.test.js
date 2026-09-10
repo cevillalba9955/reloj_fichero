@@ -310,6 +310,273 @@ test('021 MENSUAL: GET ?tramo=Mes devuelve lo mismo que GET sin tramo', async ()
   }
 });
 
+// ===========================================================================
+// 022-informe-primera-quincena-anticipado — emitir el informe de la primera
+// quincena (tramo Q1) manualmente sobre un mes QUINCENAL todavía ABIERTO, una
+// vez terminada la primera quincena. Ver
+// specs/022-informe-primera-quincena-anticipado/contracts/web-api.md.
+// ===========================================================================
+
+// `PRESENTISMO_HOY` fija la fecha del servidor para ejercitar la "ventana
+// anticipada" de forma determinista, sin depender de en qué día corra la suite.
+const HOY_Q1_TERMINADA = `${PER.slice(0, 4)}-${PER.slice(4, 6)}-20`; // día 20: Q1 ya terminó
+const HOY_Q1_EN_CURSO = `${PER.slice(0, 4)}-${PER.slice(4, 6)}-10`; // día 10: Q1 en curso
+const ENV_ANTICIPADO = { ...ENV_QUINCENAL, PRESENTISMO_HOY: HOY_Q1_TERMINADA };
+
+// caso 19 + 20
+test('022 QUINCENAL: POST ?tramo=Q1 sobre período ABIERTO con Q1 terminada → 200 anticipado; GET lo devuelve', async () => {
+  const e = await entorno({ envExtra: ENV_ANTICIPADO });
+  try {
+    const post = await fetch(ruta(e.base, 'Q1'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ autor: 'ana' }),
+    });
+    assert.equal(post.status, 200);
+    const v = await post.json();
+    assert.equal(v.sello.tramo, 'Q1');
+    assert.equal(v.sello.anticipado, true);
+    assert.equal(v.sello.modo, 'manual');
+    assert.equal(v.periodoId, `${PER}-Q1`);
+    assert.equal(v.obsoleto, false);
+    assert.ok(Array.isArray(v.resumen.filas) && v.resumen.filas.length === 2);
+    assert.ok(Array.isArray(v.detalle.secciones) && v.detalle.secciones.length === 2);
+    assert.ok(v.pendientes && typeof v.pendientes.hayPendientes === 'boolean');
+    assert.equal(v.resumen.encabezado.rangoFechas.desde, `${PER.slice(0, 4)}-${PER.slice(4, 6)}-01`);
+    assert.equal(v.resumen.encabezado.rangoFechas.hasta, `${PER.slice(0, 4)}-${PER.slice(4, 6)}-15`);
+
+    const get = await fetch(ruta(e.base, 'Q1'));
+    assert.equal(get.status, 200);
+    const g = await get.json();
+    assert.equal(g.sello.anticipado, true);
+    assert.equal(g.obsoleto, false);
+  } finally {
+    e.close();
+  }
+});
+
+// caso 26 — cuadre del informe anticipado de Q1 vs. "Resumen del Período"
+test('022 QUINCENAL: informe anticipado de Q1 cuadra con /resumen-periodo?periodo=<PER>-Q1', async () => {
+  const F_Q1 = fechaDelMes(2);
+  const e = await entorno({
+    envExtra: ENV_ANTICIPADO,
+    clasificaciones: { [F_Q1]: 'Laborable' },
+    fichadas: [{ legajo: 1, fecha: F_Q1, hora: '07:05:00' }],
+  });
+  try {
+    const post = await fetch(ruta(e.base, 'Q1'), { method: 'POST' });
+    assert.equal(post.status, 200);
+    const inf = await post.json();
+    const rp = await fetch(`${e.base}/api/resumen-periodo?periodo=${PER}-Q1`).then((r) => r.json());
+
+    const CONT = ['horasTrabajadas', 'completas', 'incompletas', 'ausencias', 'llegadasTarde', 'retirosAnticipados'];
+    for (const filaInf of inf.resumen.filas) {
+      const filaRp = rp.filas.find((f) => f.legajo === filaInf.legajo);
+      assert.ok(filaRp, `resumen-periodo tiene el legajo ${filaInf.legajo}`);
+      for (const c of CONT) {
+        assert.equal(filaInf[c] ?? 0, filaRp[c] ?? 0, `legajo ${filaInf.legajo}, contador ${c}`);
+      }
+    }
+    // cuadre interno (SC-002 / SC-003)
+    const suma = inf.resumen.filas.reduce((s, f) => s + f.horasTrabajadas, 0);
+    assert.equal(Math.round(suma * 100) / 100, inf.resumen.encabezado.totalHoras);
+    for (const seccion of inf.detalle.secciones) {
+      const fila = inf.resumen.filas.find((f) => f.legajo === seccion.legajo);
+      assert.equal(seccion.subtotalHoras, fila.horasTrabajadas, `legajo ${seccion.legajo}`);
+    }
+  } finally {
+    e.close();
+  }
+});
+
+// caso 26b — padrón completo y pendientes de los días 1–15 (SC-004 / SC-005)
+test('022 QUINCENAL: el informe anticipado cubre todo el padrón y señala los pendientes de Q1', async () => {
+  const F_CORR = fechaDelMes(1); // siempre vencido (navegable)
+  const F_INCOMPLETA = fechaDelMes(2);
+  const e = await entorno({
+    envExtra: ENV_ANTICIPADO,
+    clasificaciones: { [F_CORR]: 'Laborable', [F_INCOMPLETA]: 'Laborable' },
+    // legajo 1: día 2 sólo entrada (jornada incompleta); día 1 sin fichada
+    fichadas: [{ legajo: 1, fecha: F_INCOMPLETA, hora: '07:05:00' }],
+  });
+  try {
+    // legajo 1: corrección sobre el día 1 (queda como día con ajuste)
+    const corr = await fetch(`${e.base}/api/fichadas-hoy/correcciones`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        legajo: 1,
+        fecha: F_CORR,
+        entrada: '08:00',
+        salida: '16:00',
+        autor: 'ana',
+        motivo: 'olvido de fichada',
+      }),
+    });
+    assert.ok(corr.status === 200 || corr.status === 201, `corrección aplicada (status ${corr.status})`);
+
+    const inf = await fetch(ruta(e.base, 'Q1'), { method: 'POST' }).then((r) => r.json());
+
+    // padrón completo, sin omisiones ni duplicados (SC-004)
+    assert.equal(inf.resumen.filas.length, PADRON.length);
+    const legajos = inf.resumen.filas.map((f) => f.legajo).sort();
+    assert.deepEqual(legajos, [...new Set(legajos)].sort());
+
+    // pendientes de Q1 (SC-005): jornada incompleta, día con ajuste y anomalía
+    assert.equal(inf.pendientes.hayPendientes, true);
+    assert.ok(
+      inf.pendientes.jornadasIncompletas.some((p) => p.legajo === 1 && p.fechas.includes(F_INCOMPLETA)),
+      'la jornada incompleta del legajo 1 figura en pendientes',
+    );
+    assert.ok(
+      inf.pendientes.ajustes.some((p) => p.legajo === 1 && p.fechas.includes(F_CORR)),
+      'el día con corrección del legajo 1 figura en pendientes',
+    );
+    assert.ok(
+      inf.pendientes.anomalias.some((p) => p.legajo === 9),
+      'el empleado sin categoría (legajo 9) figura como anomalía',
+    );
+  } finally {
+    e.close();
+  }
+});
+
+// caso 21 — la primera quincena todavía no terminó
+test('022 QUINCENAL: POST ?tramo=Q1 con Q1 EN CURSO → 409 QUINCENA_EN_CURSO y no escribe nada', async () => {
+  const e = await entorno({ envExtra: { ...ENV_QUINCENAL, PRESENTISMO_HOY: HOY_Q1_EN_CURSO } });
+  try {
+    const res = await fetch(ruta(e.base, 'Q1'), { method: 'POST' });
+    assert.equal(res.status, 409);
+    assert.equal((await res.json()).error.codigo, 'QUINCENA_EN_CURSO');
+    const get = await fetch(ruta(e.base, 'Q1'));
+    assert.equal(get.status, 404);
+    assert.equal((await get.json()).error.codigo, 'INFORME_NO_EMITIDO');
+  } finally {
+    e.close();
+  }
+});
+
+// caso 22 + 23 + 24 — fuera de la ventana anticipada
+test('022: ?tramo=Q2 / sin tramo sobre período abierto → 409 PERIODO_ABIERTO; MENSUAL ?tramo=Q1 → 400', async () => {
+  const q = await entorno({ envExtra: ENV_ANTICIPADO });
+  try {
+    const q2 = await fetch(ruta(q.base, 'Q2'), { method: 'POST' });
+    assert.equal(q2.status, 409);
+    assert.equal((await q2.json()).error.codigo, 'PERIODO_ABIERTO');
+
+    const sin = await fetch(ruta(q.base), { method: 'POST' });
+    assert.equal(sin.status, 409);
+    assert.equal((await sin.json()).error.codigo, 'PERIODO_ABIERTO');
+  } finally {
+    q.close();
+  }
+
+  const m = await entorno({ envExtra: { PRESENTISMO_HOY: HOY_Q1_TERMINADA } }); // MENSUAL
+  try {
+    const res = await fetch(ruta(m.base, 'Q1'), { method: 'POST' });
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error.codigo, 'PERIODO_INVALIDO');
+  } finally {
+    m.close();
+  }
+});
+
+// caso 25 — rol lector no puede emitir el informe anticipado; sí puede leerlo
+test('022: POST ?tramo=Q1 anticipado con rol lector → 403 ACCESO_DENEGADO', async () => {
+  const raiz = mkdtempSync(join(tmpdir(), 'acl-informe-q1-'));
+  const rolesPath = join(raiz, 'roles.json');
+  writeFileSync(rolesPath, JSON.stringify({ rolPorDefecto: 'lector', mapeo: {} }), 'utf8');
+  const e = await entorno({ envExtra: { ...ENV_ANTICIPADO, ACL_ROLES_CONFIG: rolesPath } });
+  try {
+    const denegado = await fetch(ruta(e.base, 'Q1'), { method: 'POST' });
+    assert.equal(denegado.status, 403);
+    assert.equal((await denegado.json()).error.codigo, 'ACCESO_DENEGADO');
+  } finally {
+    e.close();
+    rmSync(raiz, { recursive: true, force: true });
+  }
+});
+
+test('022: GET ?tramo=Q1 de una copia anticipada ya emitida → 200 (lectura abierta)', async () => {
+  const e = await entorno({ envExtra: ENV_ANTICIPADO });
+  try {
+    const emit = await fetch(ruta(e.base, 'Q1'), { method: 'POST' });
+    assert.equal(emit.status, 200);
+    const get = await fetch(ruta(e.base, 'Q1')); // sin header de rol
+    assert.equal(get.status, 200);
+    assert.equal((await get.json()).sello.anticipado, true);
+  } finally {
+    e.close();
+  }
+});
+
+// caso 28 + 30 + 30b — re-emisión; emitir no bloquea correcciones; re-emitir refleja el cambio
+test('022: re-emitir anticipado (idempotente sin cambios) y reflejar una corrección posterior', async () => {
+  const F_CORR = fechaDelMes(1); // siempre vencido (navegable)
+  const e = await entorno({
+    envExtra: ENV_ANTICIPADO,
+    clasificaciones: { [F_CORR]: 'Laborable' },
+    fichadas: [{ legajo: 1, fecha: F_CORR, hora: '08:00:00' }], // sólo entrada → 0 horas
+  });
+  try {
+    const v1 = await fetch(ruta(e.base, 'Q1'), { method: 'POST' }).then((r) => r.json());
+    const v2 = await fetch(ruta(e.base, 'Q1'), { method: 'POST' }).then((r) => r.json());
+    // sin cambios intermedios: mismas cifras, sólo cambia el sello de emisión
+    assert.equal(v2.sello.anticipado, true);
+    assert.equal(v1.resumen.encabezado.totalHoras, v2.resumen.encabezado.totalHoras);
+    assert.notEqual(v1.sello.emitidoEn, v2.sello.emitidoEn);
+
+    const horasAntes = v2.resumen.filas.find((f) => f.legajo === 1).horasTrabajadas;
+
+    // corrección sobre un día 1–15: NO se bloquea (el mes sigue abierto)
+    const corr = await fetch(`${e.base}/api/fichadas-hoy/correcciones`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        legajo: 1,
+        fecha: F_CORR,
+        entrada: '08:00',
+        salida: '18:00',
+        autor: 'ana',
+        motivo: 'jornada extendida',
+      }),
+    });
+    assert.ok(corr.status === 200 || corr.status === 201, `corrección aplicada (status ${corr.status})`);
+
+    // sin re-emitir, la copia guardada sigue siendo la previa (no se auto-invalida)
+    const sinReemitir = await fetch(ruta(e.base, 'Q1')).then((r) => r.json());
+    assert.equal(sinReemitir.resumen.filas.find((f) => f.legajo === 1).horasTrabajadas, horasAntes);
+
+    // re-emitir: la copia nueva refleja la corrección (SC-008)
+    const v3 = await fetch(ruta(e.base, 'Q1'), { method: 'POST' }).then((r) => r.json());
+    const horasDespues = v3.resumen.filas.find((f) => f.legajo === 1).horasTrabajadas;
+    assert.ok(horasDespues > horasAntes, `re-emitir refleja el cambio (${horasAntes} → ${horasDespues})`);
+  } finally {
+    e.close();
+  }
+});
+
+// caso 27 — al cerrar el mes, la copia anticipada de Q1 se reemplaza por la de cierre
+test('022 QUINCENAL: cerrar el período reemplaza la copia anticipada de Q1 (anticipado=false)', async () => {
+  const e = await entorno({ envExtra: ENV_ANTICIPADO });
+  try {
+    const anticipada = await fetch(ruta(e.base, 'Q1'), { method: 'POST' }).then((r) => r.json());
+    assert.equal(anticipada.sello.anticipado, true);
+
+    await cerrar(e);
+
+    const q1 = await fetch(ruta(e.base, 'Q1')).then((r) => r.json());
+    assert.equal(q1.sello.anticipado, false);
+    assert.equal(q1.sello.modo, 'automatico');
+    for (const tramo of ['Q2', 'Mes']) {
+      const res = await fetch(ruta(e.base, tramo));
+      assert.equal(res.status, 200, `GET ?tramo=${tramo}`);
+    }
+  } finally {
+    e.close();
+  }
+});
+
 // US3 — reabrir invalida el informe mensual; volver a cerrar lo regenera
 test('021 QUINCENAL: reabrir marca el informe mensual obsoleto; re-cerrar lo regenera', async () => {
   const e = await entorno({ envExtra: ENV_QUINCENAL });

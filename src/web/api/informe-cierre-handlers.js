@@ -3,6 +3,7 @@ import { ApiError } from './router.js';
 import { exigirRol } from '../acl/autorizacion.js';
 import { parsePeriodoId } from './periodo-id.js';
 import { construirVistaInformeCierre } from '../view-model.js';
+import { primeraQuincenaTerminada } from '../../presentismo/domain/periodo-liquidacion.js';
 import { rutaCarpetaPeriodo, ARCHIVO_PADRON } from '../../presentismo/domain/periodo-storage.js';
 import {
   leerSnapshotPadron,
@@ -79,15 +80,42 @@ function tramoParaLeer(modo, tramoQuery) {
   throw new ApiError(400, 'PERIODO_INVALIDO', 'En modo quincenal el informe se pide por tramo (?tramo=Q1, Q2 o Mes)');
 }
 
-async function exigirCalendarioCerrado(ctx, periodoMes, { debeEstarCerrado }) {
+async function cargarCalendarioObligatorio(ctx, periodoMes) {
   const calendario = await ctx.repo.cargarCalendario(periodoMes);
   if (!calendario) {
     throw new ApiError(404, 'CALENDARIO_NO_GENERADO', `No hay calendario para ${periodoMes}`);
   }
+  return calendario;
+}
+
+async function exigirCalendarioCerrado(ctx, periodoMes, { debeEstarCerrado }) {
+  const calendario = await cargarCalendarioObligatorio(ctx, periodoMes);
   if (debeEstarCerrado && calendario.cerrado !== true) {
     throw new ApiError(409, 'PERIODO_ABIERTO', `El período ${periodoMes} debe cerrarse antes de emitir el informe`);
   }
   return calendario;
+}
+
+// 022-informe-primera-quincena-anticipado — "ventana de emisión anticipada":
+// se acepta `POST …?tramo=Q1` sobre un período ABIERTO sólo si la instalación
+// es QUINCENAL, el tramo pedido es exactamente Q1 y el período no está cerrado.
+// Dentro de esa ventana el período debe además tener la primera quincena ya
+// terminada (FR-002); si no, `409 QUINCENA_EN_CURSO`. Cualquier otro pedido
+// sobre un período abierto sigue devolviendo `409 PERIODO_ABIERTO`.
+function exigirPeriodoEmitible(ctx, periodoMes, calendario, { modo, tramoQuery }) {
+  const esAnticipadoQ1 = modo === 'QUINCENAL' && tramoQuery === 'Q1' && calendario.cerrado !== true;
+  if (esAnticipadoQ1) {
+    if (!primeraQuincenaTerminada(periodoMes, ctx.hoyISO)) {
+      throw new ApiError(
+        409,
+        'QUINCENA_EN_CURSO',
+        `La primera quincena de ${periodoMes} todavía no terminó`,
+      );
+    }
+  } else if (calendario.cerrado !== true) {
+    throw new ApiError(409, 'PERIODO_ABIERTO', `El período ${periodoMes} debe cerrarse antes de emitir el informe`);
+  }
+  return esAnticipadoQ1;
 }
 
 export function registrarRutas(router, ctx) {
@@ -98,9 +126,13 @@ export function registrarRutas(router, ctx) {
     exigirRol(ctx, 'editor', async ({ params, query, body }) => {
       const modo = ctx.modoResumenPeriodo ?? 'MENSUAL';
       const { periodoMes } = parsePeriodoId(params.periodo, modo);
-      await exigirCalendarioCerrado(ctx, periodoMes, { debeEstarCerrado: true });
+      const calendario = await cargarCalendarioObligatorio(ctx, periodoMes);
 
+      // `tramosParaEmitir` valida el `?tramo` (400 PERIODO_INVALIDO) antes del
+      // gate abierto/cerrado: en MENSUAL, `?tramo=Q1` es 400, no 409.
       const tramos = tramosParaEmitir(modo, query.tramo);
+      const anticipado = exigirPeriodoEmitible(ctx, periodoMes, calendario, { modo, tramoQuery: query.tramo });
+
       const { legajos, nombres } = legajosYNombresDelPeriodo(ctx, periodoMes);
       const autor = body?.autor ?? null;
       const servicio = servicioDelPeriodo(ctx, periodoMes);
@@ -115,6 +147,7 @@ export function registrarRutas(router, ctx) {
           autor,
           emision: 'manual',
           granularidad: modo,
+          anticipado,
         });
         emitidos.push(construirVistaInformeCierre({ entrada }));
       }

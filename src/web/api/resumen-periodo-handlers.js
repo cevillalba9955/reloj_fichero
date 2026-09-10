@@ -1,7 +1,7 @@
 import { ApiError } from './router.js';
 import { construirVistaResumenPeriodo, construirDetalleEmpleado, hoyLocal } from '../view-model.js';
 import { RosterNoDisponibleError } from '../../roster/active-employees-provider.js';
-import { Tramo } from '../../presentismo/domain/periodo-liquidacion.js';
+import { Tramo, primeraQuincenaTerminada } from '../../presentismo/domain/periodo-liquidacion.js';
 import { parsePeriodoId, expandirPeriodos, periodoPorDefecto } from './periodo-id.js';
 
 // feature 011 — Handlers de la API de "Resumen del Período". Solo lectura
@@ -15,10 +15,17 @@ import { parsePeriodoId, expandirPeriodos, periodoPorDefecto } from './periodo-i
 // QUINCENAL ofrece quincenas `YYYYMM-Q1` / `YYYYMM-Q2`. `YYYYMM` a secas (mes
 // completo) se acepta como query en ambos modos.
 
+// 022-informe-primera-quincena-anticipado — fecha con la que se decide la
+// "ventana de emisión anticipada". `ctx.hoyISO` = reloj real salvo override de
+// tests (PRESENTISMO_HOY). Fallback a `hoyLocal()` por si el contexto no lo trae.
+function hoyDe(ctx) {
+  return ctx.hoyISO ?? hoyLocal();
+}
+
 async function periodoEfectivo(ctx, query) {
   const modo = ctx.modoResumenPeriodo ?? 'MENSUAL';
   const generados = await ctx.repo.listarPeriodos();
-  const periodo = query.periodo ?? periodoPorDefecto(generados, modo, hoyLocal());
+  const periodo = query.periodo ?? periodoPorDefecto(generados, modo, hoyDe(ctx));
   if (periodo == null) {
     throw new ApiError(404, 'CALENDARIO_NO_GENERADO', 'No hay ningún período con calendario generado');
   }
@@ -27,6 +34,7 @@ async function periodoEfectivo(ctx, query) {
   if (!calendario) {
     throw new ApiError(404, 'CALENDARIO_NO_GENERADO', `No hay calendario para ${periodoMes}`);
   }
+  const cerrado = Boolean(calendario.cerrado);
   return {
     periodo,
     periodoMes,
@@ -34,7 +42,16 @@ async function periodoEfectivo(ctx, query) {
     periodos: expandirPeriodos(generados, modo),
     // 018-informe-cierre-periodo — la página usa este flag para habilitar la
     // acción "Emitir informe de cierre" sólo sobre un período cerrado.
-    cerrado: Boolean(calendario.cerrado),
+    cerrado,
+    // 022-informe-primera-quincena-anticipado (FR-002) — la página "Resumen del
+    // Período" ofrece "Emitir informe de la primera quincena" sólo si: modo
+    // QUINCENAL, el período efectivo es un tramo Q1, el período NO está cerrado
+    // y la primera quincena ya terminó. El calendario ya está garantizado acá.
+    emisionAnticipadaQ1Disponible:
+      modo === 'QUINCENAL' &&
+      tramo === Tramo.Q1 &&
+      !cerrado &&
+      primeraQuincenaTerminada(periodoMes, hoyDe(ctx)),
   };
 }
 
@@ -75,10 +92,11 @@ async function nombresPorLegajo(ctx) {
 export function registrarRutas(router, ctx) {
   // GET /api/resumen-periodo[?periodo=YYYYMM[-Q1|-Q2]] → VistaResumenPeriodo.
   router.add('GET', '/api/resumen-periodo', async ({ query }) => {
-    const { periodo, periodoMes, tramo, periodos, cerrado } = await periodoEfectivo(ctx, query);
+    const { periodo, periodoMes, tramo, periodos, cerrado, emisionAnticipadaQ1Disponible } =
+      await periodoEfectivo(ctx, query);
     const legajos = await legajosEsperados(ctx);
     const nombres = await nombresPorLegajo(ctx);
-    const hoy = hoyLocal();
+    const hoy = hoyDe(ctx);
 
     let filas;
     try {
@@ -88,7 +106,17 @@ export function registrarRutas(router, ctx) {
     }
     const conNombre = filas.map((f) => ({ ...f, nombre: nombres.get(f.legajo) ?? null }));
     const enCurso = periodoIncluyeHoy(periodoMes, tramo, hoy);
-    return { status: 200, body: construirVistaResumenPeriodo({ periodo, periodos, filas: conNombre, enCurso, cerrado }) };
+    return {
+      status: 200,
+      body: construirVistaResumenPeriodo({
+        periodo,
+        periodos,
+        filas: conNombre,
+        enCurso,
+        cerrado,
+        emisionAnticipadaQ1Disponible,
+      }),
+    };
   });
 
   // GET /api/resumen-periodo/:legajo[?periodo=YYYYMM[-Q1|-Q2]] → VistaDetalleEmpleado (US2).
@@ -102,7 +130,7 @@ export function registrarRutas(router, ctx) {
 
     let filas;
     try {
-      filas = await ctx.service.calcularResumenPeriodo(periodoMes, [legajo], hoyLocal(), { tramo });
+      filas = await ctx.service.calcularResumenPeriodo(periodoMes, [legajo], hoyDe(ctx), { tramo });
     } catch (err) {
       throw new ApiError(500, 'ERROR_CALCULANDO_RESUMEN', err.message);
     }

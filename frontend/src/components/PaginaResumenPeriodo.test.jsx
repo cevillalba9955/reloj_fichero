@@ -157,6 +157,37 @@ test('018 — período abierto: no muestra acciones del informe de cierre, sólo
   expect(screen.getByText(/se genera automáticamente al cerrar el período/)).toBeInTheDocument();
 });
 
+// 022-informe-primera-quincena-anticipado — con
+// `emisionAnticipadaQ1Disponible` en la vista (tramo Q1, mes abierto, primera
+// quincena terminada) la página ofrece emitir el informe anticipado.
+test('022 — Q1 con emisionAnticipadaQ1Disponible: muestra "Emitir informe de la primera quincena"', async () => {
+  const cliente = clienteMock({
+    obtenerResumen: vi.fn().mockResolvedValue(
+      vista({ periodo: '202607-Q1', cerrado: false, emisionAnticipadaQ1Disponible: true }),
+    ),
+  });
+  render(<PaginaResumenPeriodo cliente={cliente} clienteInforme={informeMock()} />);
+  await screen.findByRole('table');
+  expect(
+    await screen.findByRole('button', { name: 'Emitir informe de la primera quincena' }),
+  ).toBeInTheDocument();
+  expect(screen.getByText(/Emisión anticipada: el mes sigue abierto/)).toBeInTheDocument();
+});
+
+test('022 — Q1 sin emisionAnticipadaQ1Disponible: no ofrece la emisión anticipada, sólo la nota', async () => {
+  const cliente = clienteMock({
+    obtenerResumen: vi.fn().mockResolvedValue(
+      vista({ periodo: '202607-Q1', cerrado: false, emisionAnticipadaQ1Disponible: false }),
+    ),
+  });
+  render(<PaginaResumenPeriodo cliente={cliente} clienteInforme={informeMock()} />);
+  await screen.findByRole('table');
+  expect(
+    screen.queryByRole('button', { name: 'Emitir informe de la primera quincena' }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByText(/se genera automáticamente al cerrar el período/)).toBeInTheDocument();
+});
+
 test('018 — período cerrado con informe guardado: muestra "Ver informe" y "Descargar PDF"', async () => {
   const informe = {
     obtener: vi.fn().mockResolvedValue({

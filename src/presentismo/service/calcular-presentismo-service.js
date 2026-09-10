@@ -161,6 +161,9 @@ export function createCalcularPresentismoService({
     autor = null,
     emision = 'manual',
     granularidad = 'MENSUAL',
+    // 022-informe-primera-quincena-anticipado — true si se emite sobre un
+    // período todavía abierto (informe de la primera quincena antes del cierre).
+    anticipado = false,
   }) {
     const rangoFechas = rangoDeTramo(periodoMes, tramo);
     const periodoId = tramo === 'Mes' ? periodoMes : `${periodoMes}-${tramo}`;
@@ -180,6 +183,7 @@ export function createCalcularPresentismoService({
       autor,
       emitidoEn,
       rangoFechas,
+      anticipado,
     });
     const entrada = { ...informe, obsoleto: false, invalidadoPor: null };
     await repo.guardarInformeCierre(periodoMes, tramo, entrada);
@@ -188,6 +192,9 @@ export function createCalcularPresentismoService({
       tramo,
       autor: autor ?? null,
       emision,
+      // 022 — condición de emisión anticipada (FR-015): distingue en el log una
+      // emisión de la primera quincena sobre un mes abierto de un cierre normal.
+      anticipado: Boolean(anticipado),
       empleados: informe.resumen.encabezado.empleados,
       totalHoras: informe.resumen.encabezado.totalHoras,
     });
