@@ -147,6 +147,34 @@ página **Calendario**, con el período del mes cerrado, aparece además la acci
 formato que los informes de cierre, referido al mes calendario completo
 (feature 021).
 
+### Informe de la primera quincena antes del cierre (feature 022)
+
+En modo `QUINCENAL`, el informe de la **primera quincena** (`Q1`, días 1–15) se
+puede emitir **manualmente** sobre un mes todavía **abierto**, una vez que la
+primera quincena terminó (fecha del servidor posterior al día 15), sin esperar
+al cierre del mes:
+
+- `POST /api/calendarios/:periodo/informe-cierre?tramo=Q1` sobre un período
+  abierto — rol **editor** o superior. Se acepta sólo si la instalación es
+  `QUINCENAL` y la primera quincena ya terminó; si aún está en curso,
+  `409 QUINCENA_EN_CURSO`. Para cualquier otro tramo sobre un período abierto
+  sigue siendo `409 PERIODO_ABIERTO`.
+- La copia guardada lleva `sello.anticipado: true` (y `modo: 'manual'`). Se
+  puede **re-emitir** a demanda mientras el mes siga abierto; emitirla **no**
+  bloquea correcciones/pausas/justificaciones sobre los días 1–15.
+- Al **cerrar** el mes, la emisión automática de cierre reescribe `Q1` con
+  `sello.anticipado: false` (`modo: 'automatico'`): a partir de ahí el informe
+  de Q1 es el de cierre.
+- `GET /api/resumen-periodo?periodo=<YYYYMM>-Q1` expone
+  `emisionAnticipadaQ1Disponible` (`true` sólo con modo `QUINCENAL`, tramo `Q1`,
+  período abierto y primera quincena terminada). En la página **Resumen del
+  Período** ese flag habilita el botón *"Emitir informe de la primera
+  quincena"* / *"Re-emitir"*, y la copia se muestra con un aviso persistente de
+  emisión anticipada.
+- `PRESENTISMO_HOY` (`YYYY-MM-DD`) sobreescribe la fecha del servidor usada para
+  decidir la ventana anticipada — sólo para tests; en producción es el reloj
+  real.
+
 Tests: `node --test tests/unit/presentismo-informe-cierre.test.js
 tests/unit/file-presentismo-repository-informe.test.js
 tests/contract/web-api-informe-cierre.test.js

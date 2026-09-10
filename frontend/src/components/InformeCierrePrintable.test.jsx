@@ -151,3 +151,19 @@ test('cuando la copia es obsoleta, muestra el aviso', () => {
   render(<InformeCierrePrintable vista={vista({ obsoleto: true })} onCerrar={() => {}} />);
   expect(screen.getByText(/desactualizado/)).toBeInTheDocument();
 });
+
+// 022-informe-primera-quincena-anticipado — marca visible de emisión anticipada
+test('022: sello.anticipado muestra la marca "EMISIÓN ANTICIPADA" y el título del modal la refleja', () => {
+  const v = vista({
+    periodoId: '202607-Q1',
+    sello: { periodoId: '202607-Q1', tramo: 'Q1', modo: 'manual', emitidoEn: '2026-07-16T10:00:00.000Z', autor: 'ana', anticipado: true },
+  });
+  render(<InformeCierrePrintable vista={v} onCerrar={() => {}} />);
+  expect(screen.getByText(/EMISIÓN ANTICIPADA/)).toBeInTheDocument();
+  expect(screen.getByRole('dialog')).toHaveTextContent(/emisión anticipada/i);
+});
+
+test('022: sin sello.anticipado no aparece la marca de emisión anticipada', () => {
+  render(<InformeCierrePrintable vista={vista()} onCerrar={() => {}} />);
+  expect(screen.queryByText(/EMISIÓN ANTICIPADA/)).not.toBeInTheDocument();
+});

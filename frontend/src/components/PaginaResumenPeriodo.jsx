@@ -74,6 +74,7 @@ export default function PaginaResumenPeriodo({ cliente = clientePorDefecto, clie
             key={estado.vista.periodo}
             periodo={estado.vista.periodo}
             cerrado={Boolean(estado.vista.cerrado)}
+            anticipadoQ1Disponible={Boolean(estado.vista.emisionAnticipadaQ1Disponible)}
             cliente={clienteInforme}
           />
           <TablaResumenPeriodo

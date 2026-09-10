@@ -49,6 +49,7 @@ export const ESTILOS_INFORME = `
   .informe-cierre-contenido h4 { margin: 18px 0 6px; border-bottom: 1px solid #999; padding-bottom: 2px; }
   .informe-cierre-contenido .informe-sello p { margin: 2px 0; }
   .informe-cierre-contenido .informe-obsoleto { color: #a8071a; font-weight: 600; }
+  .informe-cierre-contenido .informe-anticipado { color: #ad4e00; font-weight: 600; }
   .informe-tabla { border-collapse: collapse; width: 100%; margin: 4px 0 8px; }
   .informe-tabla th, .informe-tabla td { border: 1px solid #bbb; padding: 3px 6px; text-align: left; }
   .informe-tabla th { background: #f0f0f0; }
@@ -301,6 +302,13 @@ const InformeCierreContenido = forwardRef(function InformeCierreContenido({ vist
           Emitido el {fechaEmision}
           {sello.autor ? ` por ${sello.autor}` : ''} ({sello.modo})
         </p>
+        {/* 022-informe-primera-quincena-anticipado (FR-008) — marca visible de
+            emisión anticipada: el mes todavía no está cerrado. */}
+        {sello.anticipado && (
+          <p className="informe-anticipado" role="note">
+            EMISIÓN ANTICIPADA — el mes no está cerrado; las cifras de la primera quincena pueden cambiar hasta el cierre.
+          </p>
+        )}
         {obsoleto && (
           <p className="informe-obsoleto" role="alert">
             El período fue reabierto después de esta emisión: el informe está desactualizado. Se regenera al volver a

@@ -126,3 +126,74 @@ test('mensual: copia guardada obsoleta → muestra el aviso', async () => {
   render(<AccionInformeCierre periodo="202607" cerrado mensual cliente={cliente} />);
   expect(await screen.findByText(/quedó desactualizado/)).toBeInTheDocument();
 });
+
+// ===========================================================================
+// 022-informe-primera-quincena-anticipado — con `anticipadoQ1Disponible` y el
+// período abierto, se puede emitir MANUALMENTE el informe de la primera
+// quincena y re-emitirlo; la copia se muestra con un aviso de emisión
+// anticipada.
+// ===========================================================================
+
+function vistaAnticipada(over = {}) {
+  return vistaInforme({
+    periodoId: '202607-Q1',
+    sello: {
+      periodoId: '202607-Q1',
+      tramo: 'Q1',
+      modo: 'manual',
+      emitidoEn: '2026-07-16T10:00:00.000Z',
+      autor: 'ana',
+      anticipado: true,
+    },
+    ...over,
+  });
+}
+
+test('022 anticipado: sin copia → botón "Emitir informe de la primera quincena" y aviso de emisión anticipada', async () => {
+  const cliente = { obtener: vi.fn().mockRejectedValue(noEmitido()), emitir: vi.fn() };
+  render(<AccionInformeCierre periodo="202607-Q1" cerrado={false} anticipadoQ1Disponible cliente={cliente} />);
+  await waitFor(() => expect(cliente.obtener).toHaveBeenCalledWith('202607-Q1'));
+  expect(screen.getByRole('button', { name: 'Emitir informe de la primera quincena' })).toBeInTheDocument();
+  expect(screen.getByText(/Emisión anticipada: el mes sigue abierto/)).toBeInTheDocument();
+  expect(screen.queryByText(/se genera automáticamente al cerrar el período/)).not.toBeInTheDocument();
+});
+
+test('022 anticipado: "Emitir…" llama a cliente.emitir y luego muestra Ver / Descargar / Re-emitir', async () => {
+  const user = userEvent.setup();
+  const cliente = {
+    obtener: vi.fn().mockRejectedValue(noEmitido()),
+    emitir: vi.fn().mockResolvedValue(vistaAnticipada()),
+  };
+  render(<AccionInformeCierre periodo="202607-Q1" cerrado={false} anticipadoQ1Disponible cliente={cliente} />);
+
+  await user.click(await screen.findByRole('button', { name: 'Emitir informe de la primera quincena' }));
+  expect(cliente.emitir).toHaveBeenCalledWith('202607-Q1');
+
+  expect(await screen.findByRole('button', { name: 'Ver informe' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Descargar PDF' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Re-emitir' })).toBeInTheDocument();
+  expect(screen.getByText(/Emisión anticipada: el mes sigue abierto/)).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: 'Ver informe' }));
+  const dialogo = await screen.findByRole('dialog');
+  expect(within(dialogo).getByText(/EMISIÓN ANTICIPADA/)).toBeInTheDocument();
+});
+
+test('022 anticipado: con copia ya emitida al montar → Ver / Descargar / Re-emitir sin volver a emitir', async () => {
+  const cliente = {
+    obtener: vi.fn().mockResolvedValue(vistaAnticipada()),
+    emitir: vi.fn(),
+  };
+  render(<AccionInformeCierre periodo="202607-Q1" cerrado={false} anticipadoQ1Disponible cliente={cliente} />);
+  expect(await screen.findByRole('button', { name: 'Ver informe' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Re-emitir' })).toBeInTheDocument();
+  expect(cliente.emitir).not.toHaveBeenCalled();
+});
+
+test('022: período abierto SIN anticipadoQ1Disponible → sólo la nota, sin botón ni aviso', async () => {
+  const cliente = { obtener: vi.fn().mockRejectedValue(noEmitido()), emitir: vi.fn() };
+  render(<AccionInformeCierre periodo="202607-Q1" cerrado={false} anticipadoQ1Disponible={false} cliente={cliente} />);
+  expect(screen.getByText(/se genera automáticamente al cerrar el período/)).toBeInTheDocument();
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  expect(screen.queryByText(/Emisión anticipada/)).not.toBeInTheDocument();
+});
