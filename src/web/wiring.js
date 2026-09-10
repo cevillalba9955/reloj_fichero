@@ -1,3 +1,4 @@
+import { hoyLocal } from '../presentismo/domain/calendario-mes.js';
 import { loadCategoriasConfig } from '../presentismo/config/categorias-config.js';
 import { loadMotivosAusenciaConfig } from '../presentismo/config/motivos-ausencia-config.js';
 import { loadVacacionesConfig } from '../presentismo/config/vacaciones-config.js';
@@ -49,6 +50,12 @@ export function crearContextoWeb(env = process.env) {
       `presentismo: PRESENTISMO_RESUMEN_PERIODO inválido "${env.PRESENTISMO_RESUMEN_PERIODO}" (se espera MENSUAL o QUINCENAL)`,
     );
   }
+  // 022-informe-primera-quincena-anticipado — fecha 'YYYY-MM-DD' con la que los
+  // handlers deciden la "ventana de emisión anticipada" (¿ya terminó la primera
+  // quincena?). En producción es el reloj real (`hoyLocal()`); `PRESENTISMO_HOY`
+  // sólo lo sobreescribe en tests para ejercitar la ventana de forma
+  // determinista. Mismo criterio de override que las demás variables de entorno.
+  const hoyISO = env.PRESENTISMO_HOY || hoyLocal();
 
   // feature 014 — a diferencia de 007-012 (que cacheaban la config parseada
   // una sola vez al arrancar el proceso), esta feature permite editar
@@ -143,6 +150,7 @@ export function crearContextoWeb(env = process.env) {
     consultarReloj,
     sincronizarPadronOracle,
     modoResumenPeriodo,
+    hoyISO,
     // feature 014 — rutas de archivo que necesita configuracion-handlers.js
     // para leer/escribir (env-file.js reescribe rutaEnv; categorias-config.js
     // /motivos-ausencia-config.js re-parsean configPath/motivosAusenciaConfigPath

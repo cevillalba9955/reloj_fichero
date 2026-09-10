@@ -232,6 +232,74 @@ test('QUINCENAL: ?periodo=YYYYMM (mes completo) sigue siendo válido', async () 
   }
 });
 
+// ---------------------------------------------------------------------------
+// 022-informe-primera-quincena-anticipado — flag `emisionAnticipadaQ1Disponible`
+// en VistaResumenPeriodo. `PRESENTISMO_HOY` fija la fecha del servidor.
+// ---------------------------------------------------------------------------
+
+const PER = mesActualPeriodo();
+const HOY_Q1_TERMINADA = `${PER.slice(0, 4)}-${PER.slice(4, 6)}-20`;
+const HOY_Q1_EN_CURSO = `${PER.slice(0, 4)}-${PER.slice(4, 6)}-10`;
+
+test('022 QUINCENAL: emisionAnticipadaQ1Disponible=true en Q1 con la quincena terminada y el mes abierto', async () => {
+  const e = await crearEntornoFichadasHoy({
+    padron: PADRON,
+    envExtra: { ...ENV_QUINCENAL, PRESENTISMO_HOY: HOY_Q1_TERMINADA },
+  });
+  try {
+    const v = await (await fetch(`${e.base}/api/resumen-periodo?periodo=${PER}-Q1`)).json();
+    assert.equal(v.emisionAnticipadaQ1Disponible, true);
+  } finally {
+    e.close();
+  }
+});
+
+test('022: emisionAnticipadaQ1Disponible=false — Q1 en curso, Q2, período cerrado y modo MENSUAL', async () => {
+  // (a) Q1 en curso
+  const enCurso = await crearEntornoFichadasHoy({
+    padron: PADRON,
+    envExtra: { ...ENV_QUINCENAL, PRESENTISMO_HOY: HOY_Q1_EN_CURSO },
+  });
+  try {
+    const v = await (await fetch(`${enCurso.base}/api/resumen-periodo?periodo=${PER}-Q1`)).json();
+    assert.equal(v.emisionAnticipadaQ1Disponible, false);
+  } finally {
+    enCurso.close();
+  }
+
+  // (b) tramo Q2 y (c) período cerrado
+  const e = await crearEntornoFichadasHoy({
+    padron: PADRON,
+    envExtra: { ...ENV_QUINCENAL, PRESENTISMO_HOY: HOY_Q1_TERMINADA },
+  });
+  try {
+    const q2 = await (await fetch(`${e.base}/api/resumen-periodo?periodo=${PER}-Q2`)).json();
+    assert.equal(q2.emisionAnticipadaQ1Disponible, false);
+
+    await fetch(`${e.base}/api/calendarios/${PER}/cerrar`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ autor: 'ana' }),
+    });
+    const cerrado = await (await fetch(`${e.base}/api/resumen-periodo?periodo=${PER}-Q1`)).json();
+    assert.equal(cerrado.emisionAnticipadaQ1Disponible, false);
+  } finally {
+    e.close();
+  }
+
+  // (d) modo MENSUAL
+  const mensual = await crearEntornoFichadasHoy({
+    padron: PADRON,
+    envExtra: { PRESENTISMO_HOY: HOY_Q1_TERMINADA },
+  });
+  try {
+    const v = await (await fetch(`${mensual.base}/api/resumen-periodo?periodo=${PER}`)).json();
+    assert.equal(v.emisionAnticipadaQ1Disponible, false);
+  } finally {
+    mensual.close();
+  }
+});
+
 test('MENSUAL (default): ?periodo=YYYYMM-Q1 → 400 PERIODO_INVALIDO', async () => {
   const e = await crearEntornoFichadasHoy({ padron: PADRON });
   try {
