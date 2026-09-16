@@ -125,6 +125,61 @@ body {
   font-weight: 700;
 }
 
+/* --- Formularios de edición en diálogo modal (Asignar vacaciones, Corregir
+   horarios, Pausa/retiro, Justificar ausencia): usan <label> HTML plano, no
+   antd Form.Item, así que sin reglas propias el navegador decide el wrap
+   según el ancho de cada campo y deja las etiquetas e inputs desalineados
+   entre sí (feedback de UX: "inputs mal ubicados"). El título ya lo muestra
+   el encabezado del modal (Dialogo/antd Modal), por eso estos formularios no
+   repiten un <h3> propio. */
+/* Combinador `>` a propósito: solo las etiquetas de campo de nivel superior
+   (hijas directas del <form>, ya que los fragmentos JSX no agregan nodo
+   propio) — no los <label> internos que ya arma antd para Radio/Checkbox
+   dentro de <fieldset>, que necesitan su propio layout en fila. */
+.formulario-asignar-vacaciones > label,
+.formulario-justificacion > label,
+.formulario-correccion > label,
+.formulario-pausa-retiro > label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+}
+.formulario-asignar-vacaciones > label > *,
+.formulario-justificacion > label > *,
+.formulario-correccion > label > *,
+.formulario-pausa-retiro > label > * {
+  font-weight: 400;
+  width: 100%;
+}
+.formulario-asignar-vacaciones fieldset,
+.formulario-justificacion fieldset,
+.formulario-correccion fieldset,
+.formulario-pausa-retiro fieldset {
+  border: none;
+  padding: 0;
+  margin: 0 0 0.75rem;
+}
+.formulario-asignar-vacaciones legend,
+.formulario-justificacion legend,
+.formulario-correccion legend,
+.formulario-pausa-retiro legend {
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: 0.25rem;
+}
+.formulario-asignar-vacaciones .acciones,
+.formulario-justificacion .acciones,
+.formulario-correccion .acciones,
+.formulario-pausa-retiro .acciones {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  margin-top: 1rem;
+}
+
 /* Accesibilidad: etiqueta solo para lectores de pantalla. */
 .sr-only {
   position: absolute;

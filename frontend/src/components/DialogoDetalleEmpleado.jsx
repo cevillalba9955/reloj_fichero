@@ -68,8 +68,6 @@ export default function DialogoDetalleEmpleado({ cliente, legajo, nombre, period
   return (
     <Dialogo etiqueta={`Detalle de fichadas — ${nombre ?? `legajo ${legajo}`}`} onCerrar={onCerrar}>
       <div className="detalle-empleado">
-        <h3>Detalle — {nombre ?? `legajo ${legajo}`}</h3>
-
         {estado.tipo === 'cargando' && (
           <p className="cargando" role="status">
             <Spin size="small" /> Cargando…

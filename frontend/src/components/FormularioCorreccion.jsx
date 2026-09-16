@@ -43,7 +43,6 @@ export default function FormularioCorreccion({ fila, onGuardar, onCancelar }) {
       onSubmit={guardar}
       aria-label={`Corregir horarios del legajo ${fila.legajo}`}
     >
-      <h3>Corregir horarios — {fila.nombre ?? `legajo ${fila.legajo}`}</h3>
       <label>
         Entrada
         <Input
