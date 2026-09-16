@@ -53,7 +53,6 @@ export default function FormularioAsignarVacaciones({ fila = null, onGuardar, on
       onSubmit={guardar}
       aria-label={fila ? `Asignar vacaciones al legajo ${fila.legajo}` : 'Asignar vacaciones'}
     >
-      <h3>Asignar vacaciones{fila?.nombre ? ` — ${fila.nombre}` : ''}</h3>
       {!fila && (
         <label>
           Legajo

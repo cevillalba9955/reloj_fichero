@@ -247,7 +247,7 @@ export default function PaginaFichadasHoy({
               Escape / click en el backdrop equivalen a Cancelar. */}
           {correccion && (
             <Dialogo
-              etiqueta={`Corregir horarios del legajo ${correccion.legajo}`}
+              etiqueta={`Corregir horarios — ${correccion.nombre ?? `legajo ${correccion.legajo}`}`}
               onCerrar={() => setCorreccion(null)}
             >
               <FormularioCorreccion
@@ -259,7 +259,7 @@ export default function PaginaFichadasHoy({
           )}
           {pausaRetiro && (
             <Dialogo
-              etiqueta={`Pausa o retiro anticipado del legajo ${pausaRetiro.legajo}`}
+              etiqueta={`Pausa o retiro anticipado — ${pausaRetiro.nombre ?? `legajo ${pausaRetiro.legajo}`}`}
               onCerrar={() => setPausaRetiro(null)}
             >
               <FormularioPausaRetiro
@@ -270,7 +270,10 @@ export default function PaginaFichadasHoy({
             </Dialogo>
           )}
           {justificacion && (
-            <Dialogo etiqueta="Justificación de ausencia" onCerrar={() => setJustificacion(null)}>
+            <Dialogo
+              etiqueta={`Justificación de ausencia${justificacion.nombre ? ` — ${justificacion.nombre}` : ''}`}
+              onCerrar={() => setJustificacion(null)}
+            >
               <FormularioJustificacion
                 fila={justificacion.legajo != null ? justificacion : null}
                 motivos={motivos}

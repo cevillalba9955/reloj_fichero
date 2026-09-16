@@ -44,8 +44,6 @@ export default function FormularioPausaRetiro({ fila, onGuardar, onCancelar }) {
       onSubmit={guardar}
       aria-label={`Pausa o retiro anticipado del legajo ${fila.legajo}`}
     >
-      <h3>Pausa / Retiro anticipado — {fila.nombre ?? `legajo ${fila.legajo}`}</h3>
-
       <fieldset>
         <legend>Tipo de registro</legend>
         <Radio.Group value={modo} onChange={(ev) => setModo(ev.target.value)}>

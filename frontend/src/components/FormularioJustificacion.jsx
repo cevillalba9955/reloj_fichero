@@ -58,7 +58,6 @@ export default function FormularioJustificacion({ fila = null, motivos = [], onG
       onSubmit={guardar}
       aria-label={fila ? `Justificar ausencia del legajo ${fila.legajo}` : 'Justificar ausencia'}
     >
-      <h3>Justificación de ausencia{fila?.nombre ? ` — ${fila.nombre}` : ''}</h3>
       {!fila && (
         <label>
           Legajo

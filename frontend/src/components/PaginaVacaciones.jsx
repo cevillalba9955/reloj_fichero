@@ -161,7 +161,7 @@ export default function PaginaVacaciones({ cliente = clientePorDefecto }) {
 
           {asignando && (
             <Dialogo
-              etiqueta={`Asignar vacaciones — legajo ${asignando.legajo}`}
+              etiqueta={`Asignar vacaciones — ${asignando.nombre ?? `legajo ${asignando.legajo}`}`}
               onCerrar={() => setAsignando(null)}
             >
               <FormularioAsignarVacaciones
