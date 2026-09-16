@@ -13,7 +13,7 @@ escriben primero, en rojo, antes de tocar `informe-cierre.js`.
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirmar la línea base: correr en verde
+- [X] T001 Confirmar la línea base: correr en verde
   `node --test tests/unit/presentismo-informe-cierre.test.js tests/unit/presentismo-resumen-periodo.test.js tests/integration/informe-cierre.integration.test.js`
   antes de tocar código, para partir de un estado conocido (plan.md §Testing).
 
@@ -45,7 +45,7 @@ que el renglón de ese día en `detalle.secciones[].dias[]` trae
 
 > **Escribir estos tests PRIMERO y confirmar que fallan antes de implementar.**
 
-- [ ] T002 [US1] En `tests/unit/presentismo-informe-cierre.test.js`, agregar
+- [X] T002 [US1] En `tests/unit/presentismo-informe-cierre.test.js`, agregar
   los casos (usando los helpers `dia()`/`filaNormal()` ya existentes en el
   archivo):
   - día con `justificacion.motivoId === MotivoVacaciones.id` (importar
@@ -73,7 +73,7 @@ que el renglón de ese día en `detalle.secciones[].dias[]` trae
 
 ### Implementation for User Story 1
 
-- [ ] T003 [US1] En `src/presentismo/domain/informe-cierre.js`: importar
+- [X] T003 [US1] En `src/presentismo/domain/informe-cierre.js`: importar
   `MotivoVacaciones` desde `./vacaciones.js` y, dentro de `renglonDe(d)`,
   cuando `d.justificacion?.motivoId === MotivoVacaciones.id`, forzar
   `entrada: null`, `salida: null`, `pausas: []` y
@@ -83,10 +83,10 @@ que el renglón de ese día en `detalle.secciones[].dias[]` trae
   (data-model.md, research.md §3). No modificar `filaResumenDe`,
   `seccionDetalleDe` ni `construirPendientes` más allá de que ya delegan en
   `renglonDe`.
-- [ ] T004 [US1] Poner en verde los casos de T002; correr
+- [X] T004 [US1] Poner en verde los casos de T002; correr
   `node --test tests/unit/presentismo-informe-cierre.test.js` completo y
   confirmar cero regresiones en los casos preexistentes del archivo.
-- [ ] T005 [P] [US1] En `tests/integration/informe-cierre.integration.test.js`,
+- [X] T005 [P] [US1] En `tests/integration/informe-cierre.integration.test.js`,
   agregar (o extender, si ya existe un escenario de vacaciones) un caso
   end-to-end: emitir el informe de cierre de un período con un legajo que
   tiene una Asignación de Vacaciones vigente y una fichada excepcional ese
@@ -113,7 +113,7 @@ proyección de `resumen-periodo.js` (que alimenta ambas pantallas) sigue
 devolviendo `entrada`/`salida`/`requiereJustificacionRevision: true` sin
 cambios.
 
-- [ ] T006 [US2] Correr
+- [X] T006 [US2] Correr
   `node --test tests/unit/presentismo-resumen-periodo.test.js tests/contract/web-api-resumen-periodo.test.js tests/integration/resumen-periodo.integration.test.js`
   y confirmar que pasan sin ninguna modificación de código en
   `src/presentismo/domain/resumen-periodo.js` ni en los handlers de
@@ -123,7 +123,7 @@ cambios.
   Justificación-espejo…` y `requiereJustificacionRevision se expone en el
   detalle del día`, `tests/unit/presentismo-resumen-periodo.test.js:277` y
   `:301`— ya cubren por separado cada mitad del escenario combinado).
-- [ ] T007 [US2] En `tests/unit/presentismo-resumen-periodo.test.js`, agregar
+- [X] T007 [US2] En `tests/unit/presentismo-resumen-periodo.test.js`, agregar
   un único caso combinado que junte ambas condiciones ya cubiertas por
   separado en T006: un día con `justificacion.motivoId === MotivoVacaciones.id`,
   `entrada`/`salida` numéricas (fichada excepcional) y
@@ -140,16 +140,27 @@ confirma que las pantallas interactivas no perdieron la señal de revisión.
 
 ## Phase 5: Polish & Cross-Cutting
 
-- [ ] T008 [P] Correr la suite completa `npm test` (o `node --test tests/`) y
+- [X] T008 [P] Correr la suite completa `npm test` (o `node --test tests/`) y
   confirmar cero regresiones fuera del alcance de esta feature.
-- [ ] T009 Ejecutar la validación manual de `quickstart.md` §2 (API) y §3 (UI):
+- [X] T009 Ejecutar la validación manual de `quickstart.md` §2 (API) y §3 (UI):
   confirmar en pantalla que "Fichadas de Hoy"/"Resumen del Período" no
   cambiaron y que el informe de cierre (vista + PDF) oculta el día de
-  vacaciones excepcional.
-- [ ] T010 Revisar que ningún comentario/documentación interna de
+  vacaciones excepcional. **Nota de ejecución**: el escenario §2 (API) ya
+  queda ejecutado íntegramente por el test de integración de T005 (servidor
+  real, misma llamada HTTP, entorno aislado); no se repitió a mano contra
+  `.env`/`PRESENTISMO_REPO_DIR=./data` (datos locales reales) para no escribir
+  una asignación de vacaciones sobre datos operativos reales. El paso §3 (UI)
+  se da por cubierto por inspección de código (research.md §5): cero cambios
+  de frontend, y `InformeCierreContenido.jsx`/`InformeCierrePrintable.jsx` ya
+  renderizan `entrada`/`salida`/`pausas`/`requiereJustificacionRevision` de
+  forma genérica, sin lógica propia de Vacaciones que pudiera necesitar
+  verificación visual adicional.
+- [X] T010 Revisar que ningún comentario/documentación interna de
   `src/presentismo/domain/informe-cierre.js` quede desactualizado tras el
   cambio (agregar una nota breve, en el estilo ya usado en el archivo, sobre
-  el ocultamiento de FR-001/FR-002 junto a `renglonDe`).
+  el ocultamiento de FR-001/FR-002 junto a `renglonDe`). Ya agregada como
+  parte de T003 (comentario `023-ocultar-fichadas-vacaciones` sobre
+  `esVacaciones`/`renglonDe`).
 
 ---
 
