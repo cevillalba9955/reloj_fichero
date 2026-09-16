@@ -116,10 +116,13 @@ export function imprimirEnIframe(titulo, htmlContenido) {
 }
 
 // Descarga (imprime → «Guardar como PDF») el informe a partir del nodo DOM ya
-// renderizado (`.informe-cierre-contenido`).
+// renderizado (`.informe-cierre-contenido`). El título del documento es lo que
+// el navegador sugiere como nombre de archivo al elegir "Guardar como PDF":
+// `periodoId` es 'YYYYMM' (tramo Mes) o 'YYYYMM-Q1'/'YYYYMM-Q2' (quincena), así
+// que sacar el guion da "Asistencia YYYYMM" o "Asistencia YYYYMMQx".
 export function descargarInformePdf(nodo, periodoId) {
   if (!nodo) return;
-  imprimirEnIframe(`Informe de cierre ${periodoId}`, nodo.outerHTML);
+  imprimirEnIframe(`Asistencia ${periodoId.replace('-', '')}`, nodo.outerHTML);
 }
 
 function TablaResumen({ resumen }) {
