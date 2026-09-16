@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { construirInformeCierre, rangoDeTramo } from '../../src/presentismo/domain/informe-cierre.js';
+import { MotivoVacaciones } from '../../src/presentismo/domain/vacaciones.js';
 
 // 018-informe-cierre-periodo (T008) — proyección pura: arma el Informe de
 // Resumen + el Informe de Detalle + la lista de pendientes + el sello a partir
@@ -221,4 +222,108 @@ test('pendientes: anomalías y ajustes (corrección o justificación)', () => {
 test('pendientes: hayPendientes false cuando no hay incompletas, anomalías ni ajustes', () => {
   const { pendientes } = construirInformeCierre({ ...base, filas: [filaNormal()] });
   assert.deepEqual(pendientes, { hayPendientes: false, jornadasIncompletas: [], anomalias: [], ajustes: [] });
+});
+
+// 023-ocultar-fichadas-vacaciones — caso excepcional: fichadas registradas un
+// día cubierto por una Asignación de Vacaciones vigente (Justificación-espejo
+// `MotivoVacaciones.id`, feature 015 FR-017). El informe de detalle NO debe
+// exponer esas fichadas ni la señal de revisión: el renglón debe verse igual
+// que un día de vacaciones sin ninguna fichada (FR-001/FR-002).
+const justificacionVacaciones = { motivoId: MotivoVacaciones.id, etiquetaMotivo: 'Vacaciones', tipoPago: 'No paga' };
+
+const diaVacacionesConFichadas = (over = {}) =>
+  dia({
+    fecha: '2026-07-10',
+    estado: 'Sin fichadas',
+    entrada: 480,
+    salida: 960,
+    horas: 0,
+    justificacion: justificacionVacaciones,
+    requiereJustificacionRevision: true,
+    ...over,
+  });
+
+test('vacaciones con fichadas completas: el informe oculta entrada, salida, pausas y la revisión pendiente', () => {
+  const filas = [
+    filaNormal({
+      legajo: 10,
+      vacaciones: 1,
+      detalle: [diaVacacionesConFichadas({ pausas: [{ desde: 500, hasta: 520, tipo: 'intermedia' }] })],
+    }),
+  ];
+  const { detalle } = construirInformeCierre({ ...base, filas });
+  const renglon = detalle.secciones[0].dias[0];
+  assert.equal(renglon.entrada, null);
+  assert.equal(renglon.salida, null);
+  assert.deepEqual(renglon.pausas, []);
+  assert.equal(renglon.requiereJustificacionRevision, false);
+  // la clasificación de vacaciones sigue visible: no se oculta el badge, sólo la fichada
+  assert.deepEqual(renglon.justificacion, justificacionVacaciones);
+  assert.equal(renglon.estado, 'Sin fichadas');
+});
+
+test('vacaciones con sólo entrada (sin salida): también se oculta, igual que con ambas fichadas', () => {
+  const filas = [
+    filaNormal({ legajo: 10, vacaciones: 1, detalle: [diaVacacionesConFichadas({ salida: null })] }),
+  ];
+  const { detalle } = construirInformeCierre({ ...base, filas });
+  const renglon = detalle.secciones[0].dias[0];
+  assert.equal(renglon.entrada, null);
+  assert.equal(renglon.salida, null);
+  assert.equal(renglon.requiereJustificacionRevision, false);
+});
+
+test('vacaciones sin ninguna fichada: el renglón es idéntico (paridad) al de vacaciones con fichadas ocultas', () => {
+  const diaSinFichadas = dia({
+    fecha: '2026-07-10',
+    estado: 'Sin fichadas',
+    entrada: null,
+    salida: null,
+    horas: 0,
+    justificacion: justificacionVacaciones,
+    requiereJustificacionRevision: false,
+  });
+  const filas = [filaNormal({ legajo: 10, vacaciones: 1, detalle: [diaSinFichadas] })];
+  const { detalle } = construirInformeCierre({ ...base, filas });
+  const renglonSinFichadas = detalle.secciones[0].dias[0];
+
+  const filasConFichadas = [filaNormal({ legajo: 10, vacaciones: 1, detalle: [diaVacacionesConFichadas()] })];
+  const { detalle: detalleConFichadas } = construirInformeCierre({ ...base, filas: filasConFichadas });
+  const renglonConFichadasOcultas = detalleConFichadas.secciones[0].dias[0];
+
+  assert.deepEqual(renglonConFichadasOcultas, renglonSinFichadas);
+});
+
+test('control: un día NO vacaciones con revisión pendiente sigue mostrando entrada/salida (el ocultamiento es específico de vacaciones)', () => {
+  const diaJustificacionDistinta = dia({
+    fecha: '2026-07-10',
+    estado: 'Sin fichadas',
+    entrada: 480,
+    salida: 960,
+    horas: 0,
+    justificacion: { motivoId: 'sin_aviso', etiquetaMotivo: 'Sin Aviso', tipoPago: 'No paga' },
+    requiereJustificacionRevision: true,
+  });
+  const filas = [filaNormal({ legajo: 10, detalle: [diaJustificacionDistinta] })];
+  const { detalle } = construirInformeCierre({ ...base, filas });
+  const renglon = detalle.secciones[0].dias[0];
+  assert.equal(renglon.entrada, 480);
+  assert.equal(renglon.salida, 960);
+  assert.equal(renglon.requiereJustificacionRevision, true);
+});
+
+test('fila de resumen: los contadores no cambian por el ocultamiento de fichadas en días de vacaciones (FR-003)', () => {
+  const filas = [
+    filaNormal({
+      legajo: 10,
+      vacaciones: 1,
+      ausencias: 0,
+      horasTrabajadas: 0,
+      detalle: [diaVacacionesConFichadas()],
+    }),
+  ];
+  const { resumen } = construirInformeCierre({ ...base, filas });
+  assert.equal(resumen.filas[0].vacaciones, 1);
+  assert.equal(resumen.filas[0].ausencias, 0);
+  assert.equal(resumen.filas[0].horasTrabajadas, 0);
 });

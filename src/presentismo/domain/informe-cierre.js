@@ -1,4 +1,5 @@
 import { EstadoJornada } from './jornada.js';
+import { MotivoVacaciones } from './vacaciones.js';
 
 // 018-informe-cierre-periodo — Proyección PURA del informe de cierre de un
 // período (data-model.md §2–§5). Recibe las filas que ya devuelve
@@ -60,20 +61,32 @@ function filaResumenDe(fila) {
   return salida;
 }
 
+// 023-ocultar-fichadas-vacaciones — un día cubierto por una Asignación de
+// Vacaciones vigente (Justificación-espejo `MotivoVacaciones.id`, feature 015)
+// puede traer, aguas arriba (resumen-periodo.js), la hora real de una fichada
+// excepcional y `requiereJustificacionRevision: true` (feature 015 FR-017): la
+// pantalla "Resumen del Período" (011) debe seguir mostrándolas, pero el
+// documento de informe generado NO (FR-001/FR-002 de esta feature): el
+// renglón debe verse igual que un día de vacaciones sin ninguna fichada.
+function esVacaciones(d) {
+  return d.justificacion?.motivoId === MotivoVacaciones.id;
+}
+
 function renglonDe(d) {
+  const ocultarFichadas = esVacaciones(d);
   return {
     fecha: d.fecha,
     clasificacion: d.clasificacion,
     estado: d.estado,
-    entrada: d.entrada ?? null,
-    salida: d.salida ?? null,
-    pausas: (d.pausas ?? []).map((p) => ({ desde: p.desde, hasta: p.hasta, tipo: p.tipo })),
+    entrada: ocultarFichadas ? null : d.entrada ?? null,
+    salida: ocultarFichadas ? null : d.salida ?? null,
+    pausas: ocultarFichadas ? [] : (d.pausas ?? []).map((p) => ({ desde: p.desde, hasta: p.hasta, tipo: p.tipo })),
     horas: d.horas ?? 0,
     llegadaTarde: Boolean(d.llegadaTarde),
     corregida: Boolean(d.corregida),
     motivoCorreccion: d.motivoCorreccion ?? null,
     justificacion: d.justificacion ?? null,
-    requiereJustificacionRevision: Boolean(d.requiereJustificacionRevision),
+    requiereJustificacionRevision: ocultarFichadas ? false : Boolean(d.requiereJustificacionRevision),
   };
 }
 

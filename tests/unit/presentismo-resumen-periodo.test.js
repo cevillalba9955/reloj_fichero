@@ -306,6 +306,34 @@ test('requiereJustificacionRevision se expone en el detalle del día', () => {
   assert.equal(r.detalle[0].requiereJustificacionRevision, true);
 });
 
+// 023-ocultar-fichadas-vacaciones (T007) — regresión explícita: el ocultamiento
+// de fichadas en los informes generados vive en informe-cierre.js, NO acá.
+// Un día de vacaciones con una fichada excepcional (feature 015 FR-017) DEBE
+// seguir exponiendo la hora real y la señal de revisión sin ningún cambio, ya
+// que esta proyección alimenta "Fichadas de Hoy" (010) y "Resumen del
+// Período" (011), que deben seguir mostrándolas (FR-004 de la feature 023).
+test('023 — un día de vacaciones con fichada excepcional sigue exponiendo entrada/salida y la revisión pendiente (sin ocultar)', () => {
+  const r = proyectarResumenPeriodo({
+    resumen: resumen([
+      jornada('2026-07-10', {
+        estado: 'Sin fichadas',
+        entrada: { hora: 480 },
+        salida: { hora: 960 },
+        totalDiario: 0,
+        justificacion: { motivoId: MotivoVacaciones.id, etiquetaMotivo: 'Vacaciones', tipoPago: 'No paga' },
+        requiereJustificacionRevision: true,
+      }),
+    ]),
+    hoy: HOY,
+  });
+  const dia = r.detalle[0];
+  assert.equal(dia.entrada, 480, 'la pantalla interactiva sigue mostrando la hora fichada de entrada');
+  assert.equal(dia.salida, 960, 'la pantalla interactiva sigue mostrando la hora fichada de salida');
+  assert.equal(dia.requiereJustificacionRevision, true, 'la señal de revisión sigue expuesta');
+  assert.equal(r.vacaciones, 1, 'el día sigue contando en la columna vacaciones');
+  assert.equal(r.ausencias, 0, 'nunca como ausencia, con o sin fichadas');
+});
+
 // 018 — presentismo individual: numerador = horas trabajadas en días
 // laborables; denominador = jornada esperada de esos días. Vacaciones fuera de
 // los dos; un día ausente pesa en el denominador y no en el numerador.

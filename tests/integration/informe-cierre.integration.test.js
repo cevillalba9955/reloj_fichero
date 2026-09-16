@@ -149,3 +149,51 @@ test('modo QUINCENAL: cerrar crea las entradas Q1, Q2 y Mes; GET ?tramo=Q1 abarc
     e.close();
   }
 });
+
+// 023-ocultar-fichadas-vacaciones (T005) — caso excepcional: fichadas
+// registradas un día que además tiene una Asignación de Vacaciones vigente
+// (feature 015 FR-017). "Resumen del Período" (011) sigue mostrando la
+// fichada y la señal de revisión sin cambios (FR-004 de esta feature); el
+// informe de cierre generado las oculta, viéndose como un día de vacaciones
+// común (FR-001/FR-002), sin alterar los contadores (FR-003).
+test('un día de vacaciones con fichadas excepcionales: el informe de cierre las oculta, pero "Resumen del Período" sigue mostrándolas', async () => {
+  const e = await entorno(); // legajo 1: FECHA Laborable, con fichadas 07:00/16:05
+  try {
+    const asignar = await post(e, '/api/vacaciones/asignaciones', {
+      legajo: 1,
+      fechaInicio: FECHA,
+      cantidadDias: 1,
+      autor: 'rrhh',
+    });
+    assert.equal(asignar.status, 200);
+
+    // "Resumen del Período" (features 010/011): sin cambios, sigue mostrando
+    // la fichada excepcional y la señal de revisión.
+    const detalleResumen = (await getJson(e, `/api/resumen-periodo/1?periodo=${P}`)).body.dias;
+    const diaResumen = detalleResumen.find((d) => d.fecha === FECHA);
+    assert.equal(diaResumen.justificacion?.motivoId, 'vacaciones-anual');
+    assert.equal(diaResumen.requiereJustificacionRevision, true, 'se sigue señalando para revisión en pantalla');
+    assert.notEqual(diaResumen.entrada, null, 'la pantalla interactiva sigue mostrando la fichada');
+
+    // Cerrar y emitir el informe: el mismo día debe verse como una vacación común.
+    assert.equal((await post(e, `/api/calendarios/${P}/cerrar`, { autor: 'ana' })).status, 200);
+    const informe = (await getJson(e, `/api/calendarios/${P}/informe-cierre`)).body;
+    const seccion = informe.detalle.secciones.find((s) => s.legajo === 1);
+    const diaInforme = seccion.dias.find((d) => d.fecha === FECHA);
+    assert.equal(diaInforme.entrada, null, 'el informe generado oculta la fichada excepcional');
+    assert.equal(diaInforme.salida, null);
+    assert.deepEqual(diaInforme.pausas, []);
+    assert.equal(diaInforme.requiereJustificacionRevision, false);
+    assert.equal(diaInforme.justificacion?.motivoId, 'vacaciones-anual', 'la clasificación de vacaciones sigue visible');
+
+    // Contadores sin cambios (FR-003): el día sigue contando en `vacaciones`
+    // (no una lista, sino el mismo agregado que ya mostraba "Resumen del
+    // Período" antes de esta feature), y el subtotal del detalle sigue
+    // cuadrando con la fila del resumen (SC-002, sin romper por el ocultamiento).
+    const filaResumen = informe.resumen.filas.find((f) => f.legajo === 1);
+    assert.ok(filaResumen.vacaciones >= 1);
+    assert.equal(seccion.subtotalHoras, filaResumen.horasTrabajadas);
+  } finally {
+    e.close();
+  }
+});

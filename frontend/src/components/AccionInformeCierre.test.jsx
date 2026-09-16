@@ -80,7 +80,7 @@ test('"Descargar PDF" imprime SOLO el informe en un iframe aislado (no el modal 
   const doc = iframe.contentWindow.document;
   expect(doc.body.textContent).toContain('Resumen de horas computadas');
   expect(doc.body.textContent).toContain('Detalle de asistencia');
-  expect(doc.title).toMatch(/Informe de cierre 202607/);
+  expect(doc.title).toBe('Asistencia 202607');
   expect(doc.body.textContent).not.toContain('Descargar PDF');
 });
 
@@ -188,6 +188,19 @@ test('022 anticipado: con copia ya emitida al montar → Ver / Descargar / Re-em
   expect(await screen.findByRole('button', { name: 'Ver informe' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Re-emitir' })).toBeInTheDocument();
   expect(cliente.emitir).not.toHaveBeenCalled();
+});
+
+// 024 — el título del documento (lo que el navegador sugiere como nombre de
+// archivo al "Guardar como PDF") sigue el patrón "Asistencia YYYYMMQx" para un
+// tramo de quincena, sin el guion que separa periodoMes de tramo en `periodoId`.
+test('022 anticipado: "Descargar PDF" sugiere el nombre de archivo "Asistencia 202607Q1"', async () => {
+  const user = userEvent.setup();
+  const cliente = { obtener: vi.fn().mockResolvedValue(vistaAnticipada()), emitir: vi.fn() };
+  render(<AccionInformeCierre periodo="202607-Q1" cerrado={false} anticipadoQ1Disponible cliente={cliente} />);
+
+  await user.click(await screen.findByRole('button', { name: 'Descargar PDF' }));
+  const iframe = document.getElementById('informe-cierre-print-frame');
+  expect(iframe.contentWindow.document.title).toBe('Asistencia 202607Q1');
 });
 
 test('022: período abierto SIN anticipadoQ1Disponible → sólo la nota, sin botón ni aviso', async () => {
