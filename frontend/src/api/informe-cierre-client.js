@@ -1,4 +1,5 @@
 import { fetchConRol } from '../utils/rol-apex.js';
+import { API_BASE } from './base.js';
 
 // 018-informe-cierre-periodo — Cliente de datos del informe de cierre. Único
 // acceso a datos de la UI: habla solo con `/api` (Principio I). Mismo patrón
@@ -11,7 +12,7 @@ function partesPeriodo(periodo) {
   return { mes: m[1], tramo: m[2] ? `Q${m[2]}` : null };
 }
 
-export function crearClienteInformeCierre({ fetchImpl, base = '/api' } = {}) {
+export function crearClienteInformeCierre({ fetchImpl, base = API_BASE } = {}) {
   const doFetch = fetchImpl ?? fetchConRol;
 
   async function pedir(path, opciones) {

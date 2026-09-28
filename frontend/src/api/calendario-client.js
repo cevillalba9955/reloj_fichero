@@ -1,10 +1,11 @@
 import { fetchConRol } from '../utils/rol-apex.js';
+import { API_BASE } from './base.js';
 
 // feature 007 — Cliente de datos del frontend. Es el ÚNICO acceso a datos de la
 // UI: habla solo con la API `/api` (Principio I). No conoce Oracle, el reloj ni
 // el filesystem del dominio. `fetchImpl` es inyectable para tests.
 
-export function crearClienteCalendario({ fetchImpl, base = '/api' } = {}) {
+export function crearClienteCalendario({ fetchImpl, base = API_BASE } = {}) {
   const doFetch = fetchImpl ?? fetchConRol;
 
   async function pedir(path, opts) {

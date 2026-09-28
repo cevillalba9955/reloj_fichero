@@ -3,7 +3,9 @@ import react from '@vitejs/plugin-react';
 
 // feature 007 — Config de Vite (dev server + build) y Vitest (tests de
 // componente). En dev, /api se proxya al backend Node (src/web/server.js).
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  // Producción: publicado detrás de nginx bajo /presentismo/. Dev: raíz.
+  base: command === 'build' ? '/presentismo/' : '/',
   plugins: [react()],
   server: {
     proxy: {
@@ -34,4 +36,4 @@ export default defineConfig({
     setupFiles: './vitest.setup.js',
     include: ['src/**/*.test.{js,jsx}'],
   },
-});
+}));
