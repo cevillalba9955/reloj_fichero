@@ -1,10 +1,11 @@
 import { fetchConRol } from '../utils/rol-apex.js';
+import { API_BASE } from './base.js';
 
 // feature 014 — Cliente de datos de la página "Configuración". Único acceso
 // a datos de la UI: habla solo con la API `/api` (Principio I). Mismo patrón
 // que resumen-periodo-client.js / fichadas-hoy-client.js.
 
-export function crearClienteConfiguracion({ fetchImpl, base = '/api' } = {}) {
+export function crearClienteConfiguracion({ fetchImpl, base = API_BASE } = {}) {
   const doFetch = fetchImpl ?? fetchConRol;
 
   async function pedir(path, opciones) {

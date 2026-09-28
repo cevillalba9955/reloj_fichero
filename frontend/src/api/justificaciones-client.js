@@ -1,10 +1,11 @@
 import { fetchConRol } from '../utils/rol-apex.js';
+import { API_BASE } from './base.js';
 
 // feature 012 — Cliente de datos de "Justificación de Ausencias". Único
 // acceso a datos de la UI: habla solo con la API `/api` (Principio I). Mismo
 // patrón que fichadas-hoy-client.js / resumen-periodo-client.js.
 
-export function crearClienteJustificaciones({ fetchImpl, base = '/api' } = {}) {
+export function crearClienteJustificaciones({ fetchImpl, base = API_BASE } = {}) {
   const doFetch = fetchImpl ?? fetchConRol;
 
   async function pedir(path, opts) {
