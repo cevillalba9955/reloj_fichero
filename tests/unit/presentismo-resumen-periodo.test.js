@@ -443,3 +443,30 @@ test('presentismoIndividual es null si no hubo horas esperadas (tramo todo de va
   assert.equal(r.horasEsperadas, 0);
   assert.equal(r.presentismoIndividual, null);
 });
+
+// Rangos de vacaciones: días corridos consecutivos se agrupan ("7 [02 al 08]").
+test('rangosVacaciones agrupa días consecutivos y separa los no consecutivos', () => {
+  const vac = (fecha) =>
+    jornada(fecha, {
+      estado: 'Sin fichadas',
+      totalDiario: 0,
+      entrada: null,
+      salida: null,
+      justificacion: { motivoId: MotivoVacaciones.id, etiquetaMotivo: 'Vacaciones', tipoPago: 'No paga' },
+    });
+  const r = proyectarResumenPeriodo({
+    resumen: resumen([
+      vac('2026-07-01'),
+      vac('2026-07-02'),
+      vac('2026-07-03'),
+      jornada('2026-07-06'),
+      vac('2026-07-07'),
+    ]),
+    hoy: HOY,
+  });
+  assert.equal(r.vacaciones, 4);
+  assert.deepEqual(r.rangosVacaciones, [
+    { desde: '2026-07-01', hasta: '2026-07-03' },
+    { desde: '2026-07-07', hasta: '2026-07-07' },
+  ]);
+});

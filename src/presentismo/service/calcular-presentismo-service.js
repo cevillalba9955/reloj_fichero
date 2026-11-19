@@ -595,7 +595,14 @@ export function createCalcularPresentismoService({
         estado = jornada?.estado ?? null;
       }
 
-      diasInfo.push({ fecha: f, clasificacion: dia.clasificacion, estado, esFuturo, yaJustificado });
+      diasInfo.push({
+        fecha: f,
+        clasificacion: dia.clasificacion,
+        estado,
+        esFuturo,
+        yaJustificado,
+        permiteConFichadas: motivo.tipoPago === 'Paga',
+      });
     }
 
     const { elegibles, omitidas, noAplicables } = expandirRangoElegible(diasInfo);

@@ -1,6 +1,6 @@
 import { clamp, enVentana, redondearHorasAbajo } from './tiempo.js';
 import { Clasificacion } from './calendario-mes.js';
-import { descuentoPausas } from './pausa.js';
+import { descuentoPausas, TipoPausa } from './pausa.js';
 
 // Dominio: cálculo de una Jornada (Día × empleado). Función pura y
 // determinista (FR-023). Reglas consolidadas en research §7. Trabaja en
@@ -160,6 +160,31 @@ function estadoConCorreccion(auto, entradaEfectiva, salidaEfectiva) {
   return EstadoJornada.SIN_FICHADAS;
 }
 
+// caso legajo 9 (02/11/26): entrada fichada, sin fichada de salida y con un
+// retiro anticipado vigente. El retiro hace de salida (a su hora de inicio): el
+// día pasa a Completa con las horas trabajadas hasta el retiro. Solo aplica a
+// una jornada Laborable `Incompleta` con entrada y sin salida; si el retiro
+// empieza antes de la entrada, el día cuenta 0 horas.
+function conRetiroComoSalida(auto, pausas, params) {
+  if (!params || auto.clasificacion !== Clasificacion.LABORABLE) return auto;
+  if (auto.estado !== EstadoJornada.INCOMPLETA || auto.entradaEfectiva == null || auto.salidaEfectiva != null) {
+    return auto;
+  }
+  const retiros = pausas.filter((p) => p.vigente !== false && p.tipo === TipoPausa.RETIRO_ANTICIPADO);
+  if (retiros.length === 0) return auto;
+  const desde = Math.min(...retiros.map((p) => p.desde));
+  const horasAuto = redondearHorasAbajo(clamp(desde - auto.entradaEfectiva, 0, params.jornadaEsperada));
+  return {
+    ...auto,
+    estado: EstadoJornada.COMPLETA,
+    salidaEfectiva: Math.max(desde, auto.entradaEfectiva),
+    horasAuto,
+    totalDiario: horasAuto,
+    sugerencia: null,
+    motivo: null,
+  };
+}
+
 // `justificacion` (spec 012, feature 012; generalizado a cualquier
 // clasificación por spec 015 FR-006): Justificación vigente de este día
 // ({tipoPago, ...}), aplicable solo cuando NO hay corrección (mutuamente
@@ -226,7 +251,7 @@ export function aplicarAjustes(auto, { correccion = null, pausas = [], params = 
 
   // Pausas: solo descuentan si hay horario efectivo (Laborable con entrada y
   // salida). En Feriado/Incompleta/Sin fichadas, descuento = 0 (FR-039).
-  const descuento = descuentoPausas(pausas, auto.entradaEfectiva, auto.salidaEfectiva);
+  let descuento = descuentoPausas(pausas, auto.entradaEfectiva, auto.salidaEfectiva);
 
   if (correccion) {
     // La corrección prevalece sobre el auto para el total (FR-028). Se marca
@@ -246,6 +271,10 @@ export function aplicarAjustes(auto, { correccion = null, pausas = [], params = 
     };
   }
 
+  // Sin corrección: un retiro anticipado vigente hace de salida si falta la fichada.
+  auto = conRetiroComoSalida(auto, pausas, params);
+  descuento = descuentoPausas(pausas, auto.entradaEfectiva, auto.salidaEfectiva);
+
   if (justificacion) {
     // Laborable: "llegaron fichadas" ya lo indica el propio estado auto
     // (deja de ser Sin fichadas). No Laborable/Feriado nunca pasan por
@@ -263,14 +292,18 @@ export function aplicarAjustes(auto, { correccion = null, pausas = [], params = 
       // cuente como presente — SIEMPRE 0 horas (feature 012 FR-014) y estado
       // `Sin fichadas` — pero el día se señala para revisión de un
       // responsable en vez de descartar la marca o las fichadas en silencio.
-      // `Paga`: el cálculo real de las fichadas prevalece (feature 012, edge
-      // case "fichadas que llegan tras justificar"); solo se señala.
+      // `Paga` (issue #40, caso legajo 9): se trabaja lo fichado y la
+      // licencia completa el resto hasta la jornada esperada, también cuando
+      // el empleado ficha la salida antes del horario sin marcar retiro. Las
+      // horas reales se conservan en `horasLicencia` = total − trabajado, para
+      // separar "Presentes" de "Licencia" en el resumen.
+      const trabajado = redondearHorasAbajo(Math.max(0, auto.totalDiario - descuento));
+      const totalPaga = paga && params ? Math.max(params.jornadaEsperada, trabajado) : trabajado;
       return {
         ...auto,
         estado: paga ? auto.estado : EstadoJornada.SIN_FICHADAS,
-        totalDiario: paga
-          ? redondearHorasAbajo(Math.max(0, auto.totalDiario - descuento))
-          : 0,
+        totalDiario: paga ? totalPaga : 0,
+        horasLicencia: paga ? totalPaga - trabajado : 0,
         descuentoPausas: paga ? descuento : 0,
         correccionVigente: false,
         pausas,
@@ -284,6 +317,7 @@ export function aplicarAjustes(auto, { correccion = null, pausas = [], params = 
       ...auto,
       estado: EstadoJornada.SIN_FICHADAS,
       totalDiario: creditoPaga,
+      horasLicencia: creditoPaga,
       descuentoPausas: 0,
       correccionVigente: false,
       pausas,

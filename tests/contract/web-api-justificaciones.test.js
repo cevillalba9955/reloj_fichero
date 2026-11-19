@@ -126,13 +126,29 @@ test('POST /api/justificaciones con motivoId inexistente → 400 JUSTIFICACION_I
   }
 });
 
-test('POST /api/justificaciones sobre día único con fichadas → 409 JUSTIFICACION_NO_APLICABLE', async () => {
+// Una licencia Paga completa el día también sobre un día con fichadas.
+test('POST /api/justificaciones Paga sobre día único con fichadas → 200 registrada', async () => {
   const e = await entorno();
   try {
     const res = await fetch(`${e.base}/api/justificaciones`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ legajo: 1, fecha: FECHA_CON_FICHADAS, motivoId: 'examen' }),
+    });
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).registradas[0].tipoPago, 'Paga');
+  } finally {
+    e.close();
+  }
+});
+
+test('POST /api/justificaciones No paga sobre día único con fichadas → 409 JUSTIFICACION_NO_APLICABLE', async () => {
+  const e = await entorno();
+  try {
+    const res = await fetch(`${e.base}/api/justificaciones`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ legajo: 1, fecha: FECHA_CON_FICHADAS, motivoId: 'sin_aviso' }),
     });
     assert.equal(res.status, 409);
     assert.equal((await res.json()).error.codigo, 'JUSTIFICACION_NO_APLICABLE');

@@ -42,6 +42,29 @@ function justificacionDe(jornada) {
   return { motivoId, etiquetaMotivo, tipoPago };
 }
 
+// issue #40 — minutos que se dejan de pagar por `minutos` de tardanza/retiro:
+// el total diario se trunca hacia abajo a la grilla de 30 min, así que el
+// descuento equivalente se redondea hacia arriba a esa grilla (10 min tarde →
+// 30 min). Acotado a la jornada esperada.
+function descuentoPagado(minutos, jornadaEsperada) {
+  if (!(minutos > 0)) return 0;
+  return Math.min(jornadaEsperada, Math.ceil(minutos / 30) * 30);
+}
+
+// Agrupa fechas 'YYYY-MM-DD' ordenadas en rangos de días corridos consecutivos:
+// ['2026-11-02', ..., '2026-11-08'] → [{ desde: '2026-11-02', hasta: '2026-11-08' }].
+function agruparRangos(fechas) {
+  const rangos = [];
+  for (const f of fechas) {
+    const ultimo = rangos[rangos.length - 1];
+    const siguiente = ultimo ? new Date(`${ultimo.hasta}T00:00:00Z`) : null;
+    if (siguiente) siguiente.setUTCDate(siguiente.getUTCDate() + 1);
+    if (ultimo && siguiente.toISOString().slice(0, 10) === f) ultimo.hasta = f;
+    else rangos.push({ desde: f, hasta: f });
+  }
+  return rangos;
+}
+
 function detalleDeJornada(jornada, params) {
   const pausasVigentes = (jornada.pausas ?? []).filter((p) => p.vigente !== false);
   return {
@@ -51,6 +74,8 @@ function detalleDeJornada(jornada, params) {
     entrada: entradaConsiderada(jornada),
     salida: salidaConsiderada(jornada),
     horas: jornada.totalDiario ?? 0,
+    // Parte de `horas` acreditada como licencia paga (el resto es trabajado).
+    horasLicencia: jornada.horasLicencia ?? 0,
     llegadaTarde: esLlegadaTarde(jornada, params),
     corregida: Boolean(jornada.correccionVigente),
     // Motivo de la corrección vigente (FR-027: siempre presente cuando hay
@@ -94,6 +119,7 @@ export function proyectarResumenPeriodo({ resumen, hoy }) {
   // genera una Asignación de Vacaciones (`MotivoVacaciones.id`, "No paga":
   // sin esta columna propia, quedarían mezclados dentro de `ausencias`).
   let vacaciones = 0;
+  const fechasVacaciones = [];
   // 018 — DENOMINADOR del presentismo: la jornada esperada de cada día
   // LABORABLE del tramo. Los FERIADOS NO cuentan (no son trabajo exigible) y
   // las VACACIONES tampoco (el empleado no debía presentarse). Los días de
@@ -106,6 +132,14 @@ export function proyectarResumenPeriodo({ resumen, hoy }) {
   // NO entra acá (sí en `horasTrabajadas`, que alimenta la columna "Horas" y la
   // liquidación). "solo contabilizar horas trabajadas".
   let horasComputadas = 0;
+  // issue #40 — horas (minutos) de los días que cuenta cada columna del resumen,
+  // con el mismo criterio de día que su contador. Presentes + Feriados +
+  // Licencia (+ En Curso y Vacaciones, sin columna de horas) suman `horasTrabajadas`.
+  // Tarde y Retiros no suman horas: muestran los minutos DESCONTADOS por esos
+  // días (`descuentoPor`), porque ya están dentro de las horas de Presentes.
+  const horasPor = { presentes: 0, ausencias: 0, feriado: 0, licencia: 0 };
+  const descuentoPor = { tarde: 0, retiros: 0 };
+  const apertura = params?.aperturaOficial ?? 0;
 
   for (const d of detalle) {
     horasTrabajadas += d.horas;
@@ -116,17 +150,39 @@ export function proyectarResumenPeriodo({ resumen, hoy }) {
       horasEsperadas += jornadaEsperada;
       // El día de licencia sin fichadas queda en 0 (su crédito no es trabajo);
       // si hubo fichadas reales pese a la justificación, esas horas sí cuentan.
-      if (trabajado) horasComputadas += d.horas;
+      if (trabajado) horasComputadas += d.horas - d.horasLicencia;
     }
-    if (d.clasificacion === Clasificacion.FERIADO) feriado += 1;
-    if (esLicencia) licencia += 1;
-    if (esVacaciones) vacaciones += 1;
-    if (d.estado === EstadoJornada.COMPLETA) completas += 1;
-    else if (d.estado === EstadoJornada.INCOMPLETA) incompletas += 1;
-    else if (d.estado === EstadoJornada.SIN_FICHADAS && !esLicencia && !esVacaciones) ausencias += 1;
-    if (d.llegadaTarde) llegadasTarde += 1;
+    if (d.clasificacion === Clasificacion.FERIADO) {
+      feriado += 1;
+      horasPor.feriado += d.horas;
+    }
+    if (esLicencia) {
+      licencia += 1;
+      horasPor.licencia += d.horasLicencia;
+    }
+    if (esVacaciones) {
+      vacaciones += 1;
+      fechasVacaciones.push(d.fecha);
+    }
+    if (d.estado === EstadoJornada.COMPLETA) {
+      completas += 1;
+      horasPor.presentes += d.horas - d.horasLicencia;
+    } else if (d.estado === EstadoJornada.INCOMPLETA) incompletas += 1;
+    else if (d.estado === EstadoJornada.SIN_FICHADAS && !esLicencia && !esVacaciones) {
+      ausencias += 1;
+      horasPor.ausencias += d.horas;
+    }
+    if (d.llegadaTarde) {
+      llegadasTarde += 1;
+      descuentoPor.tarde += descuentoPagado(d.entrada - apertura, jornadaEsperada);
+    }
     if (d.corregida) correcciones += 1;
-    if (d.pausas.some((p) => p.tipo === TipoPausa.RETIRO_ANTICIPADO)) retirosAnticipados += 1;
+    const retiros = d.pausas.filter((p) => p.tipo === TipoPausa.RETIRO_ANTICIPADO);
+    if (retiros.length > 0) {
+      retirosAnticipados += 1;
+      const minutosRetiro = retiros.reduce((acc, p) => acc + Math.max(0, p.hasta - p.desde), 0);
+      descuentoPor.retiros += descuentoPagado(minutosRetiro, jornadaEsperada);
+    }
   }
 
   return {
@@ -148,6 +204,10 @@ export function proyectarResumenPeriodo({ resumen, hoy }) {
     feriado,
     licencia,
     vacaciones,
+    // Rangos de días con vacaciones del período, para mostrar "7 [02 al 08]".
+    rangosVacaciones: agruparRangos(fechasVacaciones),
+    horasPor,
+    descuentoPor,
     detalle,
   };
 }
