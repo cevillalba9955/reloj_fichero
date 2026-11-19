@@ -120,6 +120,7 @@ export function proyectarResumenPeriodo({ resumen, hoy }) {
   // sin esta columna propia, quedarían mezclados dentro de `ausencias`).
   let vacaciones = 0;
   const fechasVacaciones = [];
+  const fechasAusencias = [];
   // 018 — DENOMINADOR del presentismo: la jornada esperada de cada día
   // LABORABLE del tramo. Los FERIADOS NO cuentan (no son trabajo exigible) y
   // las VACACIONES tampoco (el empleado no debía presentarse). Los días de
@@ -171,6 +172,7 @@ export function proyectarResumenPeriodo({ resumen, hoy }) {
     else if (d.estado === EstadoJornada.SIN_FICHADAS && !esLicencia && !esVacaciones) {
       ausencias += 1;
       horasPor.ausencias += d.horas;
+      fechasAusencias.push(d.fecha);
     }
     if (d.llegadaTarde) {
       llegadasTarde += 1;
@@ -206,6 +208,8 @@ export function proyectarResumenPeriodo({ resumen, hoy }) {
     vacaciones,
     // Rangos de días con vacaciones del período, para mostrar "7 [02 al 08]".
     rangosVacaciones: agruparRangos(fechasVacaciones),
+    // Fechas de las ausencias del período, para mostrar "2 [05,12]".
+    fechasAusencias,
     horasPor,
     descuentoPor,
     detalle,

@@ -470,3 +470,22 @@ test('rangosVacaciones agrupa días consecutivos y separa los no consecutivos', 
     { desde: '2026-07-07', hasta: '2026-07-07' },
   ]);
 });
+
+// Fechas de referencia de las ausencias ("2 [05,12]").
+test('fechasAusencias lista los días sin fichadas que cuentan como ausencia', () => {
+  const sinFichadas = (fecha, over = {}) =>
+    jornada(fecha, { estado: 'Sin fichadas', totalDiario: 0, entrada: null, salida: null, ...over });
+  const r = proyectarResumenPeriodo({
+    resumen: resumen([
+      sinFichadas('2026-07-01'),
+      jornada('2026-07-02'),
+      sinFichadas('2026-07-03', {
+        justificacion: { motivoId: 'enfermedad', etiquetaMotivo: 'Enfermedad', tipoPago: 'Paga' },
+      }),
+      sinFichadas('2026-07-06'),
+    ]),
+    hoy: HOY,
+  });
+  assert.equal(r.ausencias, 2);
+  assert.deepEqual(r.fechasAusencias, ['2026-07-01', '2026-07-06']);
+});

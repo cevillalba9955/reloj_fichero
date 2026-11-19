@@ -51,7 +51,7 @@ test('muestra Días (Horas) y deja vacía la celda cuando los días son cero', (
   expect(celdas[5].textContent).toBe(''); // Licencia en cero
   expect(celdas[7]).toHaveTextContent('1 (-1 hora 30 min)'); // Tarde: descuento en negativo, texto largo
   expect(celdas[8].textContent).toBe(''); // Retiros en cero
-  expect(celdas[9].textContent).toBe('2'); // Ausencias (última columna): solo días, sin horas
+  expect(celdas[9].textContent).toBe('2'); // Ausencias (última columna): sin horas; sin fechas, solo el total
 });
 
 test('Tarde y Retiros muestran el descuento en texto largo: "30 min", "4 horas"', () => {
@@ -85,6 +85,13 @@ test('muestra la columna Vacaciones', () => {
   expect(encabezados).toContain('Vacaciones');
   const celdas = screen.getAllByRole('row')[1].querySelectorAll('td');
   expect(celdas[6]).toHaveTextContent('5');
+});
+
+test('Ausencias muestra los días y las fechas de referencia: "2 [05,12]"', () => {
+  render(
+    <TablaResumenPeriodo filas={[fila({ ausencias: 2, fechasAusencias: ['2026-10-05', '2026-10-12'] })]} />,
+  );
+  expect(screen.getAllByRole('row')[1].querySelectorAll('td')[9].textContent).toBe('2 [05,12]');
 });
 
 test('Vacaciones muestra los días con el rango asignado: "7 [02 al 08]"', () => {

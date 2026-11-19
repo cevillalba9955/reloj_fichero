@@ -207,6 +207,7 @@ export function construirVistaResumenPeriodo({
             licencia: 0,
             vacaciones: 0,
             rangosVacaciones: [],
+            fechasAusencias: [],
             horasPor: HORAS_POR_VACIAS,
             descuentoPor: DESCUENTO_POR_VACIO,
             anomalia: f.anomalia,
@@ -228,6 +229,7 @@ export function construirVistaResumenPeriodo({
             // spec 015 — días con Justificación de Vacaciones del período.
             vacaciones: f.vacaciones ?? 0,
             rangosVacaciones: f.rangosVacaciones ?? [],
+            fechasAusencias: f.fechasAusencias ?? [],
             // issue #40 — minutos por columna (Presentes, Ausencias, Feriados,
             // Licencia) y minutos descontados por Tarde/Retiros, para mostrar
             // "Días (Horas)" / "Días (-Horas)".

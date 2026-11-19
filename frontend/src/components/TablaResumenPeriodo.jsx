@@ -43,7 +43,13 @@ function diasConRangos(dias, rangos = []) {
   return texto.length > 0 ? `${dias} [${texto.join(', ')}]` : String(dias);
 }
 
-const ocultarSiAnomalia =(fila) => (fila.anomalia ? { colSpan: 0 } : {});
+// Ausencias: "2 [05,12]" (día del mes de cada ausencia).
+function diasConFechas(dias, fechas = []) {
+  if (!dias) return '';
+  return fechas.length > 0 ? `${dias} [${fechas.map((f) => f.slice(8, 10)).join(',')}]` : String(dias);
+}
+
+const ocultarSiAnomalia = (fila) => (fila.anomalia ? { colSpan: 0 } : {});
 
 export default function TablaResumenPeriodo({ filas, onSeleccionar = null }) {
   if (!filas || filas.length === 0) {
@@ -55,18 +61,19 @@ export default function TablaResumenPeriodo({ filas, onSeleccionar = null }) {
     { title: 'Empleado', key: 'nombre', render: (_, fila) => fila.nombre ?? '—' },
     {
       title: 'Horas a cobrar',
+      align: 'center',
       key: 'horas',
       render: (_, fila) =>
         fila.anomalia ? <span className="anomalia-mensaje">Anomalía: {fila.anomalia}</span> : formatoHoras(fila.horasTrabajadas),
       onCell: (fila) => (fila.anomalia ? { colSpan: 8 } : {}),
     },
-    { title: 'Presentes', key: 'presentes', render: (_, fila) => diasYHoras(fila.completas, fila.horasPor?.presentes), onCell: ocultarSiAnomalia },
-    { title: 'Feriados', key: 'feriado', render: (_, fila) => diasYHoras(fila.feriado, fila.horasPor?.feriado), onCell: ocultarSiAnomalia },
-    { title: 'Licencia', key: 'licencia', render: (_, fila) => diasYHoras(fila.licencia, fila.horasPor?.licencia), onCell: ocultarSiAnomalia },
+    { title: 'Presentes', align: 'right', key: 'presentes', render: (_, fila) => diasYHoras(fila.completas, fila.horasPor?.presentes), onCell: ocultarSiAnomalia },
+    { title: 'Feriados', align: 'right', key: 'feriado', render: (_, fila) => diasYHoras(fila.feriado, fila.horasPor?.feriado), onCell: ocultarSiAnomalia },
+    { title: 'Licencia', align: 'right', key: 'licencia', render: (_, fila) => diasYHoras(fila.licencia, fila.horasPor?.licencia), onCell: ocultarSiAnomalia },
     { title: 'Vacaciones', key: 'vacaciones', render: (_, fila) => diasConRangos(fila.vacaciones, fila.rangosVacaciones), onCell: ocultarSiAnomalia },
     { title: 'Tarde', key: 'tarde', render: (_, fila) => diasYHoras(fila.llegadasTarde, fila.descuentoPor?.tarde, true), onCell: ocultarSiAnomalia },
     { title: 'Retiros', key: 'retiros', render: (_, fila) => diasYHoras(fila.retirosAnticipados, fila.descuentoPor?.retiros, true), onCell: ocultarSiAnomalia },
-    { title: 'Ausencias', key: 'ausencias', render: (_, fila) => fila.ausencias || '', onCell: ocultarSiAnomalia },
+    { title: 'Ausencias', key: 'ausencias', render: (_, fila) => diasConFechas(fila.ausencias, fila.fechasAusencias), onCell: ocultarSiAnomalia },
   ];
 
   return (
