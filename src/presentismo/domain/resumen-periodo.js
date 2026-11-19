@@ -65,7 +65,7 @@ function agruparRangos(fechas) {
   return rangos;
 }
 
-function detalleDeJornada(jornada, params) {
+function detalleDeJornada(jornada, params, hoy) {
   const pausasVigentes = (jornada.pausas ?? []).filter((p) => p.vigente !== false);
   return {
     fecha: jornada.fecha,
@@ -85,6 +85,10 @@ function detalleDeJornada(jornada, params) {
     pausas: pausasVigentes.map((p) => ({ desde: p.desde, hasta: p.hasta, tipo: p.tipo ?? TipoPausa.INTERMEDIA })),
     justificacion: justificacionDe(jornada),
     requiereJustificacionRevision: Boolean(jornada.requiereJustificacionRevision),
+    // Día ya pasado con una sola punta fichada (falta entrada o salida): suma 0
+    // horas y requiere una corrección manual. El día de hoy no cuenta: el
+    // empleado puede seguir trabajando.
+    requiereCorreccion: jornada.estado === EstadoJornada.INCOMPLETA && jornada.fecha < hoy,
   };
 }
 
@@ -100,7 +104,7 @@ export function proyectarResumenPeriodo({ resumen, hoy }) {
     params?.jornadaEsperada ?? Math.max(0, (params?.cierreOficial ?? 0) - (params?.aperturaOficial ?? 0));
   const detalle = resumen.jornadas
     .filter((j) => j.fecha <= hoy)
-    .map((j) => detalleDeJornada(j, params));
+    .map((j) => detalleDeJornada(j, params, hoy));
 
   let horasTrabajadas = 0;
   let completas = 0;
@@ -121,6 +125,7 @@ export function proyectarResumenPeriodo({ resumen, hoy }) {
   let vacaciones = 0;
   const fechasVacaciones = [];
   const fechasAusencias = [];
+  const fechasSinCorregir = [];
   // 018 — DENOMINADOR del presentismo: la jornada esperada de cada día
   // LABORABLE del tramo. Los FERIADOS NO cuentan (no son trabajo exigible) y
   // las VACACIONES tampoco (el empleado no debía presentarse). Los días de
@@ -178,6 +183,7 @@ export function proyectarResumenPeriodo({ resumen, hoy }) {
       llegadasTarde += 1;
       descuentoPor.tarde += descuentoPagado(d.entrada - apertura, jornadaEsperada);
     }
+    if (d.requiereCorreccion) fechasSinCorregir.push(d.fecha);
     if (d.corregida) correcciones += 1;
     const retiros = d.pausas.filter((p) => p.tipo === TipoPausa.RETIRO_ANTICIPADO);
     if (retiros.length > 0) {
@@ -210,6 +216,8 @@ export function proyectarResumenPeriodo({ resumen, hoy }) {
     rangosVacaciones: agruparRangos(fechasVacaciones),
     // Fechas de las ausencias del período, para mostrar "2 [05,12]".
     fechasAusencias,
+    // Días pasados con jornada incompleta (falta una fichada): requieren corrección.
+    fechasSinCorregir,
     horasPor,
     descuentoPor,
     detalle,

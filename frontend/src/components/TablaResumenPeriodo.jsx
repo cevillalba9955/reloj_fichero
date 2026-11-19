@@ -49,6 +49,24 @@ function diasConFechas(dias, fechas = []) {
   return fechas.length > 0 ? `${dias} [${fechas.map((f) => f.slice(8, 10)).join(',')}]` : String(dias);
 }
 
+// Días pasados con una sola fichada (falta la salida o la entrada): suman 0 horas
+// y requieren una corrección manual. Se marca en la fila con los días afectados.
+function AdvertenciaSinCorregir({ fechas = [] }) {
+  if (fechas.length === 0) return null;
+  const dias = fechas.map((f) => f.slice(8, 10)).join(',');
+  return (
+    <span
+      className="marca-revision"
+      style={{ color: '#d46b08', fontWeight: 600 }}
+      title="Jornada incompleta: falta una fichada y el día no suma horas. Requiere corrección."
+      aria-label={`Requiere corrección: jornada incompleta los días ${dias}`}
+    >
+      {' '}
+      ⚠ corregir [{dias}]
+    </span>
+  );
+}
+
 const ocultarSiAnomalia = (fila) => (fila.anomalia ? { colSpan: 0 } : {});
 
 export default function TablaResumenPeriodo({ filas, onSeleccionar = null }) {
@@ -64,7 +82,14 @@ export default function TablaResumenPeriodo({ filas, onSeleccionar = null }) {
       align: 'center',
       key: 'horas',
       render: (_, fila) =>
-        fila.anomalia ? <span className="anomalia-mensaje">Anomalía: {fila.anomalia}</span> : formatoHoras(fila.horasTrabajadas),
+        fila.anomalia ? (
+          <span className="anomalia-mensaje">Anomalía: {fila.anomalia}</span>
+        ) : (
+          <>
+            {formatoHoras(fila.horasTrabajadas)}
+            <AdvertenciaSinCorregir fechas={fila.fechasSinCorregir} />
+          </>
+        ),
       onCell: (fila) => (fila.anomalia ? { colSpan: 8 } : {}),
     },
     { title: 'Presentes', align: 'right', key: 'presentes', render: (_, fila) => diasYHoras(fila.completas, fila.horasPor?.presentes), onCell: ocultarSiAnomalia },

@@ -123,6 +123,35 @@ test('requiereJustificacionRevision se señala junto al estado del día', async 
   expect(await screen.findByRole('alert')).toHaveTextContent(/revisar/i);
 });
 
+test('un día incompleto pasado se advierte como "requiere corrección"', async () => {
+  const cliente = {
+    obtenerDetalle: vi.fn().mockResolvedValue(
+      detalle({
+        dias: [
+          {
+            fecha: '2026-07-03',
+            clasificacion: 'Laborable',
+            estado: 'Incompleta',
+            entrada: '06:49',
+            salida: null,
+            horas: 0,
+            llegadaTarde: false,
+            corregida: false,
+            pausas: [],
+            justificacion: null,
+            requiereJustificacionRevision: false,
+            requiereCorreccion: true,
+          },
+        ],
+      }),
+    ),
+  };
+  render(
+    <DialogoDetalleEmpleado cliente={cliente} legajo={1} nombre="Ana Pérez" periodo="202607" onCerrar={vi.fn()} />,
+  );
+  expect(await screen.findByRole('alert')).toHaveTextContent(/requiere corrección/i);
+});
+
 test('el botón Cerrar invoca onCerrar sin alterar datos', async () => {
   const cliente = { obtenerDetalle: vi.fn().mockResolvedValue(detalle()) };
   const onCerrar = vi.fn();

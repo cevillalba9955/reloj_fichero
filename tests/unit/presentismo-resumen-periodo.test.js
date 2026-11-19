@@ -489,3 +489,16 @@ test('fechasAusencias lista los días sin fichadas que cuentan como ausencia', (
   assert.equal(r.ausencias, 2);
   assert.deepEqual(r.fechasAusencias, ['2026-07-01', '2026-07-06']);
 });
+
+// Una sola punta fichada en un día pasado requiere corrección; hoy no (puede seguir trabajando).
+test('fechasSinCorregir: jornada incompleta de un día pasado sí, la de hoy no', () => {
+  const incompleta = (fecha) =>
+    jornada(fecha, { estado: 'Incompleta', totalDiario: 0, salida: null, salidaEfectiva: null });
+  const r = proyectarResumenPeriodo({
+    resumen: resumen([incompleta('2026-07-16'), jornada('2026-07-17'), incompleta('2026-07-18')]),
+    hoy: '2026-07-18',
+  });
+  assert.deepEqual(r.fechasSinCorregir, ['2026-07-16']);
+  assert.equal(r.detalle.find((d) => d.fecha === '2026-07-16').requiereCorreccion, true);
+  assert.equal(r.detalle.find((d) => d.fecha === '2026-07-18').requiereCorreccion, false);
+});

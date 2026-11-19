@@ -208,6 +208,7 @@ export function construirVistaResumenPeriodo({
             vacaciones: 0,
             rangosVacaciones: [],
             fechasAusencias: [],
+            fechasSinCorregir: [],
             horasPor: HORAS_POR_VACIAS,
             descuentoPor: DESCUENTO_POR_VACIO,
             anomalia: f.anomalia,
@@ -230,6 +231,7 @@ export function construirVistaResumenPeriodo({
             vacaciones: f.vacaciones ?? 0,
             rangosVacaciones: f.rangosVacaciones ?? [],
             fechasAusencias: f.fechasAusencias ?? [],
+            fechasSinCorregir: f.fechasSinCorregir ?? [],
             // issue #40 — minutos por columna (Presentes, Ausencias, Feriados,
             // Licencia) y minutos descontados por Tarde/Retiros, para mostrar
             // "Días (Horas)" / "Días (-Horas)".
@@ -267,6 +269,7 @@ export function construirDetalleEmpleado({ periodo, legajo, nombre = null, detal
       // si no hay Justificación vigente.
       justificacion: d.justificacion ?? null,
       requiereJustificacionRevision: Boolean(d.requiereJustificacionRevision),
+      requiereCorreccion: Boolean(d.requiereCorreccion),
     })),
   };
 }

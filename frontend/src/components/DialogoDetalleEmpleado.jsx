@@ -34,6 +34,12 @@ const columnas = [
               ({dia.justificacion.etiquetaMotivo}, {dia.justificacion.tipoPago})
             </span>
           )}
+          {dia.requiereCorreccion && (
+            <span className="marca-revision" role="alert" style={{ color: '#d46b08', fontWeight: 600 }} title="Falta una fichada: el día suma 0 horas hasta corregirlo">
+              {' '}
+              ⚠ requiere corrección
+            </span>
+          )}
           {dia.requiereJustificacionRevision && (
             <span className="marca-revision" role="alert">
               {' '}

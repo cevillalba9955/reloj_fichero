@@ -140,3 +140,16 @@ test('con onSeleccionar, clic en una fila con anomalía NO selecciona', () => {
   fireEvent.click(screen.getAllByRole('row')[1]);
   expect(onSeleccionar).not.toHaveBeenCalled();
 });
+
+// Días pasados con una sola fichada (falta la salida): advertir que requieren corrección.
+test('advierte con los días afectados cuando hay jornadas incompletas pasadas', () => {
+  render(<TablaResumenPeriodo filas={[fila({ fechasSinCorregir: ['2026-10-05', '2026-10-12'] })]} />);
+  const celda = screen.getAllByRole('row')[1].querySelectorAll('td')[2];
+  expect(celda).toHaveTextContent('⚠ corregir [05,12]');
+  expect(screen.getByLabelText(/Requiere corrección: jornada incompleta los días 05,12/)).toBeInTheDocument();
+});
+
+test('sin jornadas incompletas pasadas no muestra la advertencia', () => {
+  render(<TablaResumenPeriodo filas={[fila({ fechasSinCorregir: [] })]} />);
+  expect(screen.queryByText(/corregir/)).not.toBeInTheDocument();
+});
