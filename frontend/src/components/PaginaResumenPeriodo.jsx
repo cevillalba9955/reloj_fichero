@@ -5,6 +5,7 @@ import TablaResumenPeriodo from './TablaResumenPeriodo.jsx';
 import SelectorPeriodo, { etiquetaPeriodo } from './SelectorPeriodo.jsx';
 import DialogoDetalleEmpleado from './DialogoDetalleEmpleado.jsx';
 import AccionInformeCierre from './AccionInformeCierre.jsx';
+import { leerSesion, guardarSesion } from '../utils/sesion-storage.js';
 
 // feature 011 — Página "Resumen del Período": carga la vista del período al
 // montar (US1), permite cambiar de período (US3) y abrir el detalle de un
@@ -15,9 +16,14 @@ import AccionInformeCierre from './AccionInformeCierre.jsx';
 const clientePorDefecto = crearClienteResumenPeriodo();
 const clienteInformePorDefecto = crearClienteInformeCierre();
 
+// Recuerda el período elegido entre refrescos del navegador (sessionStorage):
+// al recargar la página retoma el período que se estaba viendo en vez de volver
+// al período en curso.
+const CLAVE_PERIODO_SESION = 'presentismo.resumen.periodo';
+
 export default function PaginaResumenPeriodo({ cliente = clientePorDefecto, clienteInforme = clienteInformePorDefecto }) {
   const [estado, setEstado] = useState({ tipo: 'cargando' });
-  const [periodoSeleccionado, setPeriodoSeleccionado] = useState(null);
+  const [periodoSeleccionado, setPeriodoSeleccionado] = useState(() => leerSesion(CLAVE_PERIODO_SESION));
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState(null); // fila en detalle
 
   const cargar = useCallback(async () => {
@@ -26,9 +32,21 @@ export default function PaginaResumenPeriodo({ cliente = clientePorDefecto, clie
       const vista = await cliente.obtenerResumen(periodoSeleccionado);
       setEstado({ tipo: 'con-datos', vista });
     } catch (err) {
+      // Período recordado que ya no es válido: se olvida y se vuelve al período
+      // por defecto en vez de dejar la página en error tras cada refresco.
+      if (periodoSeleccionado && (err.status === 400 || err.status === 404)) {
+        guardarSesion(CLAVE_PERIODO_SESION, null);
+        setPeriodoSeleccionado(null);
+        return;
+      }
       setEstado({ tipo: 'error', mensaje: err.message });
     }
   }, [cliente, periodoSeleccionado]);
+
+  const cambiarPeriodo = useCallback((periodo) => {
+    guardarSesion(CLAVE_PERIODO_SESION, periodo);
+    setPeriodoSeleccionado(periodo);
+  }, []);
 
   useEffect(() => {
     cargar();
@@ -67,7 +85,7 @@ export default function PaginaResumenPeriodo({ cliente = clientePorDefecto, clie
             <SelectorPeriodo
               periodos={estado.vista.periodos}
               periodo={estado.vista.periodo}
-              onCambiar={setPeriodoSeleccionado}
+              onCambiar={cambiarPeriodo}
             />
           </header>
           <AccionInformeCierre

@@ -1,4 +1,5 @@
 import { Table, Empty } from 'antd';
+import { formatoHoras, diasYHoras, diasConRangos, diasConFechas, diasDeFechas } from '../utils/formato-resumen.js';
 
 // feature 011 (US1) — Tabla de resumen del período: una fila por empleado
 // esperado con los acumulados del período. Componente de presentación puro:
@@ -7,53 +8,11 @@ import { Table, Empty } from 'antd';
 // acumulados de esa fila (misma idea que el `colSpan` original, vía la técnica
 // `onCell` de antd Table).
 
-// Minutos → 'H:MM' para lectura (mismo criterio que TablaFichadasHoy).
-function formatoHoras(min) {
-  const m = Number.isInteger(min) && min >= 0 ? min : 0;
-  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
-}
-
-// issue #40 — celda "<Días> (<Horas>)"; vacía si los días son cero.
-// Minutos → texto largo para los descuentos: "30 min", "1 hora", "4 horas 30 min".
-// Formato distinto de 'H:MM' para no confundirlos con las horas presentes (ya
-// descontadas de Tarde/Retiros).
-function formatoDescuento(min) {
-  const m = Number.isInteger(min) && min > 0 ? min : 0;
-  const h = Math.floor(m / 60);
-  const resto = m % 60;
-  const partes = [];
-  if (h > 0) partes.push(`${h} ${h === 1 ? 'hora' : 'horas'}`);
-  if (resto > 0 || h === 0) partes.push(`${resto} min`);
-  return partes.join(' ');
-}
-
-// Con `descuento` (Tarde/Retiros) el tiempo se muestra en negativo y en texto
-// largo: "1 (-30 min)". Si no, "<Días> (H:MM)".
-function diasYHoras(dias, minutos, descuento = false) {
-  if (!dias) return '';
-  if (descuento) return `${dias} (${minutos > 0 ? '-' : ''}${formatoDescuento(minutos)})`;
-  return `${dias} (${formatoHoras(minutos)})`;
-}
-
-// Vacaciones: "7 [02 al 08]"; varios rangos "9 [02 al 08, 20 al 21]"; un día "1 [05]".
-function diasConRangos(dias, rangos = []) {
-  if (!dias) return '';
-  const dia = (fecha) => fecha.slice(8, 10);
-  const texto = rangos.map((r) => (r.desde === r.hasta ? dia(r.desde) : `${dia(r.desde)} al ${dia(r.hasta)}`));
-  return texto.length > 0 ? `${dias} [${texto.join(', ')}]` : String(dias);
-}
-
-// Ausencias: "2 [05,12]" (día del mes de cada ausencia).
-function diasConFechas(dias, fechas = []) {
-  if (!dias) return '';
-  return fechas.length > 0 ? `${dias} [${fechas.map((f) => f.slice(8, 10)).join(',')}]` : String(dias);
-}
-
 // Días pasados con una sola fichada (falta la salida o la entrada): suman 0 horas
 // y requieren una corrección manual. Se marca en la fila con los días afectados.
 function AdvertenciaSinCorregir({ fechas = [] }) {
   if (fechas.length === 0) return null;
-  const dias = fechas.map((f) => f.slice(8, 10)).join(',');
+  const dias = diasDeFechas(fechas);
   return (
     <span
       className="marca-revision"

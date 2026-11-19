@@ -6,6 +6,11 @@ import { seleccionarOpcion } from '../test-utils/antd.js';
 // reintentar tras un error, cambiar de período (US3) y abrir el detalle de
 // un empleado (US2).
 
+// El período elegido se recuerda en sessionStorage: se limpia entre tests.
+beforeEach(() => {
+  sessionStorage.clear();
+});
+
 function vista(over = {}) {
   return {
     periodo: '202607',
@@ -204,4 +209,39 @@ test('018 — período cerrado con informe guardado: muestra "Ver informe" y "De
   await screen.findByRole('table');
   expect(await screen.findByRole('button', { name: 'Descargar PDF' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Ver informe' })).toBeInTheDocument();
+});
+
+// Recordar el período elegido entre refrescos del navegador (sessionStorage).
+test('al cambiar de período lo recuerda y al montar de nuevo retoma ese período', async () => {
+  const cliente = clienteMock({
+    obtenerResumen: vi.fn((periodo) => Promise.resolve(periodo === '202606' ? vista({ periodo: '202606' }) : vista())),
+  });
+  const primera = render(<PaginaResumenPeriodo cliente={cliente} clienteInforme={informeMock()} />);
+  await screen.findByRole('table');
+  await seleccionarOpcion('Período', 'Junio 2026');
+  await screen.findByText(/Resumen del período Junio 2026/);
+  primera.unmount();
+
+  // "refresco": se monta de nuevo y pide directamente el período recordado.
+  const cliente2 = clienteMock({
+    obtenerResumen: vi.fn().mockResolvedValue(vista({ periodo: '202606' })),
+  });
+  render(<PaginaResumenPeriodo cliente={cliente2} clienteInforme={informeMock()} />);
+  expect(await screen.findByText(/Resumen del período Junio 2026/)).toBeInTheDocument();
+  expect(cliente2.obtenerResumen).toHaveBeenCalledWith('202606');
+});
+
+test('si el período recordado ya no es válido, lo olvida y vuelve al período por defecto', async () => {
+  sessionStorage.setItem('presentismo.resumen.periodo', '199901');
+  const cliente = clienteMock({
+    obtenerResumen: vi.fn((periodo) =>
+      periodo === '199901'
+        ? Promise.reject(Object.assign(new Error('no existe'), { status: 404 }))
+        : Promise.resolve(vista()),
+    ),
+  });
+  render(<PaginaResumenPeriodo cliente={cliente} clienteInforme={informeMock()} />);
+  expect(await screen.findByText(/Resumen del período Julio 2026/)).toBeInTheDocument();
+  expect(sessionStorage.getItem('presentismo.resumen.periodo')).toBeNull();
+  expect(cliente.obtenerResumen).toHaveBeenLastCalledWith(null);
 });

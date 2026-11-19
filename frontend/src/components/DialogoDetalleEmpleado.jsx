@@ -12,12 +12,16 @@ function formatoHoras(min) {
   return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
 }
 
+// Las columnas cortas no se parten: cada día ocupa un solo renglón. Solo la
+// columna Estado puede crecer (si una advertencia la agranda, se admite).
+const sinCorte = () => ({ style: { whiteSpace: 'nowrap' } });
+
 const columnas = [
-  { title: 'Fecha', dataIndex: 'fecha', key: 'fecha' },
-  { title: 'Clasificación', dataIndex: 'clasificacion', key: 'clasificacion' },
-  { title: 'Entrada', key: 'entrada', render: (_, dia) => dia.entrada ?? '—' },
-  { title: 'Salida', key: 'salida', render: (_, dia) => dia.salida ?? '—' },
-  { title: 'Horas', key: 'horas', render: (_, dia) => formatoHoras(dia.horas) },
+  { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', onCell: sinCorte },
+  { title: 'Clasificación', dataIndex: 'clasificacion', key: 'clasificacion', onCell: sinCorte },
+  { title: 'Entrada', key: 'entrada', render: (_, dia) => dia.entrada ?? '—', onCell: sinCorte },
+  { title: 'Salida', key: 'salida', render: (_, dia) => dia.salida ?? '—', onCell: sinCorte },
+  { title: 'Horas', key: 'horas', render: (_, dia) => formatoHoras(dia.horas), onCell: sinCorte },
   {
     title: 'Estado',
     key: 'estado',
@@ -72,7 +76,11 @@ export default function DialogoDetalleEmpleado({ cliente, legajo, nombre, period
   }, [cliente, legajo, periodo]);
 
   return (
-    <Dialogo etiqueta={`Detalle de fichadas — ${nombre ?? `legajo ${legajo}`}`} onCerrar={onCerrar}>
+    <Dialogo
+      etiqueta={`Detalle de fichadas — ${nombre ?? `legajo ${legajo}`}`}
+      onCerrar={onCerrar}
+      ancho="min(1100px, 94vw)"
+    >
       <div className="detalle-empleado">
         {estado.tipo === 'cargando' && (
           <p className="cargando" role="status">

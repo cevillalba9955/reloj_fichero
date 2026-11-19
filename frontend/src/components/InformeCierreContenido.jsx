@@ -1,5 +1,6 @@
 import { forwardRef } from 'react';
 import { etiquetaPeriodo } from './SelectorPeriodo.jsx';
+import { diasYHoras, diasConRangos, diasConFechas, diasDeFechas } from '../utils/formato-resumen.js';
 
 // 018-informe-cierre-periodo — Contenido del informe de cierre (sin modal ni
 // botones): sello de emisión + Resumen por empleado + Detalle día por día +
@@ -54,8 +55,10 @@ export const ESTILOS_INFORME = `
   .informe-tabla th, .informe-tabla td { border: 1px solid #bbb; padding: 3px 6px; text-align: left; }
   .informe-tabla th { background: #f0f0f0; }
   .informe-tabla tfoot td { font-weight: 600; background: #fafafa; }
-  .informe-resumen td:not(:nth-child(2)) { text-align: right; }
-  .informe-resumen td:first-child { text-align: left; }
+  /* Misma alineación que la solapa Resumen: Horas a cobrar centrada; Presentismo,
+     Presentes, Feriados y Licencia a la derecha; el resto a la izquierda. */
+  .informe-resumen th:nth-child(3), .informe-resumen tbody td:nth-child(3) { text-align: center; }
+  .informe-resumen th:nth-child(n+4):nth-child(-n+7), .informe-resumen tbody td:nth-child(n+4):nth-child(-n+7) { text-align: right; }
   .informe-detalle td:nth-child(n+4):nth-child(-n+7) { text-align: right; }
   .fila-anomalia td, .celda-anomalia { color: #a8071a; }
   .subtotal-empleado { margin: 2px 0 10px; font-weight: 600; }
@@ -135,15 +138,15 @@ function TablaResumen({ resumen }) {
           <tr>
             <th>Legajo</th>
             <th>Nombre</th>
-            <th>Horas</th>
+            <th>Horas a cobrar</th>
             <th>Presentismo</th>
-            <th>Completas</th>
-            <th>Ausencias</th>
-            <th>Ll. tarde</th>
-            <th>Ret. antic.</th>
-            <th>Feriado</th>
+            <th>Presentes</th>
+            <th>Feriados</th>
             <th>Licencia</th>
             <th>Vacaciones</th>
+            <th>Tarde</th>
+            <th>Retiros</th>
+            <th>Ausencias</th>
           </tr>
         </thead>
         <tbody>
@@ -157,15 +160,18 @@ function TablaResumen({ resumen }) {
                 </td>
               ) : (
                 <>
-                  <td>{hhmm(f.horasTrabajadas)}</td>
+                  <td>
+                    {hhmm(f.horasTrabajadas)}
+                    {f.fechasSinCorregir?.length > 0 && ` ⚠ corregir [${diasDeFechas(f.fechasSinCorregir)}]`}
+                  </td>
                   <td>{pct(f.presentismoIndividual)}</td>
-                  <td>{num(f.completas)}</td>
-                  <td>{num(f.ausencias)}</td>
-                  <td>{num(f.llegadasTarde)}</td>
-                  <td>{num(f.retirosAnticipados)}</td>
-                  <td>{num(f.feriado)}</td>
-                  <td>{num(f.licencia)}</td>
-                  <td>{num(f.vacaciones)}</td>
+                  <td>{diasYHoras(f.completas, f.horasPor?.presentes)}</td>
+                  <td>{diasYHoras(f.feriado, f.horasPor?.feriado)}</td>
+                  <td>{diasYHoras(f.licencia, f.horasPor?.licencia)}</td>
+                  <td>{diasConRangos(f.vacaciones, f.rangosVacaciones)}</td>
+                  <td>{diasYHoras(f.llegadasTarde, f.descuentoPor?.tarde, true)}</td>
+                  <td>{diasYHoras(f.retirosAnticipados, f.descuentoPor?.retiros, true)}</td>
+                  <td>{diasConFechas(f.ausencias, f.fechasAusencias)}</td>
                 </>
               )}
             </tr>
@@ -176,9 +182,8 @@ function TablaResumen({ resumen }) {
             <td colSpan={2}>Total ({encabezado.empleados} empleados)</td>
             <td>{horas(encabezado.totalHoras)}</td>
             <td>{pctGeneral}</td>
-            <td />
+            <td colSpan={6} />
             <td>{num(encabezado.totalAusencias)}</td>
-            <td colSpan={5} />
           </tr>
         </tfoot>
       </table>
