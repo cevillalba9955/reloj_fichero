@@ -45,15 +45,34 @@ const CONTADORES = [
   'vacaciones',
 ];
 
+// Referencias de la grilla (mismo formato que la solapa "Resumen"): horas por
+// columna, descuentos de Tarde/Retiros y fechas de Vacaciones/Ausencias.
+const HORAS_POR_VACIAS = { presentes: 0, ausencias: 0, feriado: 0, licencia: 0 };
+const DESCUENTO_POR_VACIO = { tarde: 0, retiros: 0 };
+
 function filaResumenDe(fila) {
   const salida = { legajo: fila.legajo, nombre: fila.nombre ?? null, modalidad: fila.modalidad ?? null };
   if (fila.anomalia) {
     for (const c of CONTADORES) salida[c] = 0;
+    salida.horasPor = { ...HORAS_POR_VACIAS };
+    salida.descuentoPor = { ...DESCUENTO_POR_VACIO };
+    salida.rangosVacaciones = [];
+    salida.fechasAusencias = [];
+    salida.fechasSinCorregir = [];
     salida.presentismoIndividual = null;
     salida.anomalia = fila.anomalia;
     return salida;
   }
   for (const c of CONTADORES) salida[c] = fila[c] ?? 0;
+  salida.horasPor = { ...HORAS_POR_VACIAS, ...(fila.horasPor ?? {}) };
+  salida.descuentoPor = { ...DESCUENTO_POR_VACIO, ...(fila.descuentoPor ?? {}) };
+  salida.rangosVacaciones = fila.rangosVacaciones ?? [];
+  salida.fechasAusencias = fila.fechasAusencias ?? [];
+  // Un informe emitido cubre un tramo ya transcurrido: toda jornada incompleta
+  // (una sola fichada) requiere corrección. Misma fuente que `pendientes`.
+  salida.fechasSinCorregir = (fila.detalle ?? [])
+    .filter((d) => d.estado === EstadoJornada.INCOMPLETA)
+    .map((d) => d.fecha);
   // 018 — presentismo individual (ratio 0..1, o null); ya calculado por
   // proyectarResumenPeriodo excluyendo los días de vacaciones.
   salida.presentismoIndividual = fila.presentismoIndividual ?? null;

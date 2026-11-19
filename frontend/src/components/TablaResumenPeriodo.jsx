@@ -1,4 +1,5 @@
 import { Table, Empty } from 'antd';
+import { formatoHoras, diasYHoras, diasConRangos, diasConFechas, diasDeFechas } from '../utils/formato-resumen.js';
 
 // feature 011 (US1) — Tabla de resumen del período: una fila por empleado
 // esperado con los acumulados del período. Componente de presentación puro:
@@ -7,10 +8,22 @@ import { Table, Empty } from 'antd';
 // acumulados de esa fila (misma idea que el `colSpan` original, vía la técnica
 // `onCell` de antd Table).
 
-// Minutos → 'H:MM' para lectura (mismo criterio que TablaFichadasHoy).
-function formatoHoras(min) {
-  const m = Number.isInteger(min) && min >= 0 ? min : 0;
-  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+// Días pasados con una sola fichada (falta la salida o la entrada): suman 0 horas
+// y requieren una corrección manual. Se marca en la fila con los días afectados.
+function AdvertenciaSinCorregir({ fechas = [] }) {
+  if (fechas.length === 0) return null;
+  const dias = diasDeFechas(fechas);
+  return (
+    <span
+      className="marca-revision"
+      style={{ color: '#d46b08', fontWeight: 600 }}
+      title="Jornada incompleta: falta una fichada y el día no suma horas. Requiere corrección."
+      aria-label={`Requiere corrección: jornada incompleta los días ${dias}`}
+    >
+      {' '}
+      ⚠ corregir [{dias}]
+    </span>
+  );
 }
 
 const ocultarSiAnomalia = (fila) => (fila.anomalia ? { colSpan: 0 } : {});
@@ -24,20 +37,27 @@ export default function TablaResumenPeriodo({ filas, onSeleccionar = null }) {
     { title: 'Leg', dataIndex: 'legajo', key: 'legajo' },
     { title: 'Empleado', key: 'nombre', render: (_, fila) => fila.nombre ?? '—' },
     {
-      title: 'Horas',
+      title: 'Horas a cobrar',
+      align: 'center',
       key: 'horas',
       render: (_, fila) =>
-        fila.anomalia ? <span className="anomalia-mensaje">Anomalía: {fila.anomalia}</span> : formatoHoras(fila.horasTrabajadas),
-      onCell: (fila) => (fila.anomalia ? { colSpan: 9 } : {}),
+        fila.anomalia ? (
+          <span className="anomalia-mensaje">Anomalía: {fila.anomalia}</span>
+        ) : (
+          <>
+            {formatoHoras(fila.horasTrabajadas)}
+            <AdvertenciaSinCorregir fechas={fila.fechasSinCorregir} />
+          </>
+        ),
+      onCell: (fila) => (fila.anomalia ? { colSpan: 8 } : {}),
     },
-    { title: 'Presentes', key: 'presentes', render: (_, fila) => fila.completas, onCell: ocultarSiAnomalia },
-    { title: 'Ausencias', dataIndex: 'ausencias', key: 'ausencias', onCell: ocultarSiAnomalia },
-    { title: 'Feriados', dataIndex: 'feriado', key: 'feriado', onCell: ocultarSiAnomalia },
-    { title: 'Licencia', dataIndex: 'licencia', key: 'licencia', onCell: ocultarSiAnomalia },
-    { title: 'Vacaciones', dataIndex: 'vacaciones', key: 'vacaciones', onCell: ocultarSiAnomalia },
-    { title: 'Tarde', key: 'tarde', render: (_, fila) => fila.llegadasTarde, onCell: ocultarSiAnomalia },
-    { title: 'Retiros', key: 'retiros', render: (_, fila) => fila.retirosAnticipados, onCell: ocultarSiAnomalia },
-    { title: 'En Curso', key: 'enCurso', render: (_, fila) => fila.incompletas, onCell: ocultarSiAnomalia },
+    { title: 'Presentes', align: 'right', key: 'presentes', render: (_, fila) => diasYHoras(fila.completas, fila.horasPor?.presentes), onCell: ocultarSiAnomalia },
+    { title: 'Feriados', align: 'right', key: 'feriado', render: (_, fila) => diasYHoras(fila.feriado, fila.horasPor?.feriado), onCell: ocultarSiAnomalia },
+    { title: 'Licencia', align: 'right', key: 'licencia', render: (_, fila) => diasYHoras(fila.licencia, fila.horasPor?.licencia), onCell: ocultarSiAnomalia },
+    { title: 'Vacaciones', key: 'vacaciones', render: (_, fila) => diasConRangos(fila.vacaciones, fila.rangosVacaciones), onCell: ocultarSiAnomalia },
+    { title: 'Tarde', key: 'tarde', render: (_, fila) => diasYHoras(fila.llegadasTarde, fila.descuentoPor?.tarde, true), onCell: ocultarSiAnomalia },
+    { title: 'Retiros', key: 'retiros', render: (_, fila) => diasYHoras(fila.retirosAnticipados, fila.descuentoPor?.retiros, true), onCell: ocultarSiAnomalia },
+    { title: 'Ausencias', key: 'ausencias', render: (_, fila) => diasConFechas(fila.ausencias, fila.fechasAusencias), onCell: ocultarSiAnomalia },
   ];
 
   return (

@@ -327,3 +327,28 @@ test('fila de resumen: los contadores no cambian por el ocultamiento de fichadas
   assert.equal(resumen.filas[0].ausencias, 0);
   assert.equal(resumen.filas[0].horasTrabajadas, 0);
 });
+
+// La grilla del informe usa el mismo formato que la solapa Resumen: las filas
+// llevan las referencias (horas por columna, descuentos, fechas) y los días con
+// una sola fichada figuran como "a corregir" (misma fuente que `pendientes`).
+test('filas del resumen: arrastran horasPor, descuentoPor, fechas y fechasSinCorregir', () => {
+  const fila = filaNormal({
+    horasPor: { presentes: 300, ausencias: 0, feriado: 0, licencia: 240 },
+    descuentoPor: { tarde: 30, retiros: 240 },
+    rangosVacaciones: [{ desde: '2026-07-02', hasta: '2026-07-08' }],
+    fechasAusencias: ['2026-07-10'],
+    detalle: [dia({ fecha: '2026-07-09', estado: 'Incompleta', horas: 0 })],
+  });
+  const { resumen, pendientes } = construirInformeCierre({ ...base, filas: [fila, filaAnomalia] });
+  const f = resumen.filas[0];
+  assert.deepEqual(f.horasPor, { presentes: 300, ausencias: 0, feriado: 0, licencia: 240 });
+  assert.deepEqual(f.descuentoPor, { tarde: 30, retiros: 240 });
+  assert.deepEqual(f.rangosVacaciones, [{ desde: '2026-07-02', hasta: '2026-07-08' }]);
+  assert.deepEqual(f.fechasAusencias, ['2026-07-10']);
+  assert.deepEqual(f.fechasSinCorregir, ['2026-07-09']);
+  assert.deepEqual(pendientes.jornadasIncompletas[0].fechas, ['2026-07-09']); // misma fuente
+  // fila con anomalía: referencias vacías
+  const a = resumen.filas[1];
+  assert.deepEqual(a.fechasSinCorregir, []);
+  assert.deepEqual(a.descuentoPor, { tarde: 0, retiros: 0 });
+});

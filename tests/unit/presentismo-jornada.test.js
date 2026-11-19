@@ -343,3 +343,41 @@ test('entrada tarde 07:28 + salida 16:00 en horario → 8:30 (trunca 8:32 a múl
   assert.equal(r.salidaEfectiva, 960);
   assert.equal(r.horasAuto, 510, '8:32 reales → se pagan 8:30');
 });
+
+// Caso legajo 9 (02/11/26): entrada 06:49, sin salida, retiro anticipado
+// 12:00–16:00 y licencia Paga. El retiro hace de salida; la licencia completa.
+const RETIRO_12_16 = { desde: 720, hasta: 960, tipo: 'retiro_anticipado', vigente: true };
+const LICENCIA_PAGA = { motivoId: 'fallecimiento', etiquetaMotivo: 'Fallecimiento', tipoPago: 'Paga' };
+
+test('retiro anticipado hace de salida cuando falta la fichada: Completa con horas hasta el retiro', () => {
+  const auto = calc(Clasificacion.LABORABLE, [409]); // 06:49, sin salida
+  assert.equal(auto.estado, EstadoJornada.INCOMPLETA);
+  const r = aplicarAjustes(auto, { pausas: [RETIRO_12_16], params: PARAMS });
+  assert.equal(r.estado, EstadoJornada.COMPLETA);
+  assert.equal(r.totalDiario, 300); // 07:00–12:00
+});
+
+test('retiro anticipado + licencia Paga: completa la jornada; la licencia son las horas del retiro', () => {
+  const auto = calc(Clasificacion.LABORABLE, [409]);
+  const r = aplicarAjustes(auto, { pausas: [RETIRO_12_16], params: PARAMS, justificacion: LICENCIA_PAGA });
+  assert.equal(r.totalDiario, 540);
+  assert.equal(r.horasLicencia, 240);
+});
+
+test('licencia Paga completa el día también si ficha la salida antes de hora sin marcar retiro', () => {
+  const auto = calc(Clasificacion.LABORABLE, [420, 840]); // 07:00–14:00 → 7:00
+  const r = aplicarAjustes(auto, { params: PARAMS, justificacion: LICENCIA_PAGA });
+  assert.equal(r.totalDiario, 540);
+  assert.equal(r.horasLicencia, 120);
+});
+
+test('licencia No paga con fichadas sigue en 0 horas y sin licencia acreditada', () => {
+  const auto = calc(Clasificacion.LABORABLE, [409]);
+  const r = aplicarAjustes(auto, {
+    pausas: [RETIRO_12_16],
+    params: PARAMS,
+    justificacion: { ...LICENCIA_PAGA, tipoPago: 'No paga' },
+  });
+  assert.equal(r.totalDiario, 0);
+  assert.equal(r.horasLicencia, 0);
+});

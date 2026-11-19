@@ -27,7 +27,9 @@ export function clasificarDiaParaJustificar(dia) {
   if (dia.yaJustificado) {
     return { fecha: dia.fecha, elegible: false, razon: RazonNoAplicable.YA_JUSTIFICADO };
   }
-  if (!dia.esFuturo && dia.estado !== EstadoJornada.SIN_FICHADAS) {
+  // Una licencia Paga completa la jornada también sobre un día con fichadas
+  // (`permiteConFichadas`); una No paga sigue exigiendo un día sin fichadas.
+  if (!dia.esFuturo && dia.estado !== EstadoJornada.SIN_FICHADAS && !dia.permiteConFichadas) {
     return { fecha: dia.fecha, elegible: false, razon: RazonNoAplicable.CON_FICHADAS };
   }
   return { fecha: dia.fecha, elegible: true };

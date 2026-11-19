@@ -169,6 +169,9 @@ export function construirVistaFichadasHoy({ fecha, periodo, diaClasificacion, fi
 // que sus acumulados todavía no reflejan los días futuros del período
 // (FR-008 de resumen-periodo.js) — la UI lo usa para avisarlo, no cambia el
 // cálculo.
+const HORAS_POR_VACIAS = { presentes: 0, ausencias: 0, feriado: 0, licencia: 0 };
+const DESCUENTO_POR_VACIO = { tarde: 0, retiros: 0 };
+
 export function construirVistaResumenPeriodo({
   periodo,
   periodos,
@@ -203,6 +206,11 @@ export function construirVistaResumenPeriodo({
             feriado: 0,
             licencia: 0,
             vacaciones: 0,
+            rangosVacaciones: [],
+            fechasAusencias: [],
+            fechasSinCorregir: [],
+            horasPor: HORAS_POR_VACIAS,
+            descuentoPor: DESCUENTO_POR_VACIO,
             anomalia: f.anomalia,
           }
         : {
@@ -221,6 +229,14 @@ export function construirVistaResumenPeriodo({
             licencia: f.licencia ?? 0,
             // spec 015 — días con Justificación de Vacaciones del período.
             vacaciones: f.vacaciones ?? 0,
+            rangosVacaciones: f.rangosVacaciones ?? [],
+            fechasAusencias: f.fechasAusencias ?? [],
+            fechasSinCorregir: f.fechasSinCorregir ?? [],
+            // issue #40 — minutos por columna (Presentes, Ausencias, Feriados,
+            // Licencia) y minutos descontados por Tarde/Retiros, para mostrar
+            // "Días (Horas)" / "Días (-Horas)".
+            horasPor: { ...HORAS_POR_VACIAS, ...(f.horasPor ?? {}) },
+            descuentoPor: { ...DESCUENTO_POR_VACIO, ...(f.descuentoPor ?? {}) },
             anomalia: null,
           },
     ),
@@ -253,6 +269,7 @@ export function construirDetalleEmpleado({ periodo, legajo, nombre = null, detal
       // si no hay Justificación vigente.
       justificacion: d.justificacion ?? null,
       requiereJustificacionRevision: Boolean(d.requiereJustificacionRevision),
+      requiereCorreccion: Boolean(d.requiereCorreccion),
     })),
   };
 }

@@ -443,3 +443,62 @@ test('presentismoIndividual es null si no hubo horas esperadas (tramo todo de va
   assert.equal(r.horasEsperadas, 0);
   assert.equal(r.presentismoIndividual, null);
 });
+
+// Rangos de vacaciones: días corridos consecutivos se agrupan ("7 [02 al 08]").
+test('rangosVacaciones agrupa días consecutivos y separa los no consecutivos', () => {
+  const vac = (fecha) =>
+    jornada(fecha, {
+      estado: 'Sin fichadas',
+      totalDiario: 0,
+      entrada: null,
+      salida: null,
+      justificacion: { motivoId: MotivoVacaciones.id, etiquetaMotivo: 'Vacaciones', tipoPago: 'No paga' },
+    });
+  const r = proyectarResumenPeriodo({
+    resumen: resumen([
+      vac('2026-07-01'),
+      vac('2026-07-02'),
+      vac('2026-07-03'),
+      jornada('2026-07-06'),
+      vac('2026-07-07'),
+    ]),
+    hoy: HOY,
+  });
+  assert.equal(r.vacaciones, 4);
+  assert.deepEqual(r.rangosVacaciones, [
+    { desde: '2026-07-01', hasta: '2026-07-03' },
+    { desde: '2026-07-07', hasta: '2026-07-07' },
+  ]);
+});
+
+// Fechas de referencia de las ausencias ("2 [05,12]").
+test('fechasAusencias lista los días sin fichadas que cuentan como ausencia', () => {
+  const sinFichadas = (fecha, over = {}) =>
+    jornada(fecha, { estado: 'Sin fichadas', totalDiario: 0, entrada: null, salida: null, ...over });
+  const r = proyectarResumenPeriodo({
+    resumen: resumen([
+      sinFichadas('2026-07-01'),
+      jornada('2026-07-02'),
+      sinFichadas('2026-07-03', {
+        justificacion: { motivoId: 'enfermedad', etiquetaMotivo: 'Enfermedad', tipoPago: 'Paga' },
+      }),
+      sinFichadas('2026-07-06'),
+    ]),
+    hoy: HOY,
+  });
+  assert.equal(r.ausencias, 2);
+  assert.deepEqual(r.fechasAusencias, ['2026-07-01', '2026-07-06']);
+});
+
+// Una sola punta fichada en un día pasado requiere corrección; hoy no (puede seguir trabajando).
+test('fechasSinCorregir: jornada incompleta de un día pasado sí, la de hoy no', () => {
+  const incompleta = (fecha) =>
+    jornada(fecha, { estado: 'Incompleta', totalDiario: 0, salida: null, salidaEfectiva: null });
+  const r = proyectarResumenPeriodo({
+    resumen: resumen([incompleta('2026-07-16'), jornada('2026-07-17'), incompleta('2026-07-18')]),
+    hoy: '2026-07-18',
+  });
+  assert.deepEqual(r.fechasSinCorregir, ['2026-07-16']);
+  assert.equal(r.detalle.find((d) => d.fecha === '2026-07-16').requiereCorreccion, true);
+  assert.equal(r.detalle.find((d) => d.fecha === '2026-07-18').requiereCorreccion, false);
+});

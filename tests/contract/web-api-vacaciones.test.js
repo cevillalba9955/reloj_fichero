@@ -137,10 +137,13 @@ test('POST /api/vacaciones/asignaciones sobre un período cerrado → 409 PERIOD
 });
 
 test('POST /api/vacaciones/asignaciones sobre un día con Justificación vigente → 409 VACACIONES_SUPERPUESTA listando las fechas', async () => {
-  const e = await entorno();
+  // El día en conflicto se fuerza Laborable: el calendario del entorno es lun-vie
+  // y `fechaDelMes(8)` puede caer en fin de semana (No Laborable), donde la
+  // Justificación se rechazaría y el test dependería del mes en que corra.
+  const fechaConflicto = fechaDelMes(8);
+  const e = await entorno({ clasificaciones: { [fechaConflicto]: 'Laborable' } });
   try {
     await seedSaldo(e.repoDir, 1, 10);
-    const fechaConflicto = fechaDelMes(8);
     const justif = await fetch(`${e.base}/api/justificaciones`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

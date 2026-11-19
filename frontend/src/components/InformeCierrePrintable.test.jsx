@@ -17,7 +17,7 @@ function vista(over = {}) {
         rangoFechas: { desde: '2026-07-01', hasta: '2026-07-31' },
       },
       filas: [
-        { legajo: 1, nombre: 'Ana Pérez', modalidad: 'Mensual', horasTrabajadas: 930, horasEsperadas: 1200, presentismoIndividual: 930 / 1200, completas: 8, incompletas: 1, ausencias: 3, llegadasTarde: 2, retirosAnticipados: 0, correcciones: 1, feriado: 1, licencia: 0, vacaciones: 0, anomalia: null },
+        { legajo: 1, nombre: 'Ana Pérez', modalidad: 'Mensual', horasTrabajadas: 930, horasEsperadas: 1200, presentismoIndividual: 930 / 1200, completas: 8, incompletas: 1, ausencias: 3, llegadasTarde: 2, retirosAnticipados: 0, correcciones: 1, feriado: 1, licencia: 0, vacaciones: 0, horasPor: { presentes: 450, ausencias: 0, feriado: 480, licencia: 0 }, descuentoPor: { tarde: 60, retiros: 0 }, rangosVacaciones: [], fechasAusencias: ['2026-07-03', '2026-07-06', '2026-07-07'], fechasSinCorregir: ['2026-07-02'], anomalia: null },
         { legajo: 9, nombre: 'Zoe Anómala', modalidad: null, horasTrabajadas: 0, horasEsperadas: 0, presentismoIndividual: null, completas: 0, incompletas: 0, ausencias: 0, llegadasTarde: 0, retirosAnticipados: 0, correcciones: 0, feriado: 0, licencia: 0, vacaciones: 0, anomalia: 'empleado sin categoría en el padrón' },
       ],
     },
@@ -77,14 +77,14 @@ test('detalle: el estado "Sin fichadas" se muestra como "Ausente"', () => {
   expect(screen.queryByText('Sin fichadas')).not.toBeInTheDocument();
 });
 
-test('la grilla de resumen no tiene columnas Modalidad, Incompletas ni Correcc. y el header de horas es "Horas"', () => {
+test('la grilla de resumen no tiene columnas Modalidad, Incompletas ni Correcc. y el header de horas es "Horas a cobrar"', () => {
   render(<InformeCierrePrintable vista={vista()} onCerrar={() => {}} />);
   const tablaResumen = document.querySelector('.informe-resumen');
   expect(within(tablaResumen).queryByText('Modalidad')).not.toBeInTheDocument();
   expect(within(tablaResumen).queryByText('Incompletas')).not.toBeInTheDocument();
   expect(within(tablaResumen).queryByText('Correcc.')).not.toBeInTheDocument();
   expect(within(tablaResumen).queryByText('Horas computadas')).not.toBeInTheDocument();
-  expect(within(tablaResumen).getByRole('columnheader', { name: 'Horas' })).toBeInTheDocument();
+  expect(within(tablaResumen).getByRole('columnheader', { name: 'Horas a cobrar' })).toBeInTheDocument();
   expect(within(tablaResumen).getByRole('columnheader', { name: 'Presentismo' })).toBeInTheDocument();
 });
 
@@ -102,7 +102,8 @@ test('totaliza ausencias en el pie de la grilla y muestra la leyenda de presenti
   render(<InformeCierrePrintable vista={vista()} onCerrar={() => {}} />);
   // total de ausencias en el pie (fila 1 tiene 3; total 3)
   const tablaResumen = document.querySelector('.informe-resumen');
-  expect(within(tablaResumen).getAllByText('3').length).toBeGreaterThanOrEqual(2);
+  expect(within(tablaResumen).getAllByText('3').length).toBeGreaterThanOrEqual(1); // total del pie
+  expect(within(tablaResumen).getByText('3 [03,06,07]')).toBeInTheDocument(); // fila: con fechas
   // leyenda: % de presentismo general (930 / 1200 = 77,5 %) + total ausencias
   const leyenda = screen.getByText(/Presentismo general:/);
   expect(leyenda).toHaveTextContent(/77[.,]5\s*%/);
@@ -120,10 +121,10 @@ test('la grilla de resumen oculta los ceros y muestra sólo los valores > 0', ()
   render(<InformeCierrePrintable vista={vista()} onCerrar={() => {}} />);
   const tablaResumen = document.querySelector('.informe-resumen');
   // fila 1: completas 8, llegadasTarde 2, feriado 1; el resto en 0 → sin texto
-  expect(within(tablaResumen).getByText('8')).toBeInTheDocument();
-  expect(within(tablaResumen).getByText('2')).toBeInTheDocument();
-  // "15:30" aparece 2 veces: la fila del empleado y el total del pie
-  expect(within(tablaResumen).getAllByText('15:30')).toHaveLength(2);
+  expect(within(tablaResumen).getByText('8 (7:30)')).toBeInTheDocument();
+  expect(within(tablaResumen).getByText('2 (-1 hora)')).toBeInTheDocument();
+  // "15:30" aparece en el total del pie (la fila lo muestra junto a la advertencia)
+  expect(within(tablaResumen).getAllByText(/15:30/)).toHaveLength(2);
   // ningún cero visible (celdas en 0 quedan vacías)
   expect(within(tablaResumen).queryByText('0')).not.toBeInTheDocument();
 });
@@ -166,4 +167,33 @@ test('022: sello.anticipado muestra la marca "EMISIÓN ANTICIPADA" y el título 
 test('022: sin sello.anticipado no aparece la marca de emisión anticipada', () => {
   render(<InformeCierrePrintable vista={vista()} onCerrar={() => {}} />);
   expect(screen.queryByText(/EMISIÓN ANTICIPADA/)).not.toBeInTheDocument();
+});
+
+// La grilla del informe usa el mismo formato que la solapa Resumen.
+test('la grilla muestra Días (Horas), descuentos en negativo y la advertencia de corrección como la solapa Resumen', () => {
+  render(<InformeCierrePrintable vista={vista()} onCerrar={() => {}} />);
+  const tablaResumen = document.querySelector('.informe-resumen');
+  const encabezados = [...tablaResumen.querySelectorAll('thead th')].map((th) => th.textContent);
+  expect(encabezados).toEqual([
+    'Legajo', 'Nombre', 'Horas a cobrar', 'Presentismo', 'Presentes', 'Feriados', 'Licencia', 'Vacaciones', 'Tarde', 'Retiros', 'Ausencias',
+  ]);
+  const celdas = [...tablaResumen.querySelectorAll('tbody tr')[0].querySelectorAll('td')].map((td) => td.textContent);
+  expect(celdas[2]).toBe('15:30 ⚠ corregir [02]');
+  expect(celdas[4]).toBe('8 (7:30)'); // Presentes
+  expect(celdas[5]).toBe('1 (8:00)'); // Feriados
+  expect(celdas[6]).toBe(''); // Licencia en cero
+  expect(celdas[8]).toBe('2 (-1 hora)'); // Tarde: descuento en negativo, texto largo
+  expect(celdas[9]).toBe(''); // Retiros en cero
+  expect(celdas[10]).toBe('3 [03,06,07]'); // Ausencias con fechas
+});
+
+// Un informe emitido antes de este formato no trae horas por columna: se ve solo la cantidad.
+test('una fila de un informe antiguo (sin horasPor) muestra solo la cantidad de días', () => {
+  const v = vista();
+  delete v.resumen.filas[0].horasPor;
+  delete v.resumen.filas[0].descuentoPor;
+  render(<InformeCierrePrintable vista={v} onCerrar={() => {}} />);
+  const celdas = [...document.querySelectorAll('.informe-resumen tbody tr')[0].querySelectorAll('td')].map((td) => td.textContent);
+  expect(celdas[4]).toBe('8'); // Presentes sin "(0:00)"
+  expect(celdas[8]).toBe('2'); // Tarde sin descuento
 });
