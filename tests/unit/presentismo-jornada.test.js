@@ -260,13 +260,13 @@ test('justificación No paga sobre día Sin fichadas no acredita nada', () => {
   assert.equal(ajustada.estado, EstadoJornada.SIN_FICHADAS);
 });
 
-test('fichadas que llegan después de justificar (Paga) señalan requiereJustificacionRevision sin tocar el resultado', () => {
+test('licencia Paga sobre día con fichadas completas no requiere revisión y conserva el resultado', () => {
   const auto = calc(Clasificacion.LABORABLE, [425, 958]); // Completa, 9:00
   const ajustada = aplicarAjustes(auto, {
     justificacion: { tipoPago: 'Paga', motivoId: 'examen' },
     params: PARAMS,
   });
-  assert.equal(ajustada.requiereJustificacionRevision, true);
+  assert.equal(ajustada.requiereJustificacionRevision, false);
   assert.equal(ajustada.estado, EstadoJornada.COMPLETA, 'el cálculo auto no se descarta');
   assert.equal(ajustada.totalDiario, 540, 'las horas calculadas de las fichadas reales prevalecen');
 });

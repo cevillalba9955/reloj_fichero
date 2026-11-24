@@ -324,7 +324,7 @@ export function aplicarAjustes(auto, { correccion = null, pausas = [], params = 
         pausas,
         requiereRevision: false,
         justificacion,
-        requiereJustificacionRevision: true,
+        requiereJustificacionRevision: !(paga && auto.estado === EstadoJornada.COMPLETA),
       };
     }
     const creditoPaga = paga && params ? params.jornadaEsperada : 0;
