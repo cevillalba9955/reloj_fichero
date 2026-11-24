@@ -31,6 +31,9 @@ function salidaConsiderada(jornada) {
 // (misma forma que resumen.jornadas de calcularEmpleado, 004).
 export function esLlegadaTarde(jornada, params) {
   if (jornada.clasificacion !== Clasificacion.LABORABLE) return false;
+  // Un día con Justificación vigente (llegada tarde justificada, ej. turno
+  // médico) no cuenta como llegada tarde.
+  if (jornada.justificacion) return false;
   return esEntradaTarde(entradaConsiderada(jornada), params);
 }
 

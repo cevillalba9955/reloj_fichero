@@ -502,3 +502,9 @@ test('fechasSinCorregir: jornada incompleta de un día pasado sí, la de hoy no'
   assert.equal(r.detalle.find((d) => d.fecha === '2026-07-16').requiereCorreccion, true);
   assert.equal(r.detalle.find((d) => d.fecha === '2026-07-18').requiereCorreccion, false);
 });
+
+test('esLlegadaTarde: un día con justificación vigente no cuenta como llegada tarde', () => {
+  const j = jornada('2026-07-01', { entrada: { hora: 12 * 60 + 20 } });
+  assert.equal(esLlegadaTarde(j, PARAMS), true);
+  assert.equal(esLlegadaTarde({ ...j, justificacion: { tipoPago: 'Paga' } }, PARAMS), false);
+});

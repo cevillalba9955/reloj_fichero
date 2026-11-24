@@ -177,26 +177,28 @@ test('el botón "Excepcion" se oculta cuando la fila no tiene entrada (sin ficha
 
 // feature 012 — acción "Justificación" en días AUSENTE, badge de motivo y
 // acción de revertir cuando ya hay una Justificación vigente.
-test('el botón "Justificación" solo aparece en filas AUSENTE sin justificación vigente', () => {
+test('el botón "Justificación" aparece en filas sin justificación vigente (también con fichadas)', () => {
   const onJustificar = vi.fn();
   render(
     <TablaFichadasHoy
       empleados={[
         fila({ legajo: 1, situacion: 'AUSENTE' }),
         fila({ legajo: 2, situacion: 'PRESENTE' }),
+        fila({ legajo: 3, situacion: 'No aplica' }),
       ]}
       onJustificar={onJustificar}
     />,
   );
   const filas = filasDeDatos();
   expect(filas[0]).toHaveTextContent('Justificación');
-  expect(filas[1]).not.toHaveTextContent('Justificación');
+  expect(filas[1]).toHaveTextContent('Justificación');
+  expect(filas[2]).not.toHaveTextContent('Justificación');
 
   fireEvent.click(within(filas[0]).getByRole('button'));
   expect(onJustificar).toHaveBeenCalledWith(expect.objectContaining({ legajo: 1 }));
 });
 
-test('una fila con justificación vigente muestra el motivo, el botón de revertir, y oculta Corregir', () => {
+test('una fila con justificación vigente muestra el motivo, el botón de revertir, y mantiene Corregir si es Paga', () => {
   const onRevertirJustificacion = vi.fn();
   render(
     <TablaFichadasHoy
@@ -217,7 +219,7 @@ test('una fila con justificación vigente muestra el motivo, el botón de revert
   expect(datos).toHaveTextContent('LICENCIA'); // motivo Paga: la situación se etiqueta como Licencia
   expect(datos).not.toHaveTextContent('AUSENTE');
   expect(datos).not.toHaveTextContent('Justificación'); // ya justificada: no ofrece cargar de nuevo
-  expect(datos).not.toHaveTextContent('Corregir'); // no aplica sobre una ausencia justificada
+  expect(datos).toHaveTextContent('Corregir'); // licencia Paga: se puede corregir el horario trabajado
   fireEvent.click(screen.getByText('Revertir justificación'));
   expect(onRevertirJustificacion).toHaveBeenCalledWith(expect.objectContaining({ legajo: 1 }));
 });

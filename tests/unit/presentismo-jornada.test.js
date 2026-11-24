@@ -260,13 +260,13 @@ test('justificación No paga sobre día Sin fichadas no acredita nada', () => {
   assert.equal(ajustada.estado, EstadoJornada.SIN_FICHADAS);
 });
 
-test('fichadas que llegan después de justificar (Paga) señalan requiereJustificacionRevision sin tocar el resultado', () => {
+test('licencia Paga sobre día con fichadas completas no requiere revisión y conserva el resultado', () => {
   const auto = calc(Clasificacion.LABORABLE, [425, 958]); // Completa, 9:00
   const ajustada = aplicarAjustes(auto, {
     justificacion: { tipoPago: 'Paga', motivoId: 'examen' },
     params: PARAMS,
   });
-  assert.equal(ajustada.requiereJustificacionRevision, true);
+  assert.equal(ajustada.requiereJustificacionRevision, false);
   assert.equal(ajustada.estado, EstadoJornada.COMPLETA, 'el cálculo auto no se descarta');
   assert.equal(ajustada.totalDiario, 540, 'las horas calculadas de las fichadas reales prevalecen');
 });
@@ -380,4 +380,33 @@ test('licencia No paga con fichadas sigue en 0 horas y sin licencia acreditada',
   });
   assert.equal(r.totalDiario, 0);
   assert.equal(r.horasLicencia, 0);
+});
+
+// caso legajos 10/53 (20/11/26): entrada tardía fuera de la ventana de apertura
+test('entrada tardía fichada tras el fin de la ventana de apertura es entrada, no salida', () => {
+  const r = calcularJornadaAuto({
+    clasificacion: Clasificacion.LABORABLE,
+    fichadas: [{ id: 'a', hora: 12 * 60 + 20 }, { id: 'b', hora: 16 * 60 + 2 }],
+    params: PARAMS,
+  });
+  assert.equal(r.estado, EstadoJornada.COMPLETA);
+  assert.equal(r.entrada.id, 'a');
+  assert.equal(r.salida.id, 'b');
+});
+
+test('licencia Paga + corrección de entrada: trabajado + licencia = jornada esperada', () => {
+  const auto = calcularJornadaAuto({
+    clasificacion: Clasificacion.LABORABLE,
+    fichadas: [{ id: 'b', hora: 16 * 60 }],
+    params: PARAMS,
+  });
+  const correccion = { entradaCorregida: 12 * 60 + 20, salidaCorregida: null, valorCorregido: null, valorCalculado: null };
+  const r = aplicarAjustes(auto, {
+    correccion,
+    params: PARAMS,
+    justificacion: { tipoPago: 'Paga', motivoId: 'examen' },
+  });
+  assert.equal(r.totalDiario, PARAMS.jornadaEsperada);
+  assert.ok(r.horasLicencia > 0 && r.horasLicencia < PARAMS.jornadaEsperada);
+  assert.ok(r.justificacion);
 });
