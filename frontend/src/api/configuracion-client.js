@@ -38,6 +38,10 @@ export function crearClienteConfiguracion({ fetchImpl, base = API_BASE } = {}) {
     guardarReloj: (cambios) => put('/configuracion/reloj', cambios),
     probarConexionReloj: (host, port) => post('/configuracion/reloj/probar-conexion', { host, port }),
 
+    // Memoria del reloj (issue #39)
+    obtenerMemoriaReloj: () => pedir('/configuracion/reloj/memoria'),
+    limpiarMemoriaReloj: () => post('/configuracion/reloj/limpiar-memoria', {}),
+
     // Motivos de ausencia (US2)
     obtenerMotivos: () => pedir('/configuracion/motivos-ausencia'),
     crearMotivo: (motivo) => post('/configuracion/motivos-ausencia', motivo),

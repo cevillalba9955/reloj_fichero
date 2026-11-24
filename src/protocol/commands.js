@@ -117,6 +117,23 @@ export function buildCloseOperationCommand(seq) {
   return withSequence(CLOSE_OPERATION_BASE, seq);
 }
 
-// 0xA8 (borrar) esta deliberadamente fuera de alcance de esta feature
-// (spec FR-007) y no se expone ningun builder para el, aunque su tamano
-// real (16 bytes) esta documentado en research.md a modo de referencia.
+// 55 AA 01 81 00 00 00 00 00 00 FF FF 00 00 [seq LE] -> 16 bytes totales.
+// Variante "apertura de operacion" del 0x81 (byte4=00), usada antes de 0xA8
+// (research.md §6.5, research/fichada2.pcapng stream 13).
+const OPEN_OPERATION_BASE = template('55 AA 01 81 00 00 00 00 00 00 FF FF 00 00 00 00');
+// 55 AA 01 A8 00 00 00 00 00 00 FF FF 00 00 [seq LE] -> 16 bytes totales.
+// Borrado de las fichadas ya descargadas de la memoria del reloj. Probado
+// contra el equipo real el 2026-07-02 (research.md §6.5): 3 pendientes -> 0.
+// Se envuelve entre 0x81 apertura y 0x81 cierre.
+const CLEAR_BASE = template('55 AA 01 A8 00 00 00 00 00 00 FF FF 00 00 00 00');
+
+export function buildOpenOperationCommand(seq) {
+  return withSequence(OPEN_OPERATION_BASE, seq);
+}
+
+// ATENCION: borra TODAS las fichadas pendientes del reloj, no solo las que
+// el llamador ya vio. Quien lo use debe haber descargado y persistido antes
+// (ver scheduler.tick({ limpiarMemoria: true })). feature 039.
+export function buildClearCommand(seq) {
+  return withSequence(CLEAR_BASE, seq);
+}

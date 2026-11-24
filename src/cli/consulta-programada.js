@@ -224,7 +224,54 @@ export function createFichadasSink({ repoDir, now = () => new Date(), logger = n
 // host/puerto CANDIDATO todavia no guardado (contracts/control-api.md de
 // 014). Usa connectSocket() del driver aislado, cierra el socket sin ejecutar
 // ningun comando del protocolo, y nunca persiste ni altera el scheduler.
-export function crearServidorControl({ tick, port, host = '127.0.0.1', timeoutMs = 5000 }) {
+export function crearServidorControl({
+  tick,
+  contarMemoria = null,
+  limpiarMemoria = null,
+  port,
+  host = '127.0.0.1',
+  timeoutMs = 5000,
+}) {
+  function responderJson(res, status, body) {
+    res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(body));
+  }
+
+  // feature 039 — POST /memoria-reloj → { ok, pendientes } | { ok:false, motivo }
+  // | { ok:true, omitido:true } (ciclo en curso). Solo cuenta (0xB4).
+  async function manejarMemoriaReloj(res) {
+    if (!contarMemoria) return responderJson(res, 501, { error: { codigo: 'NO_DISPONIBLE', mensaje: 'Conteo no disponible' } });
+    try {
+      const r = await contarMemoria();
+      return responderJson(res, 200, r.omitido
+        ? { ok: true, omitido: true }
+        : r.ok ? { ok: true, pendientes: r.pendientes } : { ok: false, motivo: r.motivo });
+    } catch (err) {
+      return responderJson(res, 200, { ok: false, motivo: err.message });
+    }
+  }
+
+  // feature 039 — POST /limpiar-memoria: descarga y persiste las fichadas y
+  // RECIEN ENTONCES borra la memoria del reloj. Si la descarga/persistencia
+  // falla (o hay un ciclo en curso) no se borra nada.
+  async function manejarLimpiarMemoria(res) {
+    if (!limpiarMemoria) return responderJson(res, 501, { error: { codigo: 'NO_DISPONIBLE', mensaje: 'Limpieza no disponible' } });
+    try {
+      const { ciclo, limpieza } = await limpiarMemoria();
+      if (!limpieza) {
+        const motivo = ciclo?.resultado === 'omitido'
+          ? 'Hay una consulta en curso; probá de nuevo en unos segundos'
+          : ciclo?.detail ?? 'No se pudo descargar y guardar las fichadas; no se borró nada';
+        return responderJson(res, 200, { ok: false, borrado: false, motivo });
+      }
+      return responderJson(res, 200, limpieza.ok
+        ? { ok: true, borrado: limpieza.borrado, fichadasDescargadas: limpieza.descargadas }
+        : { ok: false, borrado: false, fichadasDescargadas: limpieza.descargadas, motivo: limpieza.motivo });
+    } catch (err) {
+      return responderJson(res, 200, { ok: false, borrado: false, motivo: err.message });
+    }
+  }
+
   async function manejarProbarConexion(req, res) {
     const chunks = [];
     for await (const c of req) chunks.push(c);
@@ -260,6 +307,15 @@ export function crearServidorControl({ tick, port, host = '127.0.0.1', timeoutMs
 
     if (req.method === 'POST' && pathname === '/probar-conexion') {
       await manejarProbarConexion(req, res);
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/memoria-reloj') {
+      await manejarMemoriaReloj(res);
+      return;
+    }
+    if (req.method === 'POST' && pathname === '/limpiar-memoria') {
+      await manejarLimpiarMemoria(res);
       return;
     }
 
@@ -343,7 +399,7 @@ export function runService(
   // feature 010 (US4): control local opcional (solo si se configuro el puerto).
   let controlServer = null;
   if (options.controlPort) {
-    crearServidorControl({ tick: handle.tick, port: options.controlPort, timeoutMs: options.timeoutMs }).then((srv) => {
+    crearServidorControl({ tick: handle.tick, contarMemoria: handle.contarMemoriaReloj, limpiarMemoria: handle.limpiarMemoriaReloj, port: options.controlPort, timeoutMs: options.timeoutMs }).then((srv) => {
       controlServer = srv;
       print(`Control local del servicio (POST /tick) en http://127.0.0.1:${options.controlPort}`);
     });

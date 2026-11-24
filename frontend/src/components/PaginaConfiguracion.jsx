@@ -4,6 +4,7 @@ import FormularioConexionReloj from './FormularioConexionReloj.jsx';
 import TablaMotivosAusencia from './TablaMotivosAusencia.jsx';
 import FormularioCategoriasModalidades from './FormularioCategoriasModalidades.jsx';
 import PanelPadron from './PanelPadron.jsx';
+import PanelMemoriaReloj from './PanelMemoriaReloj.jsx';
 
 // feature 014 — Página "Configuración": tres secciones independientes (una
 // por historia de usuario), cada una con su propio guardado — un error de
@@ -19,6 +20,11 @@ export default function PaginaConfiguracion({ cliente = clientePorDefecto }) {
       key: 'reloj',
       label: 'Reloj y servicio',
       children: <FormularioConexionReloj cliente={cliente} />,
+    },
+    {
+      key: 'memoria',
+      label: 'Memoria del reloj',
+      children: <PanelMemoriaReloj cliente={cliente} />,
     },
     {
       key: 'motivos',
