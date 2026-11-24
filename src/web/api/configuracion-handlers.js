@@ -96,6 +96,24 @@ export function registrarRutas(router, ctx) {
     return { status: 200, body: { ok: resultado.ok, motivo: resultado.motivo ?? undefined } };
   }));
 
+  // feature 039 (issue #39) — Memoria del reloj. Solo configurador (hereda el
+  // criterio de toda la sección). El proceso web nunca habla con el reloj:
+  // delega en el servicio de fichadas por el control local (Principio III).
+  router.add('GET', '/api/configuracion/reloj/memoria', exigirRol(ctx, 'configurador', async () => {
+    const r = await ctx.consultarReloj.contarMemoria();
+    if (!r.disponible) throw new ApiError(502, 'SERVICIO_FICHADAS_NO_DISPONIBLE', r.motivo);
+    if (!r.ok) throw new ApiError(502, 'ERROR_CONSULTANDO_RELOJ', r.motivo);
+    if (r.omitido) throw new ApiError(409, 'RELOJ_OCUPADO', 'Hay una consulta en curso; probá de nuevo en unos segundos');
+    return { status: 200, body: { fichadasEnMemoria: r.pendientes } };
+  }));
+
+  router.add('POST', '/api/configuracion/reloj/limpiar-memoria', exigirRol(ctx, 'configurador', async () => {
+    const r = await ctx.consultarReloj.limpiarMemoria();
+    if (!r.disponible) throw new ApiError(502, 'SERVICIO_FICHADAS_NO_DISPONIBLE', r.motivo);
+    if (!r.ok) throw new ApiError(502, 'ERROR_LIMPIANDO_RELOJ', r.motivo);
+    return { status: 200, body: { fichadasDescargadas: r.fichadasDescargadas, borrado: r.borrado } };
+  }));
+
   // --- Motivos de ausencia (US2) -------------------------------------------
   // Se relee el archivo en cada request (no ctx.motivosAusenciaConfig, la
   // versión "viva" que usa el cálculo de presentismo) para que esta página

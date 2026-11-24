@@ -64,5 +64,27 @@ export function createConsultarRelojCliente({
     return { disponible: true, ok: body.ok, motivo: body.motivo ?? null };
   }
 
-  return { consultar, probarConexion };
+  // feature 039 — memoria del reloj. Mismo criterio: nunca lanza; un control-API
+  // caído se distingue (`disponible: false`) de un fallo del reloj (`ok: false`).
+  async function pedirControl(path, timeout) {
+    let res;
+    try {
+      res = await fetchImpl(`${baseUrl}${path}`, { method: 'POST', signal: AbortSignal.timeout(timeout) });
+    } catch (err) {
+      return { disponible: false, motivo: `el servicio de fichadas no responde: ${err.message}` };
+    }
+    if (!res.ok) {
+      return { disponible: false, motivo: `el control del servicio de fichadas respondió HTTP ${res.status}` };
+    }
+    const body = await res.json().catch(() => null);
+    if (!body || typeof body.ok !== 'boolean') {
+      return { disponible: false, motivo: 'respuesta inválida del control del servicio de fichadas' };
+    }
+    return { disponible: true, ...body };
+  }
+
+  const contarMemoria = () => pedirControl('/memoria-reloj', timeoutMs);
+  const limpiarMemoria = () => pedirControl('/limpiar-memoria', timeoutMs);
+
+  return { consultar, probarConexion, contarMemoria, limpiarMemoria };
 }

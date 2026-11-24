@@ -1,4 +1,4 @@
-import { runQuerySession } from '../protocol/client.js';
+import { runQuerySession, runCountSession, runClearSession } from '../protocol/client.js';
 import { parseFichadaRecord } from '../protocol/records.js';
 import { createSessionLogger } from '../logging/session-logger.js';
 import { createServiceCycleLogger } from '../logging/service-cycle-logger.js';
@@ -34,6 +34,7 @@ export function createScheduler({
   let timerId = null;
   let ultimoCiclo = null;
   let cicloContador = 0;
+  let ultimaLimpieza = null;
 
   async function evaluarCheckpoints(instante) {
     for (const checkpoint of checkpoints) {
@@ -60,7 +61,13 @@ export function createScheduler({
   // consulta manual del administrador puede dispararse en cualquier momento)
   // pero respeta EXACTAMENTE el mismo single-flight — nunca dos sesiones TCP
   // concurrentes. El temporizador interno sigue llamando tick() sin opciones.
-  async function tick({ forzarConsulta = false } = {}) {
+  //
+  // feature 039: `limpiarMemoria` (solo con `forzarConsulta`) borra la memoria
+  // del reloj DESPUES de descargar y persistir las fichadas, dentro del mismo
+  // candado single-flight. Si la descarga o la persistencia fallan, NO se
+  // borra nada. El resultado queda en `ultimaLimpieza`.
+  async function tick({ forzarConsulta = false, limpiarMemoria = false } = {}) {
+    if (limpiarMemoria) ultimaLimpieza = null;
     if (consultaEnCurso) {
       registrar({ resultado: 'omitido', fichadasNuevas: 0, duracionMs: 0, detail: 'consulta ya en curso' });
       return;
@@ -126,6 +133,25 @@ export function createScheduler({
         }
       }
 
+      // feature 039: borrado de la memoria del reloj. Solo si se descargo algo
+      // y se persistio sin error (el return anterior corta ante un fallo).
+      if (limpiarMemoria) {
+        if (rawRecords.length === 0) {
+          ultimaLimpieza = { ok: true, descargadas: 0, borrado: false };
+        } else {
+          const limpieza = await runClearSession({
+            host,
+            port,
+            timeoutMs,
+            logger: createSessionLogger({ sessionId: `${sessionId}-borrado`, logDir, now }),
+            fullHandshake,
+          });
+          ultimaLimpieza = limpieza.ok
+            ? { ok: true, descargadas: rawRecords.length, borrado: true }
+            : { ok: false, descargadas: rawRecords.length, borrado: false, motivo: limpieza.motivo };
+        }
+      }
+
       // Una fichada recien agregada puede completar un checkpoint dentro
       // del mismo ciclo; se re-evaluan antes de cerrar el ciclo.
       await evaluarCheckpoints(now());
@@ -158,5 +184,29 @@ export function createScheduler({
     return ultimoCiclo;
   }
 
-  return { start, stop, tick, getUltimoCiclo };
+  function getUltimaLimpieza() {
+    return ultimaLimpieza;
+  }
+
+  // feature 039: cantidad de fichadas en la memoria del reloj. Respeta el
+  // single-flight: si hay un ciclo en curso devuelve { omitido: true }.
+  async function contarMemoria() {
+    if (consultaEnCurso) return { ok: true, omitido: true };
+    consultaEnCurso = true;
+    try {
+      cicloContador += 1;
+      const sessionId = `${serviceId}-conteo-${cicloContador}`;
+      return await runCountSession({
+        host,
+        port,
+        timeoutMs,
+        logger: createSessionLogger({ sessionId, logDir, now }),
+        fullHandshake,
+      });
+    } finally {
+      consultaEnCurso = false;
+    }
+  }
+
+  return { start, stop, tick, getUltimoCiclo, getUltimaLimpieza, contarMemoria };
 }

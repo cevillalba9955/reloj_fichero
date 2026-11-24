@@ -130,9 +130,16 @@ export function startService(options) {
     return scheduler.getUltimoCiclo();
   }
 
+  // feature 039: descarga + persiste + borra la memoria del reloj, y devuelve
+  // { ciclo, limpieza } (limpieza es null si el ciclo se omitio o fallo antes).
+  async function limpiarMemoriaReloj() {
+    await scheduler.tick({ forzarConsulta: true, limpiarMemoria: true });
+    return { ciclo: scheduler.getUltimoCiclo(), limpieza: scheduler.getUltimaLimpieza() };
+  }
+
   function stop() {
     scheduler.stop();
   }
 
-  return { getState, tick, stop };
+  return { getState, tick, stop, contarMemoriaReloj: scheduler.contarMemoria, limpiarMemoriaReloj };
 }

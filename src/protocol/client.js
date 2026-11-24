@@ -13,6 +13,8 @@ import {
   buildParamsCommand,
   buildIdentificationCommand,
   buildCloseOperationCommand,
+  buildOpenOperationCommand,
+  buildClearCommand,
   buildPendingCountCommand,
   buildPendingDetailCommand,
   buildPendingDetailContinuationCommand,
@@ -374,4 +376,97 @@ export async function runQuerySession({ host, port, timeoutMs, sessionId, logger
     closeSession(socket, logger);
     return { session, rawRecords: [] };
   }
+}
+
+// Handshake comun de las sesiones de conteo/borrado (feature 039): 0x80 y,
+// opcionalmente, los tres 0x13 (ver runQuerySession). Devuelve el proximo seq.
+async function abrirSesion(socket, reader, logger, { timeoutMs, fullHandshake }) {
+  let seq = 1;
+  socket.write(buildHandshakeCommand(seq));
+  logger.log('command_sent', { commandCode: '0x80', byteLength: 16 });
+  await reader.readExact(ACK_SIZE, { timeoutMs });
+  logger.log('response_received', { commandCode: '0x80', byteLength: ACK_SIZE });
+  seq += 1;
+  if (fullHandshake) {
+    const pasos = [
+      [buildParamsCommand, PARAMS_RESPONSE_SIZE],
+      [buildIdentificationCommand, IDENTIFICATION_RESPONSE_SIZE],
+      [buildParamsCommand, PARAMS_RESPONSE_SIZE],
+    ];
+    for (const [build, size] of pasos) {
+      const cmd = build(seq);
+      socket.write(cmd);
+      logger.log('command_sent', { commandCode: '0x13', byteLength: cmd.length });
+      // eslint-disable-next-line no-await-in-loop
+      await reader.readExact(size, { timeoutMs });
+      logger.log('response_received', { commandCode: '0x13', byteLength: size });
+      seq += 1;
+    }
+  }
+  return seq;
+}
+
+async function conSesion({ host, port, timeoutMs, logger }, fn) {
+  let socket;
+  try {
+    socket = await connectSocket(host, port, timeoutMs);
+  } catch (err) {
+    logger.log('error', { detail: err.message });
+    return { ok: false, motivo: err.message };
+  }
+  const reader = new BufferedSocketReader(socket, {
+    onKeepalive: () => logger.log('keepalive_discarded', {}),
+  });
+  try {
+    return { ok: true, ...(await fn(socket, reader)) };
+  } catch (err) {
+    logger.log('error', { detail: err.message });
+    return { ok: false, motivo: err.message };
+  } finally {
+    closeSession(socket, logger);
+  }
+}
+
+// feature 039: cuantas fichadas hay en la memoria del reloj (solo 0xB4, sin
+// descargar el detalle). Devuelve { ok: true, pendientes } o { ok: false, motivo }.
+export async function runCountSession({ host, port, timeoutMs, logger, fullHandshake = false }) {
+  return conSesion({ host, port, timeoutMs, logger }, async (socket, reader) => {
+    let seq = await abrirSesion(socket, reader, logger, { timeoutMs, fullHandshake });
+    const countCmd = buildPendingCountCommand(seq);
+    socket.write(countCmd);
+    logger.log('command_sent', { commandCode: '0xB4', byteLength: countCmd.length });
+    const ack = await reader.readExact(ACK_SIZE, { timeoutMs });
+    logger.log('response_received', { commandCode: '0xB4', byteLength: ack.length });
+    const pendientes = parseAckHeader(ack).flagBytes.readUInt32LE(0);
+    seq += 1;
+    const closeCmd = buildCloseOperationCommand(seq);
+    socket.write(closeCmd);
+    logger.log('command_sent', { commandCode: '0x81', byteLength: closeCmd.length });
+    await reader.readExact(ACK_SIZE, { timeoutMs });
+    logger.log('response_received', { commandCode: '0x81', byteLength: ACK_SIZE });
+    return { pendientes };
+  });
+}
+
+// feature 039: borra la memoria del reloj (0x81 apertura -> 0xA8 -> 0x81
+// cierre, research.md §6.5), en su propia sesion TCP. NO descarga nada:
+// el llamador es responsable de haber persistido las fichadas antes.
+export async function runClearSession({ host, port, timeoutMs, logger, fullHandshake = false }) {
+  return conSesion({ host, port, timeoutMs, logger }, async (socket, reader) => {
+    let seq = await abrirSesion(socket, reader, logger, { timeoutMs, fullHandshake });
+    for (const [codigo, build] of [
+      ['0x81', buildOpenOperationCommand],
+      ['0xA8', buildClearCommand],
+      ['0x81', buildCloseOperationCommand],
+    ]) {
+      const cmd = build(seq);
+      socket.write(cmd);
+      logger.log('command_sent', { commandCode: codigo, byteLength: cmd.length });
+      // eslint-disable-next-line no-await-in-loop
+      await reader.readExact(ACK_SIZE, { timeoutMs });
+      logger.log('response_received', { commandCode: codigo, byteLength: ACK_SIZE });
+      seq += 1;
+    }
+    return {};
+  });
 }
