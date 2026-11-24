@@ -20,6 +20,9 @@ const CLAVE_SITUACION = {
   ANOMALIA: 'anomalia',
 };
 
+// Situaciones donde justificar no aplica (día que no penaliza o sin modalidad).
+const SIN_JUSTIFICAR = new Set(['ANOMALIA', 'No aplica', 'Feriado cumplido']);
+
 const ETIQUETA_SITUACION = {
   RETIRO_ANTICIPADO: 'Retiro anticipado',
   ANOMALIA: 'Anomalía',
@@ -148,7 +151,7 @@ export default function TablaFichadasHoy({
       key: 'acciones',
       render: (_, fila) => (
         <Space size="small">
-          {onCorregir && fila.situacion !== 'ANOMALIA' && !fila.justificacion && (
+          {onCorregir && fila.situacion !== 'ANOMALIA' && (!fila.justificacion || esLicencia(fila)) && !esVacaciones(fila) && (
             <Button size="small" onClick={() => onCorregir(fila)}>
               Corregir
             </Button>
@@ -158,7 +161,7 @@ export default function TablaFichadasHoy({
               Excepcion
             </Button>
           )}
-          {onJustificar && fila.situacion === 'AUSENTE' && !fila.justificacion && (
+          {onJustificar && !SIN_JUSTIFICAR.has(fila.situacion) && !fila.justificacion && (
             <Button size="small" onClick={() => onJustificar(fila)}>
               Justificación
             </Button>

@@ -381,3 +381,32 @@ test('licencia No paga con fichadas sigue en 0 horas y sin licencia acreditada',
   assert.equal(r.totalDiario, 0);
   assert.equal(r.horasLicencia, 0);
 });
+
+// caso legajos 10/53 (20/11/26): entrada tardía fuera de la ventana de apertura
+test('entrada tardía fichada tras el fin de la ventana de apertura es entrada, no salida', () => {
+  const r = calcularJornadaAuto({
+    clasificacion: Clasificacion.LABORABLE,
+    fichadas: [{ id: 'a', hora: 12 * 60 + 20 }, { id: 'b', hora: 16 * 60 + 2 }],
+    params: PARAMS,
+  });
+  assert.equal(r.estado, EstadoJornada.COMPLETA);
+  assert.equal(r.entrada.id, 'a');
+  assert.equal(r.salida.id, 'b');
+});
+
+test('licencia Paga + corrección de entrada: trabajado + licencia = jornada esperada', () => {
+  const auto = calcularJornadaAuto({
+    clasificacion: Clasificacion.LABORABLE,
+    fichadas: [{ id: 'b', hora: 16 * 60 }],
+    params: PARAMS,
+  });
+  const correccion = { entradaCorregida: 12 * 60 + 20, salidaCorregida: null, valorCorregido: null, valorCalculado: null };
+  const r = aplicarAjustes(auto, {
+    correccion,
+    params: PARAMS,
+    justificacion: { tipoPago: 'Paga', motivoId: 'examen' },
+  });
+  assert.equal(r.totalDiario, PARAMS.jornadaEsperada);
+  assert.ok(r.horasLicencia > 0 && r.horasLicencia < PARAMS.jornadaEsperada);
+  assert.ok(r.justificacion);
+});

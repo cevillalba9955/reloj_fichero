@@ -69,11 +69,19 @@ export function calcularJornadaAuto({ clasificacion, fichadas = [], params }) {
 
   const ordenadas = [...conHora].sort((a, b) => a.hora - b.hora);
   // Entrada: primera dentro de la ventana de apertura.
-  const entrada = ordenadas.find((f) => enVentana(f.hora, params.ventanaApertura)) ?? null;
+  let entrada = ordenadas.find((f) => enVentana(f.hora, params.ventanaApertura)) ?? null;
   // Salida: última dentro de la ventana de cierre y posterior a la entrada.
-  const salida = entrada
+  let salida = entrada
     ? [...ordenadas].reverse().find((f) => enVentana(f.hora, params.ventanaCierre) && f.hora > entrada.hora) ?? null
     : [...ordenadas].reverse().find((f) => enVentana(f.hora, params.ventanaCierre)) ?? null;
+  // caso legajos 10/53 (20/11/26): una llegada tarde fichada DESPUÉS del fin de
+  // la ventana de apertura caía en la ventana de cierre, se leía como salida y
+  // la pisaba la fichada real de salida. Si no hay entrada en ventana pero hay
+  // otra fichada posterior que hace de salida, la primera fichada del día es
+  // la entrada (tardía).
+  if (!entrada && salida && ordenadas[0].id !== salida.id && ordenadas[0].hora < salida.hora) {
+    entrada = ordenadas[0];
+  }
 
   const usadas = new Set();
   if (entrada) usadas.add(entrada.id);
@@ -233,18 +241,25 @@ export function aplicarAjustes(auto, { correccion = null, pausas = [], params = 
     }
     const requiereRevision =
       correccion.valorCalculado != null && correccion.valorCalculado !== auto.totalDiario;
+    // Licencia Paga + corrección de horario: lo trabajado (corregido) más la
+    // licencia completan la jornada esperada. Otras justificaciones no
+    // conviven con una corrección (se descartan, como antes).
+    const licenciaPaga = justificacion?.tipoPago === 'Paga' && params && correccion.valorCorregido == null;
+    const totalCorr = licenciaPaga ? Math.max(params.jornadaEsperada, totalDerivado) : null;
     return {
       ...auto,
       estado: estadoConCorreccion(auto, entradaEfectiva, salidaEfectiva),
       entradaEfectiva,
       salidaEfectiva,
       descuentoPausas: descuento,
-      totalDiario: correccion.valorCorregido != null ? correccion.valorCorregido : totalDerivado,
+      totalDiario:
+        correccion.valorCorregido != null ? correccion.valorCorregido : licenciaPaga ? totalCorr : totalDerivado,
+      horasLicencia: licenciaPaga ? totalCorr - totalDerivado : 0,
       correccionVigente: true,
       correccion,
       pausas,
       requiereRevision,
-      justificacion: null,
+      justificacion: licenciaPaga ? justificacion : null,
       requiereJustificacionRevision: false,
     };
   }
